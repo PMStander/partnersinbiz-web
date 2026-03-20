@@ -181,11 +181,11 @@ export default function OurProcessPage() {
         <h2 className="font-headline text-5xl md:text-8xl font-bold tracking-tighter max-w-4xl mx-auto leading-none">
           Ready to Start? Build the future with PiB.
         </h2>
-        <a href="#">
+        <Link href="/start-a-project">
           <button className="bg-black text-white px-12 py-5 rounded-md font-headline text-xl font-bold tracking-tight hover:scale-105 transition-transform duration-300">
             Start a Project
           </button>
-        </a>
+        </Link>
       </section>
     </main>
   )

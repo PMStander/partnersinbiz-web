@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Discover Phase | PiB',
@@ -138,8 +139,8 @@ export default function DiscoverPage() {
         <div className="max-w-3xl mx-auto">
           <h2 className="font-headline text-5xl md:text-7xl font-bold mb-12 tracking-tighter">Ready to<br/>Analyze?</h2>
           <div className="flex flex-col md:flex-row justify-center gap-6">
-            <button className="bg-white text-black font-headline uppercase tracking-widest text-sm px-12 py-5 rounded-md hover:scale-105 transition-transform duration-300">Start Discovery</button>
-            <button className="glass-card text-white font-headline uppercase tracking-widest text-sm px-12 py-5 rounded-md hover:bg-white/10 transition-colors duration-300">View Methodology</button>
+            <Link href="/start-a-project" className="bg-white text-black font-headline uppercase tracking-widest text-sm px-12 py-5 rounded-md hover:scale-105 transition-transform duration-300">Start Discovery</Link>
+            <Link href="/our-process" className="glass-card text-white font-headline uppercase tracking-widest text-sm px-12 py-5 rounded-md hover:bg-white/10 transition-colors duration-300">View Methodology</Link>
           </div>
         </div>
       </section>

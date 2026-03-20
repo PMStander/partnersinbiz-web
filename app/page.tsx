@@ -89,13 +89,13 @@ export default function HomePage() {
             </h2>
             <div className="mt-8">
               <div className="text-white/40 font-mono text-sm mb-6">(0.3%) Post-launch issues</div>
-              <a
+              <Link
                 className="inline-flex items-center gap-2 group text-white font-medium hover:gap-4 transition-all"
-                href="#"
+                href="/our-process"
               >
                 See our process
                 <span className="material-symbols-outlined">arrow_outward</span>
-              </a>
+              </Link>
             </div>
           </div>
         </section>
@@ -113,9 +113,11 @@ export default function HomePage() {
                   Performance boost
                 </p>
               </div>
-              <button className="bg-white text-black px-10 py-5 rounded-md font-bold text-sm uppercase tracking-widest hover:scale-105 transition-transform">
-                Learn more
-              </button>
+              <Link href="/our-process">
+                <button className="bg-white text-black px-10 py-5 rounded-md font-bold text-sm uppercase tracking-widest hover:scale-105 transition-transform">
+                  Learn more
+                </button>
+              </Link>
             </div>
           </div>
           <div className="lg:col-span-4 relative">
@@ -221,12 +223,12 @@ export default function HomePage() {
           <h2 className="font-headline font-bold leading-[0.85] tracking-tighter uppercase text-mega max-w-5xl">
             Let&apos;s build / <br /> the future
           </h2>
-          <button className="mt-20 group flex items-center gap-6 bg-white text-black px-12 py-6 rounded-md font-bold text-lg uppercase tracking-widest hover:pr-16 transition-all">
+          <Link href="/start-a-project" className="mt-20 group flex items-center gap-6 bg-white text-black px-12 py-6 rounded-md font-bold text-lg uppercase tracking-widest hover:pr-16 transition-all">
             Get in touch
             <span className="material-symbols-outlined text-3xl group-hover:translate-x-2 transition-transform">
               arrow_outward
             </span>
-          </button>
+          </Link>
         </section>
       </main>
     </>
