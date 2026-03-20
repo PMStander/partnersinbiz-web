@@ -9,6 +9,17 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
+const VALID_PROJECT_TYPES = ['web', 'mobile', 'ai', 'design']
+
 export async function POST(request: NextRequest) {
   const body = await request.json()
   const { name, email, company, projectType, details, userId } = body
@@ -17,13 +28,16 @@ export async function POST(request: NextRequest) {
   if (!email?.trim()) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
   if (!isValidEmail(email)) return NextResponse.json({ error: 'Email is invalid' }, { status: 400 })
   if (!details?.trim()) return NextResponse.json({ error: 'Project details are required' }, { status: 400 })
+  if (!projectType || !VALID_PROJECT_TYPES.includes(projectType)) {
+    return NextResponse.json({ error: 'Invalid project type' }, { status: 400 })
+  }
 
   const docRef = await adminDb.collection('enquiries').add({
     userId: userId ?? null,
     name: name.trim(),
     email: email.trim().toLowerCase(),
     company: company?.trim() ?? '',
-    projectType: projectType ?? 'web',
+    projectType: projectType,
     details: details.trim(),
     status: 'new',
     createdAt: FieldValue.serverTimestamp(),
@@ -33,15 +47,15 @@ export async function POST(request: NextRequest) {
   await resend.emails.send({
     from: process.env.RESEND_FROM_ADDRESS!,
     to: process.env.ADMIN_NOTIFICATION_EMAIL!,
-    subject: `New Project Inquiry from ${name}`,
+    subject: `New Project Inquiry from ${escapeHtml(name)}`,
     html: `
       <h2>New Project Inquiry</h2>
-      <p><strong>Name:</strong> ${name}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Company:</strong> ${company ?? 'Not provided'}</p>
-      <p><strong>Project Type:</strong> ${projectType}</p>
+      <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+      <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+      <p><strong>Company:</strong> ${escapeHtml(company ?? 'Not provided')}</p>
+      <p><strong>Project Type:</strong> ${escapeHtml(projectType)}</p>
       <p><strong>Details:</strong></p>
-      <p>${details}</p>
+      <p>${escapeHtml(details)}</p>
       <p><em>Enquiry ID: ${docRef.id}</em></p>
     `,
   })

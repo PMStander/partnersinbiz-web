@@ -65,6 +65,14 @@ describe('POST /api/enquiries', () => {
     expect(body.error).toMatch(/details/i)
   })
 
+  it('returns 400 when projectType is invalid', async () => {
+    const req = makeRequest({ ...validBody, projectType: 'invalid-type' })
+    const res = await POST(req)
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/project type/i)
+  })
+
   it('returns 201 on valid submission', async () => {
     const req = makeRequest(validBody)
     const res = await POST(req)
