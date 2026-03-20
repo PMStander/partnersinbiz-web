@@ -3,7 +3,9 @@ import { adminDb } from '@/lib/firebase/admin'
 import { Resend } from 'resend'
 import { FieldValue } from 'firebase-admin/firestore'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY)
+}
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest) {
     assignedTo: null,
   })
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: process.env.RESEND_FROM_ADDRESS!,
     to: process.env.ADMIN_NOTIFICATION_EMAIL!,
     subject: `New Project Inquiry from ${escapeHtml(name)}`,
