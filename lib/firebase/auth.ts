@@ -1,0 +1,40 @@
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth'
+import { doc, setDoc } from 'firebase/firestore'
+import { auth, db } from './config'
+
+export async function loginWithEmail(email: string, password: string) {
+  const credential = await signInWithEmailAndPassword(auth, email, password)
+  const idToken = await credential.user.getIdToken()
+  await fetch('/api/auth/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  })
+  return credential.user
+}
+
+export async function registerWithEmail(email: string, password: string, name: string) {
+  const credential = await createUserWithEmailAndPassword(auth, email, password)
+  await setDoc(doc(db, 'users', credential.user.uid), {
+    name,
+    email,
+    role: 'client',
+    createdAt: new Date(),
+  })
+  const idToken = await credential.user.getIdToken()
+  await fetch('/api/auth/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
+  })
+  return credential.user
+}
+
+export async function logout() {
+  await signOut(auth)
+  await fetch('/api/auth/session', { method: 'DELETE' })
+}
