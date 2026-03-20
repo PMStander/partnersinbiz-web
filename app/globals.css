@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --color-surface-container: #1f1f1f;
+  --color-surface-container-highest: #353535;
+  --color-on-secondary-container: #e2e2e2;
+  --color-primary-fixed: #5d5f5f;
+  --color-on-tertiary-container: #000000;
+  --color-surface-bright: #393939;
+  --color-primary-container: #d4d4d4;
+  --color-surface-container-low: #1b1b1b;
+  --color-on-error-container: #ffdad6;
+  --color-tertiary-fixed-dim: #454747;
+  --color-secondary-container: #454747;
+  --color-error: #ffb4ab;
+  --color-surface-variant: #353535;
+  --color-inverse-surface: #e2e2e2;
+  --color-outline-variant: #474747;
+  --color-on-secondary: #1a1c1c;
+  --color-background: #000000;
+  --color-on-surface: #e2e2e2;
+  --color-on-primary-container: #000000;
+  --color-on-tertiary-fixed-variant: #e2e2e2;
+  --color-on-tertiary-fixed: #ffffff;
+  --color-on-tertiary: #1a1c1c;
+  --color-primary: #ffffff;
+  --color-surface: #000000;
+  --color-secondary: #c6c6c7;
+  --color-on-secondary-fixed: #1a1c1c;
+  --color-primary-fixed-dim: #454747;
+  --color-on-primary: #1a1c1c;
+  --color-surface-tint: #c6c6c7;
+  --color-secondary-fixed: #c6c6c7;
+  --color-on-primary-fixed-variant: #e2e2e2;
+  --color-tertiary: #e2e2e2;
+  --color-surface-dim: #000000;
+  --color-inverse-primary: #5d5f5f;
+  --color-error-container: #93000a;
+  --color-outline: #919191;
+  --color-on-secondary-fixed-variant: #3a3c3c;
+  --color-on-background: #e2e2e2;
+  --color-surface-container-high: #2a2a2a;
+  --color-on-surface-variant: #c6c6c6;
+  --color-inverse-on-surface: #303030;
+  --color-tertiary-container: #909191;
+  --color-secondary-fixed-dim: #aaabab;
+  --color-surface-container-lowest: #000000;
+  --color-on-error: #690005;
+  --color-on-primary-fixed: #ffffff;
+  --color-tertiary-fixed: #5d5f5f;
+
+  --font-headline: var(--font-space-grotesk), sans-serif;
+  --font-body: var(--font-inter), sans-serif;
+  --font-label: var(--font-inter), sans-serif;
+
+  --radius: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-black text-white;
+    font-family: var(--font-body);
+  }
+  ::selection {
+    @apply bg-white text-black;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(40px) saturate(1.8);
+    -webkit-backdrop-filter: blur(40px) saturate(1.8);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 1.5rem;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+  }
+}
+
+@layer utilities {
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #000; }
+  ::-webkit-scrollbar-thumb { background: #333; }
+}
