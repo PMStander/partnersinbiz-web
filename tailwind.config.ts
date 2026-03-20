@@ -1,3 +1,8 @@
+/**
+ * NOTE: This project uses Tailwind CSS v4. This file is NOT read by the Tailwind v4 engine.
+ * All design tokens are defined in app/globals.css via the @theme block.
+ * This file is kept as reference documentation only.
+ */
 import type { Config } from 'tailwindcss'
 
 const config: Config = {
