@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can read/write their own doc, but cannot change their role
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.data.role == "client";
+      allow update: if request.auth != null
+                    && request.auth.uid == uid
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["role"]);
+    }
+
+    // Enquiries: only server (Admin SDK) can write via API routes
+    // Clients can read their own enquiries; admins can read all
+    match /enquiries/{id} {
+      allow read: if request.auth != null
+                  && (
+                    request.auth.uid == resource.data.userId
+                    || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+                  );
+      allow write: if false;
+    }
+  }
+}
+
+// To deploy these rules to Firestore, run:
+// npx firebase-tools deploy --only firestore:rules
