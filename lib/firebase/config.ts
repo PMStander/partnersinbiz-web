@@ -1,6 +1,6 @@
-import { initializeApp, getApps } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app'
+import { getAuth, Auth } from 'firebase/auth'
+import { getFirestore, Firestore } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,7 +11,27 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+function getApp(): FirebaseApp {
+  return getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+}
 
-export const auth = getAuth(app)
-export const db = getFirestore(app)
+export function getClientAuth(): Auth {
+  return getAuth(getApp())
+}
+
+export function getClientDb(): Firestore {
+  return getFirestore(getApp())
+}
+
+// Legacy named exports for backwards compatibility — initialised lazily via Proxy
+export const auth: Auth = new Proxy({} as Auth, {
+  get(_target, prop) {
+    return Reflect.get(getClientAuth(), prop)
+  },
+})
+
+export const db: Firestore = new Proxy({} as Firestore, {
+  get(_target, prop) {
+    return Reflect.get(getClientDb(), prop)
+  },
+})
