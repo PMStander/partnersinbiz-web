@@ -5,7 +5,7 @@ const COOKIE_NAME = process.env.SESSION_COOKIE_NAME ?? '__session'
 const PROTECTED = ['/portal', '/admin']
 const ADMIN_ONLY = ['/admin']
 
-export async function proxy(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p))
   if (!isProtected) return NextResponse.next()
