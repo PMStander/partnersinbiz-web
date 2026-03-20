@@ -1,6 +1,6 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app'
-import { getAuth } from 'firebase-admin/auth'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getAuth, Auth } from 'firebase-admin/auth'
+import { getFirestore, Firestore } from 'firebase-admin/firestore'
 
 function getAdminApp(): App {
   if (getApps().length > 0) return getApps()[0]
@@ -13,6 +13,23 @@ function getAdminApp(): App {
   })
 }
 
-const adminApp = getAdminApp()
-export const adminAuth = getAuth(adminApp)
-export const adminDb = getFirestore(adminApp)
+export function getAdminAuth(): Auth {
+  return getAuth(getAdminApp())
+}
+
+export function getAdminDb(): Firestore {
+  return getFirestore(getAdminApp())
+}
+
+// Lazy singleton accessors — only instantiated when first called (not at build time)
+export const adminAuth = new Proxy({} as Auth, {
+  get(_target, prop) {
+    return getAdminAuth()[prop as keyof Auth]
+  },
+})
+
+export const adminDb = new Proxy({} as Firestore, {
+  get(_target, prop) {
+    return getAdminDb()[prop as keyof Firestore]
+  },
+})
