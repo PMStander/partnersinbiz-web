@@ -130,58 +130,86 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Culture/Team */}
+      {/* Capabilities */}
       <section className="px-8 md:px-16 py-24 md:py-48 overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-end mb-20 gap-8">
           <div className="max-w-xl">
-            <p className="font-label text-[0.6875rem] uppercase tracking-widest text-white/40 mb-4">Culture</p>
+            <p className="font-label text-[0.6875rem] uppercase tracking-widest text-white/40 mb-4">Capabilities</p>
             <h2 className="font-headline text-6xl font-bold tracking-tighter">OUR DNA</h2>
           </div>
-          <p className="font-body text-white/50 max-w-sm mb-2">We are a collective of specialists, engineers, and visionaries unified by a singular pursuit of excellence.</p>
+          <p className="font-body text-white/50 max-w-sm mb-2">Four disciplines, one standard — every engagement draws on the full depth of what we do.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Strategy */}
           <div className="aspect-[3/4] rounded-2xl overflow-hidden glass-card relative group">
-            <img
-              className="w-full h-full object-cover grayscale brightness-75 group-hover:scale-105 transition-transform duration-1000"
-              alt="Monochrome portrait of a professional male engineer"
-              src="/images/team-marcus.png"
-            />
+            <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/3 to-transparent group-hover:from-white/15 transition-all duration-1000" />
+            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-1000"
+              style={{ backgroundImage: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.15) 0%, transparent 60%), radial-gradient(circle at 80% 80%, rgba(255,255,255,0.08) 0%, transparent 50%)' }} />
+            <div className="absolute top-8 left-8 right-8">
+              <span className="font-headline text-7xl font-bold text-white/8 select-none">01</span>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center p-8">
+              <p className="font-headline text-2xl font-bold text-white/70 text-center leading-tight group-hover:text-white/90 transition-colors duration-700">
+                Clarity<br />before<br />commitment.
+              </p>
+            </div>
             <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
-              <p className="font-headline font-bold text-lg">Marcus Chen</p>
-              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">Systems Lead</p>
+              <p className="font-headline font-bold text-lg">Strategy</p>
+              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">We map the path before we move</p>
             </div>
           </div>
+          {/* Engineering */}
           <div className="aspect-[3/4] rounded-2xl overflow-hidden glass-card relative group mt-8">
-            <img
-              className="w-full h-full object-cover grayscale brightness-75 group-hover:scale-105 transition-transform duration-1000"
-              alt="Monochrome portrait of a professional female lead architect"
-              src="/images/team-elena.png"
-            />
+            <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-white/2 to-transparent group-hover:from-white/13 transition-all duration-1000" />
+            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-1000"
+              style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, rgba(255,255,255,0.12) 0%, transparent 55%), radial-gradient(circle at 20% 75%, rgba(255,255,255,0.1) 0%, transparent 50%)' }} />
+            <div className="absolute top-8 left-8 right-8">
+              <span className="font-headline text-7xl font-bold text-white/8 select-none">02</span>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center p-8">
+              <p className="font-headline text-2xl font-bold text-white/70 text-center leading-tight group-hover:text-white/90 transition-colors duration-700">
+                Systems that<br />outlast<br />the trend.
+              </p>
+            </div>
             <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
-              <p className="font-headline font-bold text-lg">Elena Vance</p>
-              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">Lead Architect</p>
+              <p className="font-headline font-bold text-lg">Engineering</p>
+              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">Built to last, designed to scale</p>
             </div>
           </div>
+          {/* Design */}
           <div className="aspect-[3/4] rounded-2xl overflow-hidden glass-card relative group">
-            <img
-              className="w-full h-full object-cover grayscale brightness-75 group-hover:scale-105 transition-transform duration-1000"
-              alt="Monochrome portrait of a tech visionary male executive"
-              src="/images/team-julian.png"
-            />
+            <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/3 to-transparent group-hover:from-white/15 transition-all duration-1000" />
+            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-1000"
+              style={{ backgroundImage: 'radial-gradient(circle at 50% 25%, rgba(255,255,255,0.15) 0%, transparent 60%), radial-gradient(circle at 85% 70%, rgba(255,255,255,0.07) 0%, transparent 45%)' }} />
+            <div className="absolute top-8 left-8 right-8">
+              <span className="font-headline text-7xl font-bold text-white/8 select-none">03</span>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center p-8">
+              <p className="font-headline text-2xl font-bold text-white/70 text-center leading-tight group-hover:text-white/90 transition-colors duration-700">
+                Form follows<br />function<br />follows feeling.
+              </p>
+            </div>
             <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
-              <p className="font-headline font-bold text-lg">Julian Voss</p>
-              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">Head of Strategy</p>
+              <p className="font-headline font-bold text-lg">Design</p>
+              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">Interfaces that earn trust instantly</p>
             </div>
           </div>
+          {/* Growth */}
           <div className="aspect-[3/4] rounded-2xl overflow-hidden glass-card relative group mt-8">
-            <div className="w-full h-full bg-white/5 flex items-center justify-center">
-              <div className="w-24 h-24 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
-                <span className="font-headline text-2xl font-bold text-white/40">ST</span>
-              </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-white/2 to-transparent group-hover:from-white/13 transition-all duration-1000" />
+            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-1000"
+              style={{ backgroundImage: 'radial-gradient(circle at 25% 40%, rgba(255,255,255,0.12) 0%, transparent 55%), radial-gradient(circle at 75% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)' }} />
+            <div className="absolute top-8 left-8 right-8">
+              <span className="font-headline text-7xl font-bold text-white/8 select-none">04</span>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center p-8">
+              <p className="font-headline text-2xl font-bold text-white/70 text-center leading-tight group-hover:text-white/90 transition-colors duration-700">
+                Earned<br />momentum,<br />not metrics.
+              </p>
             </div>
             <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
-              <p className="font-headline font-bold text-lg">Sarah Thorne</p>
-              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">AI Research</p>
+              <p className="font-headline font-bold text-lg">Growth</p>
+              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">Sustainable traction, not vanity metrics</p>
             </div>
           </div>
         </div>
