@@ -144,7 +144,7 @@ export default function AboutPage() {
             <img
               className="w-full h-full object-cover grayscale brightness-75 group-hover:scale-105 transition-transform duration-1000"
               alt="Monochrome portrait of a professional male engineer"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMwsQhnkVwyzF1rzeQDzyNMYwHDtfO-GYKEFuSKUJeTwi3iyoL9quoTI6IK20K5qZxEXsn7HoXmFc1vEFgX2OvzDJZvWaWqnKjTfMM5V-29R8OTSAzxcSwKgboe_QOGyjt44WMH6PGSwI2aZohPyx6whXTDp1tfm-K9kkNw7CPL99AONLrDVCPWRlhx9trph83rkHDHCCctuM1YvNiuf_57-jw-VDxjbO_1lbJhyygWCDC4ANS1cK-X3zpDDkkR6TcOsCvGldU_F8N"
+              src="/images/team-marcus.png"
             />
             <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
               <p className="font-headline font-bold text-lg">Marcus Chen</p>
@@ -155,7 +155,7 @@ export default function AboutPage() {
             <img
               className="w-full h-full object-cover grayscale brightness-75 group-hover:scale-105 transition-transform duration-1000"
               alt="Monochrome portrait of a professional female lead architect"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdH9o0T_0NEakzaNPc3EHabNSNDXVta8CK6tzDPLo4SdoQHNwQcs78HOE7p0tILYDV4nJROhpHuZcQsuQGJrPugsOkRecmio3Oj1-x49a-doMbvY5egcR9D3qUTyoCrk7EBljBXAkkjaQcKEj8frQLFfW9MV9r6vK1coZQ7fvFx460TzwWinS-WEO0h8pcO1g9o6Oh_0x1jO6RpJrShYrKGhLxWwXRibCiJbd6sAP1iWBVzC9cW2lLYJ0C9PQuDwXhq8Lhu6n63no6"
+              src="/images/team-elena.png"
             />
             <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
               <p className="font-headline font-bold text-lg">Elena Vance</p>
@@ -166,7 +166,7 @@ export default function AboutPage() {
             <img
               className="w-full h-full object-cover grayscale brightness-75 group-hover:scale-105 transition-transform duration-1000"
               alt="Monochrome portrait of a tech visionary male executive"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCPZsmYRpvK1-l6PzygCBA838uDK8vaw-J45uLKQU-PIqqqtlRSwq-6hBBqo4GU8w0cu5z7_gQYmxOy2VDuUrRRJ5ZuuNijg0qZtMgOUXccrQSLHXUNlDJfjIRwGTNJaM32pYRmBeYin_CjQB1ZKlOaLfimd37bzyAzfpLBgC2KxSVUl3LA3AbcpXspiDld_KijlsU-G5MiFx08soz2ldhzLM7EbjqwPdmR9ho89YMqsSMcDF3-ursuU6qABs9ge_vtDrMufuLCCJ3"
+              src="/images/team-julian.png"
             />
             <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
               <p className="font-headline font-bold text-lg">Julian Voss</p>
@@ -174,11 +174,11 @@ export default function AboutPage() {
             </div>
           </div>
           <div className="aspect-[3/4] rounded-2xl overflow-hidden glass-card relative group mt-8">
-            <img
-              className="w-full h-full object-cover grayscale brightness-75 group-hover:scale-105 transition-transform duration-1000"
-              alt="Monochrome portrait of a female AI researcher"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzVI228UhtI8uIVLw5kjTfoSlGLmhowh1RVQcYctFMpZ52G__ZZOq74VsH1JGULiisC_nIvaWMc9-UHOWJsm7YTLvl9fzCWlLHIRPjG1x3IRVGmKPqQLBIy5ukFaNonIvnKXIwS7EBUT4PJLFiuctGX2ZxRnFUjUjPeAp8DcFkEXqItS928n-djXrxxCSdV5fBmJSbs0JzUYXiU4jYm75jWtb0zI3G9BUguX2DfIVjJl0qbr9X7EwDOm3rlr2Sye1A4b85IR_4Qj1v"
-            />
+            <div className="w-full h-full bg-white/5 flex items-center justify-center">
+              <div className="w-24 h-24 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                <span className="font-headline text-2xl font-bold text-white/40">ST</span>
+              </div>
+            </div>
             <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
               <p className="font-headline font-bold text-lg">Sarah Thorne</p>
               <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">AI Research</p>

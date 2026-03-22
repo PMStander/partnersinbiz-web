@@ -17,7 +17,7 @@ export default function OurProcessPage() {
           <img
             alt="Abstract dark cinematic tech laboratory background"
             className="w-full h-full object-cover opacity-30 grayscale"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuzMJ-1IF_LLZCTr6elRiqH-2pgrnlZzseMeLp7vCI1mXfvPX6qdaawJO6fIurkAUG_WSRjhDpVMJvzKQnkSQkJo4X4dLbQ1A2xQQZOJ4_wqPBlcyUsNFPEVOSo9ad6lPMmktwlsfS7d_hyk0gf6WU4Nf-VoGE1QoAcJpIwd-UalVjqib_P6h42OihB_nEmrto2lE0EGHCDwQyIDGT31VB74Y4OPhcJ3cvlgSs24W8YvhYxuhL7mbWydDjf69ni7mG0EDismUEoXIr"
+            src="/images/our-process-hero.png"
           />
           {/* Subtle moving orbs effect */}
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-white/5 rounded-full blur-[120px]"></div>
@@ -81,13 +81,35 @@ export default function OurProcessPage() {
         {/* 02 DESIGN */}
         <section className="grid grid-cols-1 md:grid-cols-12 gap-12 items-start">
           <div className="md:col-span-7 order-2 md:order-1">
-            <div className="glass-card rounded-2xl aspect-[16/10] overflow-hidden relative group">
-              <img
-                alt="Monochromatic UI design system layout wireframe"
-                className="w-full h-full object-cover grayscale opacity-50 group-hover:scale-105 transition-transform duration-700"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDX2T9u8ODMycYryRiXyk860z4EgJJ16kTqDRiZN1GkpyEpboAX1Aqhc9IVcX9ZnQw11LOPiljLDdi-o9amaWrsneXSfmqeNH_n0bDPG00VePtt3Fpn73SgprgZeVd_CLGo7IWLuKY_4ExSAplQfVCs6HmLX2DrWRjSBbLxRHhOTNX-JhDOzIoSsgLDNWzHYKDOtpfKccDSbisE8CuiyGgnp3dt-t3H0z5imDIh97ZcUagGRQp0vbYH1MerqLx9f_QGcaLMyJ4D9W06"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+            <div className="glass-card rounded-2xl aspect-[16/10] overflow-hidden flex flex-col gap-3 p-6">
+              <div className="opacity-40 flex flex-col gap-3 h-full">
+                {/* Nav bar */}
+                <div className="flex items-center gap-2">
+                  <div className="w-16 h-2 bg-white/30 rounded"></div>
+                  <div className="flex gap-2 ml-auto">
+                    <div className="w-8 h-2 bg-white/15 rounded"></div>
+                    <div className="w-8 h-2 bg-white/15 rounded"></div>
+                    <div className="w-8 h-2 bg-white/15 rounded"></div>
+                  </div>
+                </div>
+                {/* Hero + aside */}
+                <div className="flex gap-3 flex-1">
+                  <div className="flex-1 flex flex-col gap-2 justify-center">
+                    <div className="w-3/4 h-3 bg-white/30 rounded"></div>
+                    <div className="w-1/2 h-3 bg-white/30 rounded"></div>
+                    <div className="w-full h-1.5 bg-white/15 rounded mt-2"></div>
+                    <div className="w-5/6 h-1.5 bg-white/15 rounded"></div>
+                    <div className="w-20 h-5 bg-white/20 rounded mt-3"></div>
+                  </div>
+                  <div className="w-1/3 bg-white/5 rounded-lg border border-white/10"></div>
+                </div>
+                {/* Bottom cards */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="h-10 bg-white/5 rounded border border-white/10"></div>
+                  <div className="h-10 bg-white/5 rounded border border-white/10"></div>
+                  <div className="h-10 bg-white/5 rounded border border-white/10"></div>
+                </div>
+              </div>
             </div>
           </div>
           <div className="md:col-span-5 space-y-8 order-1 md:order-2 md:pl-16">

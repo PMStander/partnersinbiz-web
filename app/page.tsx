@@ -51,17 +51,17 @@ export default function HomePage() {
               <img
                 className="w-12 h-12 rounded-full border-2 border-black object-cover"
                 alt="Professional female corporate headshot portrait"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGVlo6xfJlhJRH3KtuEYHhPUXzf3KL_fZknrdJvKz0Zow8TCiZUKZNBqD2iurQQTaOzb3jES6ZXWFh5QM2pQyXF4oYusSv9RDJDrjpWUsingURS94rY16PYZdTnpPRnRxT6VNpaZxJabGX2xyg-J_AxMUzM5TUM1YO-3y76VJLDtx_33vzUJo63IF3VrrpUJ7A0m2PY4m-_qM8FtGS_c9E-ZjJ33BTL8xHAZyrF2U6XiPy3N0OW1dfJzZelYhKxRwpQR4iJeB7F3IV"
+                src="/images/portrait-1.png"
               />
               <img
                 className="w-12 h-12 rounded-full border-2 border-black object-cover"
                 alt="Professional male corporate headshot portrait"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBeHvNfhlxQBqFV-vGCPSmfa_VGoKgDrdoUovmye4FDnSlzFcNzuCHgJ0Wmk3azRV1b2SYUjs7i4D9QqZgTaFYzGvI_h3uREXVR41CHlsduQqfffyhwrDDQrtnJlHzNJb72mzBJMDhVyGa5JPeIjfywxzSd0W5eIsvKzUvRvUAGbnleN3riaMbH8sPzO_oogHosXZPrw9mDQCCrCf6dQ-tmzOfDmym4KYXXvp92nSF7YFYZwlVMum3uohi9G5RFzWda61PxX_HBoycG"
+                src="/images/portrait-2.png"
               />
               <img
                 className="w-12 h-12 rounded-full border-2 border-black object-cover"
                 alt="Smiling professional female team member"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuANHQVXbTpCemkoqUzXARLMe_IkZN0p19cP70a0NMyMFw2UrO2KoiTyf-IopUnOsqEZ5j4ULV6zwWjUK-dTymNTN2-5tlLQuJyAnJgoXV4CeWfDbUqhKI6OdwAlouOnVFBO0wGlvMOXuXR3duxABGNCdLspGfmOPbIfSchLF7vdwm39F9XGgmTXfO_5kQXQtPABXZmEjpvkhWYZVlvijdovvkaceuc8fwYeOz0wemUMiPm3azN7vmczar-qeCRttaRGPg7yWsAQnEQk"
+                src="/images/portrait-3.png"
               />
               <div className="w-12 h-12 rounded-full glass-card flex items-center justify-center text-[10px] font-bold">
                 +24
