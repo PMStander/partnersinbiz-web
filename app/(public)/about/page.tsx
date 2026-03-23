@@ -93,18 +93,18 @@ export default function AboutPage() {
 
             <div className="relative flex flex-col md:flex-row items-start md:items-center py-16 group">
               <div className="md:w-1/2 md:pr-24 md:text-right pl-8 md:pl-0">
-                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2018</span>
-                <h4 className="font-headline text-xl font-bold mt-2">Founding</h4>
-                <p className="font-body text-sm text-white/40 mt-2">PiB was established as a boutique performance lab in London.</p>
+                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2010</span>
+                <h4 className="font-headline text-xl font-bold mt-2">The Beginning</h4>
+                <p className="font-body text-sm text-white/40 mt-2">Started coding — driven by a relentless need to build things that actually work at scale.</p>
               </div>
               <div className="absolute left-0 md:left-1/2 w-3 h-3 rounded-full bg-white -translate-x-1/2 z-10 border-4 border-black"></div>
             </div>
 
             <div className="relative flex flex-col md:flex-row-reverse items-start md:items-center py-16 group">
               <div className="md:w-1/2 md:pl-24 pl-8">
-                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2020</span>
-                <h4 className="font-headline text-xl font-bold mt-2">Expansion</h4>
-                <p className="font-body text-sm text-white/40 mt-2">Global reach with offices in Tokyo and New York. Scaling the Monolithic approach.</p>
+                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2015</span>
+                <h4 className="font-headline text-xl font-bold mt-2">Going Deep</h4>
+                <p className="font-body text-sm text-white/40 mt-2">Mastered full-stack engineering across multiple industries — from fintech to SaaS to consumer platforms.</p>
               </div>
               <div className="absolute left-0 md:left-1/2 w-3 h-3 rounded-full bg-white -translate-x-1/2 z-10 border-4 border-black"></div>
             </div>
@@ -112,17 +112,17 @@ export default function AboutPage() {
             <div className="relative flex flex-col md:flex-row items-start md:items-center py-16 group">
               <div className="md:w-1/2 md:pr-24 md:text-right pl-8 md:pl-0">
                 <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2022</span>
-                <h4 className="font-headline text-xl font-bold mt-2">AI Integration</h4>
-                <p className="font-body text-sm text-white/40 mt-2">Pivoting core architecture to be AI-native, redefining high-performance tech stacks.</p>
+                <h4 className="font-headline text-xl font-bold mt-2">AI&#8209;Native</h4>
+                <p className="font-body text-sm text-white/40 mt-2">Early adopter of AI-integrated development — rebuilt the entire engineering workflow around intelligent automation.</p>
               </div>
               <div className="absolute left-0 md:left-1/2 w-3 h-3 rounded-full bg-white -translate-x-1/2 z-10 border-4 border-black"></div>
             </div>
 
             <div className="relative flex flex-col md:flex-row-reverse items-start md:items-center py-16 group">
               <div className="md:w-1/2 md:pl-24 pl-8">
-                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">NOW</span>
-                <h4 className="font-headline text-xl font-bold mt-2">Present Day</h4>
-                <p className="font-body text-sm text-white/40 mt-2">Leading the industry in autonomous infrastructure and cognitive interfaces.</p>
+                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2026</span>
+                <h4 className="font-headline text-xl font-bold mt-2">Partners in Biz</h4>
+                <p className="font-body text-sm text-white/40 mt-2">Launched PiB to bring senior-level engineering directly to ambitious brands — without the agency overhead.</p>
               </div>
               <div className="absolute left-0 md:left-1/2 w-3 h-3 rounded-full bg-white -translate-x-1/2 z-10 border-4 border-black shadow-[0_0_15px_rgba(255,255,255,0.5)]"></div>
             </div>
