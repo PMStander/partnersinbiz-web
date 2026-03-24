@@ -46,6 +46,24 @@ export async function POST(request: NextRequest) {
     assignedTo: null,
   })
 
+  // Also create a CRM contact for this lead
+  await adminDb.collection('contacts').add({
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    company: company?.trim() ?? '',
+    phone: '',
+    website: '',
+    source: 'form',
+    type: 'lead',
+    stage: 'new',
+    tags: [],
+    notes: `Enquiry ID: ${docRef.id}`,
+    assignedTo: '', // CRM Phase 2 will populate this from the authenticated admin uid
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    lastContactedAt: null,
+  })
+
   await getResend().emails.send({
     from: process.env.RESEND_FROM_ADDRESS!,
     to: process.env.ADMIN_NOTIFICATION_EMAIL!,
