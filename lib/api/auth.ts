@@ -77,5 +77,7 @@ async function resolveUser(req: NextRequest): Promise<ApiUser | null> {
 async function getRoleFromFirestore(uid: string): Promise<ApiRole> {
   const doc = await adminDb.collection('users').doc(uid).get()
   if (!doc.exists) return 'client'
-  return (doc.data()?.role as ApiRole) ?? 'client'
+  const role = doc.data()?.role
+  if (role === 'admin' || role === 'client' || role === 'ai') return role
+  return 'client'
 }

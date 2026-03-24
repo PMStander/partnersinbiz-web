@@ -120,3 +120,26 @@ describe('withAuth — unauthenticated', () => {
     expect(res.status).toBe(401)
   })
 })
+
+describe('withAuth — session cookie', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: 'cookie-user' })
+    const mockGet = jest.fn().mockResolvedValue({
+      exists: true,
+      data: () => ({ role: 'admin' }),
+    })
+    ;(adminDb.collection as jest.Mock).mockReturnValue({
+      doc: jest.fn().mockReturnValue({ get: mockGet }),
+    })
+  })
+
+  it('grants access via session cookie', async () => {
+    const req = new NextRequest('http://localhost/api/v1/test')
+    req.cookies.set('__session', 'valid-cookie-value')
+    const res = await handler(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.uid).toBe('cookie-user')
+  })
+})
