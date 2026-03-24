@@ -1,0 +1,128 @@
+// __tests__/api/v1/email/send.test.ts
+import { POST } from '@/app/api/v1/email/send/route'
+import { NextRequest } from 'next/server'
+
+jest.mock('@/lib/firebase/admin', () => ({
+  adminAuth: { verifyIdToken: jest.fn(), verifySessionCookie: jest.fn() },
+  adminDb: { collection: jest.fn() },
+}))
+
+jest.mock('@/lib/email/resend', () => ({
+  getResendClient: jest.fn(() => ({
+    emails: {
+      send: jest.fn().mockResolvedValue({ data: { id: 'resend-id-1' }, error: null }),
+    },
+  })),
+  FROM_ADDRESS: 'peet@partnersinbiz.online',
+  plainTextToHtml: jest.fn((t: string) => `<p>${t}</p>`),
+  htmlToPlainText: jest.fn((h: string) => h.replace(/<[^>]+>/g, '')),
+}))
+
+import { adminDb } from '@/lib/firebase/admin'
+process.env.AI_API_KEY = 'test-key'
+
+const mockAdd = jest.fn().mockResolvedValue({ id: 'email-doc-1' })
+const mockDocUpdate = jest.fn().mockResolvedValue(undefined)
+const mockActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-1' })
+
+function mockCollections() {
+  ;(adminDb.collection as jest.Mock).mockImplementation((col: string) => {
+    if (col === 'emails') {
+      return {
+        add: mockAdd,
+        doc: jest.fn().mockReturnValue({ update: mockDocUpdate }),
+      }
+    }
+    if (col === 'activities') {
+      return { add: mockActivitiesAdd }
+    }
+    return {}
+  })
+}
+
+function makeReq(body: object) {
+  return new NextRequest('http://localhost/api/v1/email/send', {
+    method: 'POST',
+    headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+const validPayload = {
+  to: 'client@example.com',
+  subject: 'Hello from PiB',
+  bodyText: 'This is the email body.',
+  contactId: '',
+}
+
+describe('POST /api/v1/email/send', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockCollections()
+  })
+
+  it('returns 401 without auth', async () => {
+    const req = new NextRequest('http://localhost/api/v1/email/send', { method: 'POST' })
+    const res = await POST(req)
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 when to is missing', async () => {
+    const res = await POST(makeReq({ ...validPayload, to: '' }))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/to/i)
+  })
+
+  it('returns 400 when subject is missing', async () => {
+    const res = await POST(makeReq({ ...validPayload, subject: '' }))
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when both bodyText and bodyHtml are missing', async () => {
+    const res = await POST(makeReq({ to: 'a@b.com', subject: 'Hi' }))
+    expect(res.status).toBe(400)
+  })
+
+  it('sends email and returns 201 with id', async () => {
+    const res = await POST(makeReq(validPayload))
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.data.id).toBe('email-doc-1')
+  })
+
+  it('creates a Firestore doc with status sent', async () => {
+    await POST(makeReq(validPayload))
+    expect(mockAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'draft', direction: 'outbound' }),
+    )
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'sent', resendId: 'resend-id-1' }),
+    )
+  })
+
+  it('logs email_sent activity when contactId is provided', async () => {
+    await POST(makeReq({ ...validPayload, contactId: 'contact-abc' }))
+    expect(mockActivitiesAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'email_sent', contactId: 'contact-abc' }),
+    )
+  })
+
+  it('does not log activity when contactId is empty', async () => {
+    await POST(makeReq(validPayload))
+    expect(mockActivitiesAdd).not.toHaveBeenCalled()
+  })
+
+  it('marks email as failed when Resend returns an error', async () => {
+    const { getResendClient } = require('@/lib/email/resend')
+    ;(getResendClient as jest.Mock).mockReturnValueOnce({
+      emails: {
+        send: jest.fn().mockResolvedValue({ data: null, error: { message: 'Bad API key' } }),
+      },
+    })
+    const res = await POST(makeReq(validPayload))
+    expect(res.status).toBe(502)
+    expect(mockDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }))
+  })
+})
