@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+// Note: keeping existing discover page content and adding Athleet as featured product
 
 export const metadata: Metadata = {
   title: 'Discover Phase | PiB',
@@ -27,6 +28,55 @@ export default function DiscoverPage() {
             <p className="md:col-start-7 md:col-span-6 font-headline text-2xl md:text-4xl font-light text-white leading-tight">
               Deep architectural analysis of your goals and user requirements.
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Featured Product: Athleet */}
+      <section className="relative py-16 px-8 md:px-16">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-12">
+            <span className="font-label text-[0.6875rem] uppercase tracking-[0.3em] text-white/40 mb-4 block">Featured</span>
+            <h2 className="font-headline text-3xl font-bold tracking-tight uppercase">Our Work &amp; Products</h2>
+          </div>
+          <div className="glass-card rounded-2xl overflow-hidden border border-white/[0.08]">
+            <div className="grid grid-cols-1 md:grid-cols-3">
+              <div className="md:col-span-2 p-10 md:p-14 border-r border-white/[0.08]">
+                <div className="flex items-center gap-3 mb-6">
+                  <span className="font-label text-[0.6875rem] uppercase tracking-[0.3em] bg-white text-black px-3 py-1 rounded-sm">PRODUCT</span>
+                </div>
+                <h3 className="font-headline text-3xl md:text-4xl font-bold tracking-tighter mb-3">Athleet</h3>
+                <p className="font-headline text-lg text-white/50 mb-6 font-light">Sports Club Management</p>
+                <p className="font-body text-base text-white/50 leading-relaxed mb-10 max-w-lg">
+                  Full-stack club management system. Built once, deployed for many.
+                </p>
+                <a
+                  href="https://athleet-management.vercel.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block bg-white text-black font-headline uppercase tracking-widest text-sm px-8 py-4 rounded-md hover:scale-105 transition-transform duration-300"
+                >
+                  View Live Demo →
+                </a>
+              </div>
+              <div className="p-10 md:p-14 flex flex-col justify-center bg-white/[0.01]">
+                <div className="space-y-8">
+                  <div>
+                    <div className="font-headline text-4xl font-bold tracking-tighter mb-1">500+</div>
+                    <div className="font-label text-[0.6875rem] uppercase tracking-[0.3em] text-white/40">Athletes managed</div>
+                  </div>
+                  <div className="w-8 h-px bg-white/10"></div>
+                  <div>
+                    <div className="font-headline text-4xl font-bold tracking-tighter mb-1">&lt; 4 wks</div>
+                    <div className="font-label text-[0.6875rem] uppercase tracking-[0.3em] text-white/40">Deployment time</div>
+                  </div>
+                  <div className="w-8 h-px bg-white/10"></div>
+                  <Link href="/products" className="font-label text-[0.6875rem] uppercase tracking-[0.3em] text-white/40 hover:text-white transition-colors">
+                    All Products →
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
