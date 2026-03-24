@@ -1,0 +1,52 @@
+// app/api/v1/sequences/[id]/enroll/route.ts
+import { NextRequest } from 'next/server'
+import { adminDb } from '@/lib/firebase/admin'
+import { withAuth } from '@/lib/auth/middleware'
+import { apiSuccess, apiError } from '@/lib/api/response'
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'
+
+export const dynamic = 'force-dynamic'
+
+type Params = { params: Promise<{ id: string }> }
+
+export const POST = withAuth('admin', async (req: NextRequest, context?: unknown) => {
+  const { id } = await (context as Params).params
+  const body = await req.json().catch(() => null)
+  if (!body?.contactIds?.length) return apiError('contactIds required', 400)
+
+  const seqSnap = await adminDb.collection('sequences').doc(id).get()
+  if (!seqSnap.exists || seqSnap.data()?.deleted) return apiError('Sequence not found', 404)
+  const seq = seqSnap.data()!
+  if (seq.status !== 'active') return apiError('Sequence must be active to enroll', 422)
+
+  const firstStep = seq.steps?.[0]
+  const delayMs = (firstStep?.delayDays ?? 0) * 24 * 60 * 60 * 1000
+  const nextSendAt = Timestamp.fromDate(new Date(Date.now() + delayMs))
+
+  const enrolled: string[] = []
+  for (const contactId of body.contactIds as string[]) {
+    const contactSnap = await adminDb.collection('contacts').doc(contactId).get()
+    if (!contactSnap.exists || contactSnap.data()?.deleted) continue
+
+    const ref = await adminDb.collection('sequence_enrollments').add({
+      sequenceId: id,
+      contactId,
+      status: 'active',
+      currentStep: 0,
+      enrolledAt: FieldValue.serverTimestamp(),
+      nextSendAt,
+      deleted: false,
+    })
+
+    await adminDb.collection('activities').add({
+      contactId,
+      type: 'sequence_enrolled',
+      note: `Enrolled in sequence: ${seq.name}`,
+      createdAt: FieldValue.serverTimestamp(),
+    })
+
+    enrolled.push(ref.id)
+  }
+
+  return apiSuccess({ enrolled }, 201)
+})
