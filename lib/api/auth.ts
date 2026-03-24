@@ -3,7 +3,7 @@ import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { apiError } from './response'
 import type { ApiRole, ApiUser } from './types'
 
-type RouteHandler = (req: NextRequest, user: ApiUser) => Promise<NextResponse>
+type RouteHandler = (req: NextRequest, user: ApiUser, context?: Record<string, unknown>) => Promise<NextResponse>
 
 /**
  * Wraps an API route handler with authentication and role enforcement.
@@ -16,7 +16,7 @@ type RouteHandler = (req: NextRequest, user: ApiUser) => Promise<NextResponse>
  * Role hierarchy: ai/admin satisfy any role; client only satisfies "client"
  */
 export function withAuth(requiredRole: 'admin' | 'client', handler: RouteHandler) {
-  return async (req: NextRequest): Promise<NextResponse> => {
+  return async (req: NextRequest, context?: Record<string, unknown>): Promise<NextResponse> => {
     try {
       const user = await resolveUser(req)
       if (!user) return apiError('Unauthorized', 401)
@@ -29,7 +29,7 @@ export function withAuth(requiredRole: 'admin' | 'client', handler: RouteHandler
 
       if (!roleOk) return apiError('Forbidden', 403)
 
-      return handler(req, user)
+      return handler(req, user, context)
     } catch {
       return apiError('Unauthorized', 401)
     }
