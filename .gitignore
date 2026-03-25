@@ -53,3 +53,4 @@ firebase-secret.json
 
 # stitch reference files (source designs, not needed for build)
 stitch/
+client-secret.json
