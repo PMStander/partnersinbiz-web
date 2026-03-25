@@ -1,3 +1,5 @@
+import GlobalSearch from './GlobalSearch'
+
 interface AdminTopbarProps {
   userEmail: string
 }
@@ -11,9 +13,7 @@ export function AdminTopbar({ userEmail }: AdminTopbarProps) {
         </span>
       </div>
       <div className="flex items-center gap-6">
-        <kbd className="hidden md:inline-flex text-[9px] font-label text-on-surface-variant/40 border border-outline-variant px-1.5 py-0.5">
-          ⌘K
-        </kbd>
+        <GlobalSearch />
         <span className="text-[11px] font-label text-on-surface-variant">{userEmail}</span>
         <a
           href="/api/auth/logout"

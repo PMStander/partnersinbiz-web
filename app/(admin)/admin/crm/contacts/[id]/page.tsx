@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ContactForm } from '@/components/admin/crm/ContactForm'
 import { ActivityTimeline } from '@/components/admin/crm/ActivityTimeline'
+import ContactBrief from '@/components/admin/crm/ContactBrief'
 
 const STAGES = ['new','contacted','replied','demo','proposal','won','lost']
 
@@ -184,6 +185,10 @@ export default function ContactDetailPage() {
             <div className="px-5 py-4">
               <ActivityTimeline activities={activities as never} loading={activitiesLoading} />
             </div>
+          </div>
+
+          <div className="mt-4">
+            <ContactBrief contactId={id} />
           </div>
         </div>
       </div>
