@@ -57,7 +57,7 @@ export const GET = withAuth('admin', async (req: NextRequest, context?: unknown)
     model: BRIEF_MODEL,
     system: 'You are a B2B sales assistant. Write a concise 3–5 sentence brief about this prospect suitable for a sales rep about to reach out. Be specific, practical, and highlight the most important context.',
     prompt: context_str,
-    maxTokens: 300,
+    maxOutputTokens: 300,
   })
 
   return apiSuccess({ brief: text, contactId: id })
