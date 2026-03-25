@@ -2,6 +2,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
+  sendPasswordResetEmail,
 } from 'firebase/auth'
 import { doc, setDoc } from 'firebase/firestore'
 import { auth, db } from './config'
@@ -37,4 +38,8 @@ export async function registerWithEmail(email: string, password: string, name: s
 export async function logout() {
   await signOut(auth)
   await fetch('/api/auth/session', { method: 'DELETE' })
+}
+
+export async function resetPassword(email: string) {
+  await sendPasswordResetEmail(auth, email)
 }
