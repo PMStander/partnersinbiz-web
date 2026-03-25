@@ -1,15 +1,16 @@
 import { NextRequest } from 'next/server'
 import { generateText } from 'ai'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/auth/middleware'
+import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { BRIEF_MODEL } from '@/lib/ai/client'
+import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
-export const GET = withAuth('admin', async (req: NextRequest, context?: unknown) => {
+export const GET = withAuth('admin', async (req: NextRequest, _user: ApiUser, context?: unknown) => {
   const { id } = await (context as Params).params
 
   const contactRef = adminDb.doc(`contacts/${id}`)
@@ -28,15 +29,16 @@ export const GET = withAuth('admin', async (req: NextRequest, context?: unknown)
       .orderBy('createdAt', 'desc')
       .limit(5)
       .get(),
+    // Fetch all deals for contact, filter deleted in memory (avoids composite index)
     (adminDb.collection('deals') as any)
       .where('contactId', '==', id)
-      .where('deleted', '!=', true)
       .get(),
   ])
 
   const activities = activitiesSnap.docs.map((d: any) => d.data())
   const emails = emailsSnap.docs.map((d: any) => d.data())
-  const deals = dealsSnap.docs.map((d: any) => d.data())
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const deals = dealsSnap.docs.map((d: any) => d.data()).filter((d: any) => d.deleted !== true)
 
   const context_str = [
     `Contact: ${contact.name} (${contact.email}) at ${contact.company ?? 'unknown company'}`,
