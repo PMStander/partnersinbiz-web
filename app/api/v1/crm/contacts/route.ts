@@ -38,7 +38,7 @@ export const GET = withAuth('admin', async (req) => {
   const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query: any = adminDb.collection('contacts').where('deleted', '!=', true)
+  let query: any = adminDb.collection('contacts').orderBy('createdAt', 'desc')
 
   if (stage && VALID_STAGES.includes(stage)) {
     query = query.where('stage', '==', stage)
@@ -51,15 +51,13 @@ export const GET = withAuth('admin', async (req) => {
   }
 
   const snapshot = await query
-    .orderBy('createdAt', 'desc')
     .limit(limit)
     .offset((page - 1) * limit)
     .get()
 
-  let contacts: Contact[] = snapshot.docs.map((doc: any) => ({
-    id: doc.id,
-    ...doc.data(),
-  }))
+  let contacts: Contact[] = snapshot.docs
+    .map((doc: any) => ({ id: doc.id, ...doc.data() }))
+    .filter((c: Contact) => c.deleted !== true)
 
   if (search) {
     const q = search.toLowerCase()

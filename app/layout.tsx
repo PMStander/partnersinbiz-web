@@ -1,8 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter, Space_Grotesk } from 'next/font/google'
 import './globals.css'
-import Navbar from '@/components/layout/Navbar'
-import Footer from '@/components/layout/Footer'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -31,9 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className={`${inter.variable} ${spaceGrotesk.variable} bg-black text-white font-body selection:bg-white selection:text-black`}>
-        <Navbar />
         {children}
-        <Footer />
       </body>
     </html>
   )

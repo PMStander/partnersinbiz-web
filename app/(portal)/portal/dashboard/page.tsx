@@ -2,11 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '@/lib/firebase/config'
-import { logout } from '@/lib/firebase/auth'
 
 const STATUS_LABELS: Record<string, string> = {
   new: 'Under Review',
@@ -23,77 +19,67 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function PortalDashboard() {
-  const router = useRouter()
   const [enquiries, setEnquiries] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (user) => {
-      if (!user) { router.push('/login'); return }
-      const res = await fetch('/api/v1/portal/enquiries')
-      const body = await res.json()
-      setEnquiries(body.data ?? [])
-      setLoading(false)
-    })
-  }, [router])
-
-  async function handleLogout() {
-    await logout()
-    router.push('/')
-  }
+    fetch('/api/v1/portal/enquiries')
+      .then((r) => r.json())
+      .then((b) => { setEnquiries(b.data ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
 
   const activeCount = enquiries.filter((e) => e.status === 'active').length
   const totalCount = enquiries.length
 
   return (
-    <main className="relative z-10 pt-32 pb-24 px-8 md:px-16 min-h-screen">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-10">
-          <h1 className="font-headline text-4xl font-bold tracking-tighter">Your Projects</h1>
-          <button onClick={handleLogout} className="text-white/40 hover:text-white text-sm transition-colors">
-            Sign out
-          </button>
-        </div>
+    <div className="space-y-8">
+      <div>
+        <h1 className="font-headline text-2xl font-bold tracking-tighter">Dashboard</h1>
+        <p className="text-sm text-white/40 mt-1">Overview of your projects with Partners in Biz.</p>
+      </div>
 
-        {!loading && totalCount > 0 && (
-          <div className="grid grid-cols-2 gap-4 mb-10">
-            <div className="glass-card p-6 text-center">
-              <p className="text-4xl font-headline font-bold tracking-tighter">{totalCount}</p>
-              <p className="text-white/40 text-sm mt-1 font-label uppercase tracking-widest">Total Projects</p>
-            </div>
-            <div className="glass-card p-6 text-center">
-              <p className="text-4xl font-headline font-bold tracking-tighter text-green-300">{activeCount}</p>
-              <p className="text-white/40 text-sm mt-1 font-label uppercase tracking-widest">In Progress</p>
-            </div>
+      {!loading && totalCount > 0 && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="border border-white/10 p-6 text-center">
+            <p className="text-4xl font-headline font-bold tracking-tighter">{totalCount}</p>
+            <p className="text-white/40 text-sm mt-1 font-label uppercase tracking-widest">Total Projects</p>
           </div>
-        )}
+          <div className="border border-white/10 p-6 text-center">
+            <p className="text-4xl font-headline font-bold tracking-tighter text-green-300">{activeCount}</p>
+            <p className="text-white/40 text-sm mt-1 font-label uppercase tracking-widest">In Progress</p>
+          </div>
+        </div>
+      )}
 
+      <div>
+        <h2 className="text-xs font-label uppercase tracking-widest text-white/30 mb-3">Recent Projects</h2>
         {loading ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {[...Array(2)].map((_, i) => (
-              <div key={i} className="glass-card p-8 animate-pulse h-28" />
+              <div key={i} className="border border-white/10 p-6 animate-pulse h-20" />
             ))}
           </div>
         ) : enquiries.length === 0 ? (
-          <div className="glass-card p-12 text-center">
-            <p className="text-white/40 mb-6">No projects yet.</p>
-            <a href="/start-a-project" className="text-white underline text-sm">Start a project →</a>
+          <div className="border border-white/10 p-12 text-center">
+            <p className="text-white/40 mb-4">No projects yet.</p>
+            <Link href="/start-a-project" className="text-white underline text-sm">Start a project →</Link>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {enquiries.map((enq) => (
               <Link
                 key={enq.id}
-                href={`/portal/enquiries/${enq.id}`}
-                className="glass-card p-8 flex justify-between items-start hover:bg-white/[0.05] transition-colors block"
+                href={`/portal/project`}
+                className="border border-white/10 p-5 flex justify-between items-center hover:bg-white/5 transition-colors block"
               >
                 <div>
-                  <h3 className="font-headline text-xl font-bold tracking-tight mb-2">
+                  <p className="font-headline font-bold tracking-tight">
                     {enq.projectType?.toUpperCase() ?? 'Project'}
-                  </h3>
-                  <p className="text-white/50 text-sm line-clamp-2">{enq.details}</p>
+                  </p>
+                  <p className="text-white/40 text-xs mt-0.5 line-clamp-1">{enq.details}</p>
                 </div>
-                <span className={`flex-shrink-0 ml-4 text-xs font-label uppercase tracking-widest border px-3 py-1 rounded-full ${STATUS_COLORS[enq.status] ?? 'border-white/20 text-white/40'}`}>
+                <span className={`flex-shrink-0 ml-4 text-xs font-label uppercase tracking-widest border px-3 py-1 ${STATUS_COLORS[enq.status] ?? 'border-white/20 text-white/40'}`}>
                   {STATUS_LABELS[enq.status] ?? enq.status}
                 </span>
               </Link>
@@ -101,6 +87,6 @@ export default function PortalDashboard() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   )
 }

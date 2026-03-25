@@ -44,7 +44,10 @@ export default function LoginPage() {
     const form = new FormData(e.currentTarget)
     try {
       await loginWithEmail(form.get('email') as string, form.get('password') as string)
-      router.push('/portal/dashboard')
+      const verifyRes = await fetch('/api/auth/verify')
+      const verifyData = verifyRes.ok ? await verifyRes.json() : null
+      const role = verifyData?.role
+      router.push(role === 'admin' ? '/admin/dashboard' : '/portal/dashboard')
     } catch {
       setError('Invalid email or password.')
     } finally {

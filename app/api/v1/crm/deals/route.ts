@@ -20,17 +20,18 @@ export const GET = withAuth('admin', async (req) => {
   const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query: any = adminDb.collection('deals').where('deleted', '!=', true)
+  let query: any = adminDb.collection('deals').orderBy('createdAt', 'desc')
   if (stage && VALID_STAGES.includes(stage)) query = query.where('stage', '==', stage)
   if (contactId) query = query.where('contactId', '==', contactId)
 
   const snapshot = await query
-    .orderBy('createdAt', 'desc')
     .limit(limit)
     .offset((page - 1) * limit)
     .get()
 
-  const deals: Deal[] = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
+  const deals: Deal[] = snapshot.docs
+    .map((doc: any) => ({ id: doc.id, ...doc.data() }))
+    .filter((d: Deal) => d.deleted !== true)
   return apiSuccess(deals, 200, { total: deals.length, page, limit })
 })
 

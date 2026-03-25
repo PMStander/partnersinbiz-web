@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { adminAuth } from '@/lib/firebase/admin'
+import { FieldValue } from 'firebase-admin/firestore'
+import { adminAuth, adminDb } from '@/lib/firebase/admin'
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME ?? '__session'
 const EXPIRY_DAYS = parseInt(process.env.SESSION_EXPIRY_DAYS ?? '14')
 const EXPIRY_MS = EXPIRY_DAYS * 24 * 60 * 60 * 1000
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'peet.stander@partnersinbiz.online'
 
 export async function POST(request: NextRequest) {
   const { idToken } = await request.json()
@@ -11,7 +13,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'idToken required' }, { status: 400 })
   }
   try {
+    const decoded = await adminAuth.verifyIdToken(idToken)
     const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn: EXPIRY_MS })
+
+    // Bootstrap user document in Firestore
+    const userRef = adminDb.collection('users').doc(decoded.uid)
+    const userDoc = await userRef.get()
+    const isAdmin = decoded.email === ADMIN_EMAIL
+
+    if (!userDoc.exists) {
+      await userRef.set({
+        email: decoded.email ?? '',
+        name: decoded.name ?? decoded.email ?? '',
+        role: isAdmin ? 'admin' : 'client',
+        createdAt: FieldValue.serverTimestamp(),
+      })
+    } else if (isAdmin && userDoc.data()?.role !== 'admin') {
+      await userRef.update({ role: 'admin' })
+    }
+
     const response = NextResponse.json({ status: 'ok' })
     response.cookies.set(COOKIE_NAME, sessionCookie, {
       maxAge: EXPIRY_MS / 1000,
