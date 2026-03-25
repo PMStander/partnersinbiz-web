@@ -1,0 +1,168 @@
+// app/(admin)/admin/crm/contacts/page.tsx
+'use client'
+export const dynamic = 'force-dynamic'
+import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
+import { ContactForm } from '@/components/admin/crm/ContactForm'
+
+const STAGES = ['new','contacted','replied','demo','proposal','won','lost']
+const TYPES = ['lead','prospect','client','churned']
+
+interface Contact {
+  id: string
+  name: string
+  email: string
+  company: string
+  type: string
+  stage: string
+  lastContactedAt: unknown
+  tags: string[]
+}
+
+export default function ContactsPage() {
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [stageFilter, setStageFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [showNew, setShowNew] = useState(false)
+
+  const fetchContacts = useCallback(async () => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (search) params.set('search', search)
+    if (stageFilter) params.set('stage', stageFilter)
+    if (typeFilter) params.set('type', typeFilter)
+    const res = await fetch(`/api/v1/crm/contacts?${params}`)
+    const body = await res.json()
+    setContacts(body.data ?? [])
+    setLoading(false)
+  }, [search, stageFilter, typeFilter])
+
+  useEffect(() => { fetchContacts() }, [fetchContacts])
+
+  async function createContact(data: Record<string, unknown>) {
+    const res = await fetch('/api/v1/crm/contacts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err.error ?? 'Failed to create contact')
+    }
+    setShowNew(false)
+    fetchContacts()
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-headline text-2xl font-bold tracking-tighter">Contacts</h1>
+          <p className="text-on-surface-variant text-sm mt-0.5">{contacts.length} total</p>
+        </div>
+        <button
+          onClick={() => setShowNew(true)}
+          className="px-4 py-2 text-sm font-label text-black bg-on-surface hover:opacity-90 transition-opacity"
+        >
+          + New Contact
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3 mb-4">
+        <input
+          placeholder="Search name, email, company…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 bg-transparent border border-outline-variant px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-on-surface"
+        />
+        <select
+          value={stageFilter}
+          onChange={(e) => setStageFilter(e.target.value)}
+          className="bg-transparent border border-outline-variant px-3 py-1.5 text-sm text-on-surface focus:outline-none"
+        >
+          <option value="">All stages</option>
+          {STAGES.map((s) => <option key={s} value={s} className="bg-black">{s}</option>)}
+        </select>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="bg-transparent border border-outline-variant px-3 py-1.5 text-sm text-on-surface focus:outline-none"
+        >
+          <option value="">All types</option>
+          {TYPES.map((t) => <option key={t} value={t} className="bg-black">{t}</option>)}
+        </select>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-10 bg-surface-container animate-pulse" />
+          ))}
+        </div>
+      ) : contacts.length === 0 ? (
+        <div className="border border-outline-variant p-12 text-center">
+          <p className="text-on-surface-variant mb-3">No contacts yet.</p>
+          <button onClick={() => setShowNew(true)} className="text-sm text-on-surface underline">
+            Add your first lead →
+          </button>
+        </div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-outline-variant text-left">
+              {['Name', 'Email', 'Company', 'Type', 'Stage', 'Tags'].map((h) => (
+                <th key={h} className="py-2 px-3 text-[10px] font-label uppercase tracking-widest text-on-surface-variant font-normal">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {contacts.map((c) => (
+              <tr key={c.id} className="border-b border-outline-variant hover:bg-surface-container transition-colors">
+                <td className="py-2.5 px-3">
+                  <Link href={`/admin/crm/contacts/${c.id}`} className="text-on-surface hover:underline font-medium">
+                    {c.name}
+                  </Link>
+                </td>
+                <td className="py-2.5 px-3 text-on-surface-variant">{c.email}</td>
+                <td className="py-2.5 px-3 text-on-surface-variant">{c.company || '—'}</td>
+                <td className="py-2.5 px-3">
+                  <span className="border border-outline-variant text-[10px] font-label uppercase tracking-widest px-2 py-0.5 text-on-surface-variant">
+                    {c.type}
+                  </span>
+                </td>
+                <td className="py-2.5 px-3">
+                  <span className="border border-outline-variant text-[10px] font-label uppercase tracking-widest px-2 py-0.5 text-on-surface-variant">
+                    {c.stage}
+                  </span>
+                </td>
+                <td className="py-2.5 px-3 text-on-surface-variant text-xs">
+                  {c.tags?.join(', ') || '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* New Contact Slide-In */}
+      {showNew && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="flex-1 bg-black/50" onClick={() => setShowNew(false)} />
+          <div className="w-96 bg-surface-container border-l border-outline-variant overflow-y-auto">
+            <div className="px-6 py-4 border-b border-outline-variant">
+              <h2 className="font-headline text-base font-bold tracking-tight">New Contact</h2>
+            </div>
+            <ContactForm onSave={createContact} onCancel={() => setShowNew(false)} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

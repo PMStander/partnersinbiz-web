@@ -1,81 +1,149 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { onAuthStateChanged } from 'firebase/auth'
-import { collection, getDocs } from 'firebase/firestore'
-import { auth, db } from '@/lib/firebase/config'
-import { type Enquiry } from '@/lib/firebase/firestore'
-import { logout } from '@/lib/firebase/auth'
 
-const STATUSES = ['new', 'reviewing', 'active', 'closed'] as const
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+
+interface Stats {
+  contacts: { total: number }
+  deals: { total: number; pipelineValue: number; wonValue: number }
+  email: { sent: number; opened: number }
+  sequences: { active: number; activeEnrollments: number }
+}
+
+interface Activity {
+  id: string
+  type: string
+  contactId: string
+  note: string
+  createdAt: any
+}
+
+const ACTIVITY_ICONS: Record<string, string> = {
+  email_sent: '✉️',
+  note: '📝',
+  stage_change: '🔄',
+  sequence_enrolled: '📋',
+  call: '📞',
+}
+
+function StatCard({ label, value, sub, href }: { label: string; value: string | number; sub?: string; href?: string }) {
+  const content = (
+    <div className="p-5 rounded-xl bg-surface-container hover:bg-surface-container-high transition-colors">
+      <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-3xl font-bold text-on-surface">{value}</p>
+      {sub && <p className="text-xs text-on-surface-variant mt-1">{sub}</p>}
+    </div>
+  )
+  return href ? <Link href={href}>{content}</Link> : content
+}
 
 export default function AdminDashboard() {
-  const router = useRouter()
-  const [enquiries, setEnquiries] = useState<Enquiry[]>([])
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [activity, setActivity] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (user) => {
-      if (!user) { router.push('/login'); return }
-      const snapshot = await getDocs(collection(db, 'enquiries'))
-      setEnquiries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Enquiry)))
+    Promise.all([
+      fetch('/api/v1/dashboard/stats').then((r) => r.json()),
+      fetch('/api/v1/dashboard/activity?limit=15').then((r) => r.json()),
+    ]).then(([statsBody, activityBody]) => {
+      setStats(statsBody.data)
+      setActivity(activityBody.data ?? [])
       setLoading(false)
     })
-  }, [router])
+  }, [])
 
-  async function updateStatus(id: string, status: string) {
-    // All Firestore writes go through the API route (Admin SDK) — never the client SDK
-    await fetch(`/api/enquiries/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    })
-    setEnquiries((prev) => prev.map((e) => e.id === id ? { ...e, status: status as Enquiry['status'] } : e))
-  }
-
-  async function handleLogout() {
-    await logout()
-    router.push('/')
-  }
+  const openRate = stats && stats.email.sent > 0
+    ? Math.round((stats.email.opened / stats.email.sent) * 100)
+    : 0
 
   return (
-    <main className="relative z-10 pt-32 pb-24 px-8 md:px-16 min-h-screen">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-16">
-          <h1 className="font-headline text-4xl font-bold tracking-tighter">Admin — All Enquiries</h1>
-          <button onClick={handleLogout} className="text-white/40 hover:text-white text-sm transition-colors">Sign out</button>
+    <div className="p-6 max-w-5xl mx-auto space-y-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-on-surface">Dashboard</h1>
+        <p className="text-sm text-on-surface-variant mt-1">Overview of your business</p>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-24 rounded-xl bg-surface-container animate-pulse" />
+          ))}
         </div>
+      ) : stats && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard
+              label="Contacts"
+              value={stats.contacts.total}
+              href="/admin/crm/contacts"
+            />
+            <StatCard
+              label="Pipeline Value"
+              value={`$${stats.deals.pipelineValue.toLocaleString()}`}
+              sub={`$${stats.deals.wonValue.toLocaleString()} won`}
+              href="/admin/crm/pipeline"
+            />
+            <StatCard
+              label="Emails Sent"
+              value={stats.email.sent}
+              sub={`${openRate}% open rate`}
+              href="/admin/email"
+            />
+            <StatCard
+              label="Active Sequences"
+              value={stats.sequences.active}
+              sub={`${stats.sequences.activeEnrollments} enrolled`}
+              href="/admin/sequences"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'CRM Contacts', href: '/admin/crm/contacts' },
+              { label: 'Pipeline', href: '/admin/crm/pipeline' },
+              { label: 'Email Inbox', href: '/admin/email' },
+              { label: 'Sequences', href: '/admin/sequences' },
+              { label: 'Compose Email', href: '/admin/email/compose' },
+              { label: 'Marketing', href: '/admin/marketing' },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="px-4 py-3 rounded-xl bg-surface-container text-sm font-medium text-on-surface hover:bg-surface-container-high transition-colors text-center"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div>
+        <h2 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-3">Recent Activity</h2>
         {loading ? (
-          <p className="text-white/40">Loading...</p>
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-12 rounded-xl bg-surface-container animate-pulse" />
+            ))}
+          </div>
+        ) : activity.length === 0 ? (
+          <p className="text-on-surface-variant text-sm text-center py-8">No activity yet.</p>
         ) : (
-          <div className="space-y-4">
-            {enquiries.map((enq) => (
-              <div key={enq.id} className="glass-card p-8">
-                <div className="flex flex-col md:flex-row justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="font-headline font-bold text-lg mb-1">{enq.name} <span className="text-white/40 font-normal text-sm">— {enq.email}</span></p>
-                    <p className="text-white/50 text-xs uppercase tracking-widest mb-3">{enq.projectType} · {enq.company}</p>
-                    <p className="text-white/60 text-sm">{enq.details.slice(0, 200)}</p>
-                  </div>
-                  <div className="flex flex-col gap-2 min-w-[160px]">
-                    <label className="font-headline text-[0.65rem] uppercase tracking-widest text-white/40">Status</label>
-                    <select
-                      value={enq.status}
-                      onChange={(e) => updateStatus(enq.id, e.target.value)}
-                      className="bg-transparent border border-white/20 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-white"
-                    >
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s} className="bg-neutral-900">{s}</option>
-                      ))}
-                    </select>
-                  </div>
+          <div className="space-y-1">
+            {activity.map((item) => (
+              <div key={item.id} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-surface-container transition-colors">
+                <span className="text-base flex-shrink-0">{ACTIVITY_ICONS[item.type] ?? '•'}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-on-surface truncate">{item.note}</p>
                 </div>
+                <span className="text-xs text-on-surface-variant flex-shrink-0 capitalize">{item.type.replace(/_/g, ' ')}</span>
               </div>
             ))}
           </div>
         )}
       </div>
-    </main>
+    </div>
   )
 }

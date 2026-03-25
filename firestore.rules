@@ -2,29 +2,103 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can read/write their own doc, but cannot change their role
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    function isAdmin() {
+      return request.auth != null
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function isClientFor(clientId) {
+      return request.auth != null
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientId == clientId;
+    }
+
+    // ── Users ────────────────────────────────────────────────────────────────
     match /users/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
+      allow read: if request.auth != null
+                  && (request.auth.uid == uid || isAdmin());
+      // Clients may create their own doc (role locked to "client"); admin writes via Admin SDK
       allow create: if request.auth != null
                     && request.auth.uid == uid
                     && request.resource.data.role == "client";
       allow update: if request.auth != null
                     && request.auth.uid == uid
                     && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["role"]);
+      allow write: if isAdmin();
     }
 
-    // Enquiries: only server (Admin SDK) can write via API routes
-    // Clients can read their own enquiries; admins can read all
+    // ── Enquiries (existing) ─────────────────────────────────────────────────
     match /enquiries/{id} {
       allow read: if request.auth != null
-                  && (
-                    request.auth.uid == resource.data.userId
-                    || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
-                  );
-      allow write: if false;
+                  && (request.auth.uid == resource.data.userId || isAdmin());
+      allow write: if false; // all writes via Admin SDK only
+    }
+
+    // ── CRM ──────────────────────────────────────────────────────────────────
+    match /contacts/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /deals/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /activities/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── Email ────────────────────────────────────────────────────────────────
+    match /emails/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── Sequences ────────────────────────────────────────────────────────────
+    match /sequences/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /sequence_enrollments/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── Client portal ────────────────────────────────────────────────────────
+    match /clients/{id} {
+      allow read: if isAdmin() || isClientFor(id);
+      allow write: if isAdmin();
+    }
+
+    match /projects/{id} {
+      allow read: if isAdmin() || isClientFor(resource.data.clientId);
+      allow write: if isAdmin();
+    }
+
+    match /tasks/{id} {
+      allow read: if isAdmin() || isClientFor(resource.data.clientId);
+      allow write: if isAdmin();
+    }
+
+    match /tasks/{taskId}/comments/{commentId} {
+      allow read: if isAdmin() || isClientFor(
+        get(/databases/$(database)/documents/tasks/$(taskId)).data.clientId
+      );
+      allow write: if isAdmin() || isClientFor(
+        get(/databases/$(database)/documents/tasks/$(taskId)).data.clientId
+      );
+    }
+
+    match /invoices/{id} {
+      allow read: if isAdmin() || isClientFor(resource.data.clientId);
+      allow write: if isAdmin();
+    }
+
+    // ── Marketing ────────────────────────────────────────────────────────────
+    match /campaigns/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── AI audit log ─────────────────────────────────────────────────────────
+    match /ai_action_log/{id} {
+      allow read, write: if isAdmin();
     }
   }
 }
-
-// To deploy these rules to Firestore, run:
-// npx firebase-tools deploy --only firestore:rules

@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
-import { Resend } from 'resend'
 import { FieldValue } from 'firebase-admin/firestore'
-
-function getResend() {
-  return new Resend(process.env.RESEND_API_KEY)
-}
+import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -46,21 +42,45 @@ export async function POST(request: NextRequest) {
     assignedTo: null,
   })
 
-  await getResend().emails.send({
-    from: process.env.RESEND_FROM_ADDRESS!,
-    to: process.env.ADMIN_NOTIFICATION_EMAIL!,
-    subject: `New Project Inquiry from ${escapeHtml(name)}`,
-    html: `
-      <h2>New Project Inquiry</h2>
-      <p><strong>Name:</strong> ${escapeHtml(name)}</p>
-      <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-      <p><strong>Company:</strong> ${escapeHtml(company ?? 'Not provided')}</p>
-      <p><strong>Project Type:</strong> ${escapeHtml(projectType)}</p>
-      <p><strong>Details:</strong></p>
-      <p>${escapeHtml(details)}</p>
-      <p><em>Enquiry ID: ${docRef.id}</em></p>
-    `,
+  // Also create a CRM contact for this lead
+  await adminDb.collection('contacts').add({
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    company: company?.trim() ?? '',
+    phone: '',
+    website: '',
+    source: 'form',
+    type: 'lead',
+    stage: 'new',
+    tags: [],
+    notes: `Enquiry ID: ${docRef.id}`,
+    assignedTo: '',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    lastContactedAt: null,
   })
+
+  // Notification email — fire-and-forget; failure must not break form submission
+  try {
+    await getResendClient().emails.send({
+      from: FROM_ADDRESS,
+      to: 'peet@partnersinbiz.online',
+      subject: `New Project Inquiry from ${escapeHtml(name)}`,
+      html: `
+        <h2>New Project Inquiry</h2>
+        <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+        <p><strong>Company:</strong> ${escapeHtml(company ?? 'Not provided')}</p>
+        <p><strong>Project Type:</strong> ${escapeHtml(projectType)}</p>
+        <p><strong>Details:</strong></p>
+        <p>${escapeHtml(details)}</p>
+        <p><em>Enquiry ID: ${docRef.id}</em></p>
+      `,
+    })
+  } catch (err) {
+    // Log but do not fail the request
+    console.error('[enquiries] notification email failed:', err)
+  }
 
   return NextResponse.json({ id: docRef.id }, { status: 201 })
 }
