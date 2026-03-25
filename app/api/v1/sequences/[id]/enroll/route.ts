@@ -1,15 +1,16 @@
 // app/api/v1/sequences/[id]/enroll/route.ts
 import { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/auth/middleware'
+import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
+import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
-export const POST = withAuth('admin', async (req: NextRequest, context?: unknown) => {
+export const POST = withAuth('admin', async (req: NextRequest, _user: ApiUser, context?: unknown) => {
   const { id } = await (context as Params).params
   const body = await req.json().catch(() => null)
   if (!body?.contactIds?.length) return apiError('contactIds required', 400)

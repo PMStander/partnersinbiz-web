@@ -1,28 +1,35 @@
 // app/api/v1/sequences/route.ts
 import { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/auth/middleware'
+import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { FieldValue } from 'firebase-admin/firestore'
+import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
 
-export const GET = withAuth('admin', async (req: NextRequest) => {
+export const GET = withAuth('admin', async (req: NextRequest, _user: ApiUser) => {
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status')
   const limit = parseInt(searchParams.get('limit') ?? '50')
-  const page = parseInt(searchParams.get('page') ?? '1')
+  const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1)
 
-  let query = (adminDb.collection('sequences') as any).where('deleted', '!=', true)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = adminDb.collection('sequences').orderBy('createdAt', 'desc')
   if (status) query = query.where('status', '==', status)
-  query = query.orderBy('createdAt', 'desc').limit(limit).offset((page - 1) * limit)
 
   const snap = await query.get()
-  const data = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }))
-  return apiSuccess(data)
+
+  // Filter soft-deleted docs in memory (avoids composite index requirement)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data = snap.docs.map((d: any) => ({ id: d.id, ...d.data() })).filter((d: any) => d.deleted !== true)
+  const total = data.length
+  data = data.slice((page - 1) * limit, page * limit)
+
+  return apiSuccess(data, 200, { total, page, limit })
 })
 
-export const POST = withAuth('admin', async (req: NextRequest) => {
+export const POST = withAuth('admin', async (req: NextRequest, _user: ApiUser) => {
   const body = await req.json().catch(() => null)
   if (!body?.name) return apiError('name is required', 400)
 
