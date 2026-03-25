@@ -1,8 +1,10 @@
-// turbopack.root is not yet in the NextConfig types but is a valid runtime option
+import path from 'path'
+
+// turbopack.root must be an absolute path — __dirname compiles to "." via esbuild
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const nextConfig: any = {
   turbopack: {
-    root: __dirname,
+    root: path.resolve('.'),
   },
 };
 
