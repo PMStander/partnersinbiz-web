@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export const metadata: Metadata = {
   title: 'Our Process | PiB',
@@ -14,10 +15,12 @@ export default function OurProcessPage() {
         {/* Background Image */}
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-black/60 z-10"></div>
-          <img
-            alt="Abstract dark cinematic tech laboratory background"
-            className="w-full h-full object-cover opacity-30 grayscale"
+          <Image
             src="/images/our-process-hero.png"
+            alt="Abstract dark cinematic tech laboratory background"
+            fill
+            priority
+            className="object-cover opacity-30 grayscale"
           />
           {/* Subtle moving orbs effect */}
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-white/5 rounded-full blur-[120px]"></div>
