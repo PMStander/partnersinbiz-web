@@ -28,7 +28,7 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
   const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query: any = adminDb.collection('emails').where('deleted', '!=', true)
+  let query: any = adminDb.collection('emails').orderBy('createdAt', 'desc')
 
   if (direction && VALID_DIRECTIONS.includes(direction)) {
     query = query.where('direction', '==', direction)
@@ -40,16 +40,16 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     query = query.where('contactId', '==', contactId)
   }
 
-  const snapshot = await query
-    .orderBy('createdAt', 'desc')
-    .limit(limit)
-    .offset((page - 1) * limit)
-    .get()
+  const snapshot = await query.get()
 
-  const emails: Email[] = snapshot.docs.map((doc: any) => ({
-    id: doc.id,
-    ...doc.data(),
-  }))
+  // Filter soft-deleted docs in memory (avoids composite index requirement)
+  let emails: Email[] = snapshot.docs
+    .map((doc: any) => ({ id: doc.id, ...doc.data() } as Email))
+    .filter((e: Email & { deleted?: boolean }) => e.deleted !== true)
 
-  return apiSuccess(emails, 200, { total: emails.length, page, limit })
+  // Apply pagination after in-memory filter
+  const total = emails.length
+  emails = emails.slice((page - 1) * limit, page * limit)
+
+  return apiSuccess(emails, 200, { total, page, limit })
 })
