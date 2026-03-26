@@ -76,7 +76,7 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     return aSeconds - bSeconds
   })
 
-  return apiSuccess(posts, 200, { total: posts.length })
+  return apiSuccess(posts, 200, { total: posts.length, page: 1, limit: posts.length })
 })
 
 export const POST = withAuth('admin', async (req: NextRequest, user) => {
