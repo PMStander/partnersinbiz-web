@@ -51,7 +51,7 @@ export default function DiscoverPage() {
                   Full-stack club management system. Built once, deployed for many.
                 </p>
                 <a
-                  href="https://athleet-management.vercel.app"
+                  href="https://athleet.space"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-block bg-white text-black font-headline uppercase tracking-widest text-sm px-8 py-4 rounded-md hover:scale-105 transition-transform duration-300"

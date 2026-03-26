@@ -60,7 +60,7 @@ export default function ProductsPage() {
                   {/* CTAs */}
                   <div className="flex flex-col sm:flex-row gap-4">
                     <a
-                      href="https://athleet-management.vercel.app"
+                      href="https://athleet.space"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="bg-white text-black font-headline uppercase tracking-widest text-sm px-8 py-4 rounded-md hover:scale-105 transition-transform duration-300 text-center"
