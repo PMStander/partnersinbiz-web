@@ -163,7 +163,7 @@ POST /api/v1/social/posts
   "content": "Thread intro (used as fallback)",
   "threadParts": ["1/ First tweet", "2/ Second tweet", "3/ Third tweet"],
   "scheduledFor": "2026-03-28T09:00:00Z",
-  "category": "build-in-public"
+  "category": "work"
 }
 ```
 
