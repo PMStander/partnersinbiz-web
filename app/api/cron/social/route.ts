@@ -10,7 +10,9 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) return apiError('Unauthorized', 401)
+  const validCronAuth = auth === `Bearer ${process.env.CRON_SECRET}`
+  const validApiAuth = auth === `Bearer ${process.env.AI_API_KEY}`
+  if (!validCronAuth && !validApiAuth) return apiError('Unauthorized', 401)
 
   const now = Timestamp.now()
 
