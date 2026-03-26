@@ -103,9 +103,8 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     return apiError('scheduledFor must be a valid ISO date string')
   }
 
-  // Determine status based on whether scheduledFor is in the future
-  const now = new Date()
-  const status: SocialPostStatus = scheduledDate > now ? 'scheduled' : 'draft'
+  // Always set to scheduled — cron handles timing regardless of past/future date
+  const status: SocialPostStatus = 'scheduled'
 
   const docRef = await adminDb.collection('social_posts').add({
     platform,

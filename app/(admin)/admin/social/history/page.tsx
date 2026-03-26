@@ -26,7 +26,8 @@ interface SocialPost {
 
 function tsToDate(ts: any): Date | null {
   if (!ts) return null
-  if (ts.seconds) return new Date(ts.seconds * 1000)
+  if (ts._seconds) return new Date(ts._seconds * 1000)   // Firestore REST serialization
+  if (ts.seconds) return new Date(ts.seconds * 1000)     // Firestore SDK serialization
   return new Date(ts)
 }
 
