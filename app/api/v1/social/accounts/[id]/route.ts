@@ -1,0 +1,70 @@
+/**
+ * GET    /api/v1/social/accounts/:id  — get a single account
+ * PUT    /api/v1/social/accounts/:id  — update account details
+ * DELETE /api/v1/social/accounts/:id  — disconnect account
+ */
+import { NextRequest } from 'next/server'
+import { FieldValue } from 'firebase-admin/firestore'
+import { adminDb } from '@/lib/firebase/admin'
+import { withAuth } from '@/lib/api/auth'
+import { apiSuccess, apiError } from '@/lib/api/response'
+
+export const dynamic = 'force-dynamic'
+
+type Params = { params: Promise<{ id: string }> }
+
+export const GET = withAuth('admin', async (_req: NextRequest, _user, context) => {
+  const { id } = await (context as Params).params
+  const doc = await adminDb.collection('social_accounts').doc(id).get()
+  if (!doc.exists) return apiError('Account not found', 404)
+
+  const data = doc.data()!
+  // Strip encrypted tokens from response
+  const { encryptedTokens: _, ...safe } = data
+  return apiSuccess({ id: doc.id, ...safe })
+})
+
+export const PUT = withAuth('admin', async (req: NextRequest, _user, context) => {
+  const { id } = await (context as Params).params
+  const doc = await adminDb.collection('social_accounts').doc(id).get()
+  if (!doc.exists) return apiError('Account not found', 404)
+
+  const body = await req.json()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updates: Record<string, any> = {
+    updatedAt: FieldValue.serverTimestamp(),
+  }
+
+  const allowedFields = ['displayName', 'username', 'avatarUrl', 'profileUrl', 'accountType', 'status', 'scopes', 'platformMeta']
+  for (const field of allowedFields) {
+    if (field in body) {
+      updates[field] = body[field]
+    }
+  }
+
+  await adminDb.collection('social_accounts').doc(id).update(updates)
+  return apiSuccess({ id })
+})
+
+export const DELETE = withAuth('admin', async (_req: NextRequest, _user, context) => {
+  const { id } = await (context as Params).params
+  const doc = await adminDb.collection('social_accounts').doc(id).get()
+  if (!doc.exists) return apiError('Account not found', 404)
+
+  // Soft disconnect — mark as disconnected, clear tokens
+  await adminDb.collection('social_accounts').doc(id).update({
+    status: 'disconnected',
+    encryptedTokens: {
+      accessToken: '',
+      refreshToken: null,
+      tokenType: '',
+      expiresAt: null,
+      iv: '',
+      tag: '',
+    },
+    updatedAt: FieldValue.serverTimestamp(),
+  })
+
+  return apiSuccess({ id })
+})
