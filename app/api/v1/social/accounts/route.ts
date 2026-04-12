@@ -6,18 +6,19 @@ import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import type { SocialPlatformType, AccountStatus } from '@/lib/social/providers'
+import type { AccountStatus } from '@/lib/social/providers'
 import { ACTIVE_PLATFORMS } from '@/lib/social/providers'
+import { logAudit } from '@/lib/social/audit'
 
 export const dynamic = 'force-dynamic'
 
 const VALID_STATUSES: AccountStatus[] = ['active', 'token_expired', 'disconnected', 'rate_limited']
 
-export const GET = withAuth('admin', async (req: NextRequest) => {
+export const GET = withAuth('admin', withTenant(async (req, _user, orgId) => {
   const { searchParams } = new URL(req.url)
-  const orgId = searchParams.get('orgId') ?? 'default'
-  const platform = searchParams.get('platform') as SocialPlatformType | null
+  const platform = searchParams.get('platform')
   const status = searchParams.get('status') as AccountStatus | null
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10)))
@@ -25,7 +26,7 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query: any = adminDb.collection('social_accounts').where('orgId', '==', orgId)
 
-  if (platform && ACTIVE_PLATFORMS.includes(platform)) {
+  if (platform && ACTIVE_PLATFORMS.includes(platform as any)) {
     query = query.where('platform', '==', platform)
   }
 
@@ -38,23 +39,20 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allAccounts = snapshot.docs.map((doc: any) => {
     const data = doc.data()
-    // Strip encrypted tokens from response
     const { encryptedTokens: _, ...safe } = data
     return { id: doc.id, ...safe }
   })
 
-  // In-memory pagination
   const total = allAccounts.length
   const start = (page - 1) * limit
   const accounts = allAccounts.slice(start, start + limit)
 
   return apiSuccess(accounts, 200, { total, page, limit })
-})
+}))
 
-export const POST = withAuth('admin', async (req: NextRequest, user) => {
+export const POST = withAuth('admin', withTenant(async (req, user, orgId) => {
   const body = await req.json()
 
-  // Validate required fields
   if (!body.platform || !ACTIVE_PLATFORMS.includes(body.platform)) {
     return apiError(`platform must be one of: ${ACTIVE_PLATFORMS.join(', ')}`)
   }
@@ -63,7 +61,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   }
 
   const doc = {
-    orgId: body.orgId ?? 'default',
+    orgId,
     platform: body.platform,
     platformAccountId: body.platformAccountId ?? '',
     displayName: body.displayName,
@@ -92,5 +90,16 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
 
   const docRef = await adminDb.collection('social_accounts').add(doc)
 
+  await logAudit({
+    orgId,
+    action: 'account.connected',
+    entityType: 'account',
+    entityId: docRef.id,
+    performedBy: user.uid,
+    performedByRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    details: { platform: body.platform, displayName: body.displayName },
+    ip: req.headers.get('x-forwarded-for'),
+  })
+
   return apiSuccess({ id: docRef.id }, 201)
-})
+}))

@@ -7,27 +7,33 @@ import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { logAudit } from '@/lib/social/audit'
 
 export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
-export const GET = withAuth('admin', async (_req: NextRequest, _user, context) => {
+export const GET = withAuth('admin', withTenant(async (_req, _user, orgId, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('social_accounts').doc(id).get()
   if (!doc.exists) return apiError('Account not found', 404)
 
   const data = doc.data()!
-  // Strip encrypted tokens from response
+  if (data.orgId !== orgId) return apiError('Account not found', 404)
+
   const { encryptedTokens: _, ...safe } = data
   return apiSuccess({ id: doc.id, ...safe })
-})
+}))
 
-export const PUT = withAuth('admin', async (req: NextRequest, _user, context) => {
+export const PUT = withAuth('admin', withTenant(async (req, _user, orgId, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('social_accounts').doc(id).get()
   if (!doc.exists) return apiError('Account not found', 404)
+
+  const data = doc.data()!
+  if (data.orgId !== orgId) return apiError('Account not found', 404)
 
   const body = await req.json()
 
@@ -45,14 +51,16 @@ export const PUT = withAuth('admin', async (req: NextRequest, _user, context) =>
 
   await adminDb.collection('social_accounts').doc(id).update(updates)
   return apiSuccess({ id })
-})
+}))
 
-export const DELETE = withAuth('admin', async (_req: NextRequest, _user, context) => {
+export const DELETE = withAuth('admin', withTenant(async (req, user, orgId, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('social_accounts').doc(id).get()
   if (!doc.exists) return apiError('Account not found', 404)
 
-  // Soft disconnect — mark as disconnected, clear tokens
+  const data = doc.data()!
+  if (data.orgId !== orgId) return apiError('Account not found', 404)
+
   await adminDb.collection('social_accounts').doc(id).update({
     status: 'disconnected',
     encryptedTokens: {
@@ -66,5 +74,16 @@ export const DELETE = withAuth('admin', async (_req: NextRequest, _user, context
     updatedAt: FieldValue.serverTimestamp(),
   })
 
+  await logAudit({
+    orgId,
+    action: 'account.disconnected',
+    entityType: 'account',
+    entityId: id,
+    performedBy: user.uid,
+    performedByRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    details: { platform: data.platform },
+    ip: req.headers.get('x-forwarded-for'),
+  })
+
   return apiSuccess({ id })
-})
+}))

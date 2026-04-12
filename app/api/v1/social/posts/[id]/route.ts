@@ -7,8 +7,12 @@ import { NextRequest } from 'next/server'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { validatePostContent } from '@/lib/social/validation'
+import { logAudit } from '@/lib/social/audit'
 import type { SocialPostStatus, SocialPostCategory } from '@/lib/social/types'
+import type { SocialPlatformType } from '@/lib/social/providers'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,17 +21,24 @@ const VALID_CATEGORIES: SocialPostCategory[] = ['work', 'personal', 'ai', 'sport
 
 type Params = { params: Promise<{ id: string }> }
 
-export const GET = withAuth('admin', async (_req: NextRequest, _user, context) => {
+export const GET = withAuth('admin', withTenant(async (_req, _user, orgId, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('social_posts').doc(id).get()
   if (!doc.exists) return apiError('Post not found', 404)
-  return apiSuccess({ id: doc.id, ...doc.data() })
-})
 
-export const PUT = withAuth('admin', async (req: NextRequest, _user, context) => {
+  const data = doc.data()!
+  if (data.orgId && data.orgId !== orgId) return apiError('Post not found', 404)
+
+  return apiSuccess({ id: doc.id, ...data })
+}))
+
+export const PUT = withAuth('admin', withTenant(async (req, user, orgId, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('social_posts').doc(id).get()
   if (!doc.exists) return apiError('Post not found', 404)
+
+  const existing = doc.data()!
+  if (existing.orgId && existing.orgId !== orgId) return apiError('Post not found', 404)
 
   const body = await req.json()
 
@@ -36,12 +47,33 @@ export const PUT = withAuth('admin', async (req: NextRequest, _user, context) =>
     updatedAt: FieldValue.serverTimestamp(),
   }
 
+  // Content update — validate against platform constraints
   if ('content' in body) {
-    updates.content = body.content as string
+    const contentText = typeof body.content === 'string' ? body.content : body.content?.text
+    if (contentText) {
+      const platforms: SocialPlatformType[] = existing.platforms ?? []
+      if (platforms.length > 0) {
+        const validation = validatePostContent(contentText, platforms, {
+          threadParts: body.threadParts ?? existing.threadParts,
+        })
+        if (!validation.valid) {
+          return apiError(`Validation failed: ${validation.errors.map((e: { message: string }) => e.message).join('; ')}`)
+        }
+      }
+    }
+    updates.content = body.content
   }
 
   if ('scheduledFor' in body) {
-    updates.scheduledFor = Timestamp.fromDate(new Date(body.scheduledFor as string))
+    const ts = Timestamp.fromDate(new Date(body.scheduledFor as string))
+    updates.scheduledFor = ts
+    updates.scheduledAt = ts
+  }
+
+  if ('scheduledAt' in body) {
+    const ts = Timestamp.fromDate(new Date(body.scheduledAt as string))
+    updates.scheduledAt = ts
+    updates.scheduledFor = ts
   }
 
   if ('status' in body) {
@@ -58,26 +90,59 @@ export const PUT = withAuth('admin', async (req: NextRequest, _user, context) =>
     updates.category = body.category as SocialPostCategory
   }
 
-  if ('tags' in body) {
-    updates.tags = body.tags as string[]
-  }
-
-  if ('threadParts' in body) {
-    updates.threadParts = body.threadParts as string[]
-  }
+  if ('tags' in body) updates.tags = body.tags as string[]
+  if ('threadParts' in body) updates.threadParts = body.threadParts as string[]
+  if ('labels' in body) updates.labels = body.labels as string[]
+  if ('hashtags' in body) updates.hashtags = body.hashtags as string[]
+  if ('media' in body) updates.media = body.media
+  if ('accountIds' in body) updates.accountIds = body.accountIds
 
   await adminDb.collection('social_posts').doc(id).update(updates)
-  return apiSuccess({ id })
-})
 
-export const DELETE = withAuth('admin', async (_req: NextRequest, _user, context) => {
+  await logAudit({
+    orgId,
+    action: 'post.updated',
+    entityType: 'post',
+    entityId: id,
+    performedBy: user.uid,
+    performedByRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    details: { updatedFields: Object.keys(updates).filter(k => k !== 'updatedAt') },
+    ip: req.headers.get('x-forwarded-for'),
+  })
+
+  return apiSuccess({ id })
+}))
+
+export const DELETE = withAuth('admin', withTenant(async (req, user, orgId, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('social_posts').doc(id).get()
   if (!doc.exists) return apiError('Post not found', 404)
+
+  const data = doc.data()!
+  if (data.orgId && data.orgId !== orgId) return apiError('Post not found', 404)
 
   await adminDb.collection('social_posts').doc(id).update({
     status: 'cancelled',
     updatedAt: FieldValue.serverTimestamp(),
   })
+
+  // Cancel queue entry if exists
+  const queueDoc = await adminDb.collection('social_queue').doc(id).get()
+  if (queueDoc.exists) {
+    await adminDb.collection('social_queue').doc(id).update({
+      status: 'cancelled',
+    })
+  }
+
+  await logAudit({
+    orgId,
+    action: 'post.cancelled',
+    entityType: 'post',
+    entityId: id,
+    performedBy: user.uid,
+    performedByRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    ip: req.headers.get('x-forwarded-for'),
+  })
+
   return apiSuccess({ id })
-})
+}))

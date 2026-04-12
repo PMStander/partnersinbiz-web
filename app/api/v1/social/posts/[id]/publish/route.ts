@@ -5,37 +5,37 @@ import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { getDefaultProvider } from '@/lib/social/providers'
 import type { SocialPlatformType } from '@/lib/social/providers'
+import { logAudit } from '@/lib/social/audit'
 
 export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
-/** Map legacy platform names to provider platform types */
 function toPlatformType(platform: string): SocialPlatformType | null {
   if (platform === 'x' || platform === 'twitter') return 'twitter'
   if (platform === 'linkedin') return 'linkedin'
   return null
 }
 
-export const POST = withAuth('admin', async (_req: NextRequest, _user, context) => {
+export const POST = withAuth('admin', withTenant(async (_req, user, orgId, context) => {
   const { id } = await (context as Params).params
 
   const doc = await adminDb.collection('social_posts').doc(id).get()
   if (!doc.exists) return apiError('Post not found', 404)
 
   const post = doc.data()!
+  if (post.orgId && post.orgId !== orgId) return apiError('Post not found', 404)
 
   if (post.status === 'published') return apiError('Post already published', 409)
   if (post.status === 'cancelled') return apiError('Cannot publish a cancelled post', 400)
 
-  // Resolve platform — supports both legacy 'x' and new 'twitter' naming
   const platformType = toPlatformType(post.platform)
   if (!platformType) return apiError(`Unsupported platform: ${post.platform}`, 400)
 
-  // Resolve content — supports both legacy flat string and new { text } structure
   const text = typeof post.content === 'string' ? post.content : post.content?.text
   if (!text) return apiError('Post has no content', 400)
 
@@ -59,6 +59,17 @@ export const POST = withAuth('admin', async (_req: NextRequest, _user, context) 
       error: message,
       updatedAt: FieldValue.serverTimestamp(),
     })
+
+    await logAudit({
+      orgId,
+      action: 'post.failed',
+      entityType: 'post',
+      entityId: id,
+      performedBy: 'system',
+      performedByRole: 'system',
+      details: { error: message, platform: post.platform },
+    })
+
     return apiError('Publish failed: ' + message, 500)
   }
 
@@ -70,5 +81,24 @@ export const POST = withAuth('admin', async (_req: NextRequest, _user, context) 
     updatedAt: FieldValue.serverTimestamp(),
   })
 
+  // Complete queue entry if exists
+  const queueDoc = await adminDb.collection('social_queue').doc(id).get()
+  if (queueDoc.exists) {
+    await adminDb.collection('social_queue').doc(id).update({
+      status: 'completed',
+      completedAt: FieldValue.serverTimestamp(),
+    })
+  }
+
+  await logAudit({
+    orgId,
+    action: 'post.published',
+    entityType: 'post',
+    entityId: id,
+    performedBy: user.uid,
+    performedByRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    details: { externalId, platform: post.platform },
+  })
+
   return apiSuccess({ id, externalId, platform: post.platform })
-})
+}))

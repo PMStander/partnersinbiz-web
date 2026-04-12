@@ -1,17 +1,15 @@
 /**
  * GET /api/v1/social/health  — system health check for social subsystem
  */
-import { NextRequest } from 'next/server'
 import { Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess } from '@/lib/api/response'
 
 export const dynamic = 'force-dynamic'
 
-export const GET = withAuth('admin', async (req: NextRequest) => {
-  const { searchParams } = new URL(req.url)
-  const orgId = searchParams.get('orgId') ?? 'default'
+export const GET = withAuth('admin', withTenant(async (_req, _user, orgId) => {
   const now = Timestamp.now()
 
   // Queue health — count by status
@@ -27,7 +25,6 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     const status = data.status as keyof typeof queueHealth
     if (status in queueHealth) queueHealth[status]++
 
-    // Check for stale locks (processing for >5min)
     if (data.status === 'processing' && data.lockedAt) {
       const lockAge = now.seconds - data.lockedAt.seconds
       if (lockAge > 300) queueHealth.stale++
@@ -56,4 +53,4 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     accounts: accountHealth,
     timestamp: now.toDate().toISOString(),
   })
-})
+}))

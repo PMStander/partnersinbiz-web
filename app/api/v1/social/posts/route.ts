@@ -1,22 +1,24 @@
 /**
- * GET  /api/v1/social/posts  — list social posts (admin only)
- * POST /api/v1/social/posts  — create a social post (admin only)
+ * GET  /api/v1/social/posts  — list social posts
+ * POST /api/v1/social/posts  — create a social post
  */
 import { NextRequest } from 'next/server'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { SocialPlatform, SocialPostStatus } from '@/lib/social/types'
 import type { SocialPlatformType, PostStatus } from '@/lib/social/providers'
 import { ACTIVE_PLATFORMS } from '@/lib/social/providers'
+import { validatePostContent } from '@/lib/social/validation'
+import { logAudit } from '@/lib/social/audit'
 
 export const dynamic = 'force-dynamic'
 
 const VALID_LEGACY_PLATFORMS: SocialPlatform[] = ['x', 'linkedin']
 const VALID_STATUSES: SocialPostStatus[] = ['draft', 'scheduled', 'published', 'failed', 'cancelled']
 
-/** Map legacy platform name to provider platform type */
 function toLegacyPlatform(platform: string): SocialPlatform | null {
   if (platform === 'x' || platform === 'twitter') return 'x'
   if (platform === 'linkedin') return 'linkedin'
@@ -29,16 +31,15 @@ function toProviderPlatform(platform: string): SocialPlatformType | null {
   return null
 }
 
-export const GET = withAuth('admin', async (req: NextRequest) => {
+export const GET = withAuth('admin', withTenant(async (req, _user, orgId) => {
   const { searchParams } = new URL(req.url)
   const platform = searchParams.get('platform') as SocialPlatform | null
   const status = searchParams.get('status') as SocialPostStatus | null
   const from = searchParams.get('from')
   const to = searchParams.get('to')
 
-  // Build Firestore query with equality filters only (avoid composite index requirements)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query: any = adminDb.collection('social_posts')
+  let query: any = adminDb.collection('social_posts').where('orgId', '==', orgId)
 
   if (platform && VALID_LEGACY_PLATFORMS.includes(platform)) {
     query = query.where('platform', '==', platform)
@@ -56,7 +57,7 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     ...doc.data(),
   }))
 
-  // In-memory date range filtering to avoid composite index requirements
+  // In-memory date range filtering
   if (from) {
     const fromDate = new Date(from)
     if (!isNaN(fromDate.getTime())) {
@@ -81,26 +82,17 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     }
   }
 
-  // Sort ascending by scheduledFor/scheduledAt in-memory
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   posts.sort((a: any, b: any) => {
     const aTs: Timestamp | undefined = a.scheduledFor ?? a.scheduledAt
     const bTs: Timestamp | undefined = b.scheduledFor ?? b.scheduledAt
-    const aSeconds = aTs?.seconds ?? 0
-    const bSeconds = bTs?.seconds ?? 0
-    return aSeconds - bSeconds
+    return (aTs?.seconds ?? 0) - (bTs?.seconds ?? 0)
   })
 
   return apiSuccess(posts, 200, { total: posts.length, page: 1, limit: posts.length })
-})
+}))
 
-/**
- * Create a new social post using the EnhancedSocialPost schema.
- *
- * Accepts both legacy input (flat content string, single platform) and
- * enhanced input (content.text, platforms[], accountIds[], media[]).
- */
-export const POST = withAuth('admin', async (req: NextRequest, user) => {
+export const POST = withAuth('admin', withTenant(async (req, user, orgId) => {
   const body = await req.json()
 
   // --- Resolve content ---
@@ -108,7 +100,6 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   let platformOverrides: Record<string, unknown> = {}
 
   if (typeof body.content === 'string') {
-    // Legacy: flat string
     contentText = body.content.trim()
   } else if (body.content?.text) {
     contentText = (body.content.text as string).trim()
@@ -124,7 +115,6 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   let legacyPlatform: SocialPlatform | null = null
 
   if (body.platforms && Array.isArray(body.platforms)) {
-    // Enhanced: platforms array
     for (const p of body.platforms) {
       const pt = toProviderPlatform(p)
       if (!pt || !ACTIVE_PLATFORMS.includes(pt)) {
@@ -133,7 +123,6 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
       platforms.push(pt)
     }
   } else if (body.platform) {
-    // Legacy: single platform field
     legacyPlatform = toLegacyPlatform(body.platform)
     if (!legacyPlatform) {
       return apiError('platform must be one of: x, linkedin')
@@ -141,6 +130,16 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     platforms = [toProviderPlatform(body.platform)!]
   } else {
     return apiError('platforms[] or platform is required')
+  }
+
+  // --- Validate content against platform constraints ---
+  const validation = validatePostContent(contentText, platforms, {
+    threadParts: body.threadParts,
+    mediaCount: body.media?.length,
+  })
+
+  if (!validation.valid) {
+    return apiError(`Validation failed: ${validation.errors.map(e => e.message).join('; ')}`)
   }
 
   // --- Resolve scheduling ---
@@ -161,10 +160,8 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
 
   // --- Build EnhancedSocialPost document ---
   const doc = {
-    // Legacy fields (kept for backward compat with existing UI/cron)
     platform: legacyPlatform ?? (platforms[0] === 'twitter' ? 'x' : platforms[0]),
-    // Enhanced fields
-    orgId: body.orgId ?? 'default',
+    orgId,
     content: {
       text: contentText,
       platformOverrides,
@@ -174,7 +171,6 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     accountIds: body.accountIds ?? [],
     status,
     scheduledAt,
-    // Legacy field name alias
     scheduledFor: scheduledAt,
     publishedAt: null,
     platformResults: {},
@@ -187,7 +183,6 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     approvedAt: null,
     comments: [],
     source: (user.uid === 'ai-agent' ? 'ai_agent' : 'api') as string,
-    // Legacy compat
     threadParts: body.threadParts ?? [],
     category: body.category ?? 'other',
     tags: body.tags ?? [],
@@ -199,10 +194,10 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
 
   const docRef = await adminDb.collection('social_posts').add(doc)
 
-  // If scheduled, create a queue entry
+  // Create queue entry if scheduled
   if (status === 'scheduled' && scheduledAt) {
     await adminDb.collection('social_queue').doc(docRef.id).set({
-      orgId: doc.orgId,
+      orgId,
       postId: docRef.id,
       scheduledAt,
       status: 'pending',
@@ -221,5 +216,16 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     })
   }
 
+  await logAudit({
+    orgId,
+    action: 'post.created',
+    entityType: 'post',
+    entityId: docRef.id,
+    performedBy: user.uid,
+    performedByRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    details: { platforms, status, contentLength: contentText.length },
+    ip: req.headers.get('x-forwarded-for'),
+  })
+
   return apiSuccess({ id: docRef.id }, 201)
-})
+}))

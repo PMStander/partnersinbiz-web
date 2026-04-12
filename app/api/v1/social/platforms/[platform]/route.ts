@@ -3,6 +3,7 @@
  */
 import { NextRequest } from 'next/server'
 import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { getConstraints, isPlatformActive } from '@/lib/social/providers'
 import type { SocialPlatformType } from '@/lib/social/providers'
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ platform: string }> }
 
-export const GET = withAuth('client', async (_req: NextRequest, _user, context) => {
+export const GET = withAuth('client', withTenant(async (_req, _user, _orgId, context) => {
   const { platform } = await (context as Params).params
 
   try {
@@ -23,4 +24,4 @@ export const GET = withAuth('client', async (_req: NextRequest, _user, context) 
   } catch {
     return apiError(`Unknown platform: ${platform}`, 404)
   }
-})
+}))

@@ -1,11 +1,12 @@
 /**
  * GET  /api/v1/social/media  — list uploaded media
- * POST /api/v1/social/media  — upload media (metadata only — actual upload to storage separately)
+ * POST /api/v1/social/media  — register media record
  */
 import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { MediaType, MediaStatus } from '@/lib/social/providers'
 
@@ -14,9 +15,8 @@ export const dynamic = 'force-dynamic'
 const VALID_TYPES: MediaType[] = ['image', 'video', 'gif']
 const VALID_STATUSES: MediaStatus[] = ['uploading', 'processing', 'ready', 'failed']
 
-export const GET = withAuth('admin', async (req: NextRequest) => {
+export const GET = withAuth('admin', withTenant(async (req, _user, orgId) => {
   const { searchParams } = new URL(req.url)
-  const orgId = searchParams.get('orgId') ?? 'default'
   const type = searchParams.get('type') as MediaType | null
   const status = searchParams.get('status') as MediaStatus | null
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
@@ -41,15 +41,14 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     ...doc.data(),
   }))
 
-  // In-memory pagination
   const total = allMedia.length
   const start = (page - 1) * limit
   const media = allMedia.slice(start, start + limit)
 
   return apiSuccess(media, 200, { total, page, limit })
-})
+}))
 
-export const POST = withAuth('admin', async (req: NextRequest, user) => {
+export const POST = withAuth('admin', withTenant(async (req, user, orgId) => {
   const body = await req.json()
 
   if (!body.originalUrl || typeof body.originalUrl !== 'string') {
@@ -63,7 +62,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   }
 
   const doc = {
-    orgId: body.orgId ?? 'default',
+    orgId,
     originalUrl: body.originalUrl,
     originalFilename: body.originalFilename,
     originalMimeType: body.originalMimeType ?? 'application/octet-stream',
@@ -85,4 +84,4 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   const docRef = await adminDb.collection('social_media').add(doc)
 
   return apiSuccess({ id: docRef.id }, 201)
-})
+}))
