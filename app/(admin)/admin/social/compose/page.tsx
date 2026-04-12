@@ -65,6 +65,13 @@ export default function ComposePage() {
   const [submitting, setSubmitting] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
 
+  // AI state
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiCaptions, setAiCaptions] = useState<Array<{ text: string; hashtags: string[] }>>([])
+  const [aiHashtags, setAiHashtags] = useState<Array<{ tag: string; relevance: number }>>([])
+  const [showAi, setShowAi] = useState(false)
+
   // Fetch connected accounts
   useEffect(() => {
     fetch('/api/v1/social/accounts').then(r => r.json()).then(b => setAccounts(b.data ?? []))
@@ -259,6 +266,60 @@ export default function ComposePage() {
     }
   }
 
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return
+    setAiLoading(true)
+    setAiCaptions([])
+    try {
+      const res = await fetch('/api/v1/social/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          platform: selectedPlatforms[0] ?? 'twitter',
+          tone: 'professional',
+          count: 3,
+          includeHashtags: true,
+        }),
+      })
+      const body = await res.json()
+      if (body.data?.captions) setAiCaptions(body.data.captions)
+    } catch { /* ignore */ }
+    finally { setAiLoading(false) }
+  }
+
+  const handleAiHashtags = async () => {
+    if (!content.trim()) return
+    setAiLoading(true)
+    setAiHashtags([])
+    try {
+      const res = await fetch('/api/v1/social/ai/hashtags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: content,
+          platform: selectedPlatforms[0] ?? 'twitter',
+          count: 10,
+        }),
+      })
+      const body = await res.json()
+      if (body.data?.hashtags) setAiHashtags(body.data.hashtags)
+    } catch { /* ignore */ }
+    finally { setAiLoading(false) }
+  }
+
+  const useCaption = (caption: { text: string; hashtags: string[] }) => {
+    setContent(caption.text)
+    if (caption.hashtags?.length) {
+      setHashtags(prev => [...new Set([...prev, ...caption.hashtags])])
+    }
+    setAiCaptions([])
+  }
+
+  const useHashtag = (tag: string) => {
+    if (!hashtags.includes(tag)) setHashtags(prev => [...prev, tag])
+  }
+
   const minDateTime = new Date().toISOString().slice(0, 16)
 
   return (
@@ -420,6 +481,97 @@ export default function ComposePage() {
           {errors.content && <p className="text-xs text-red-400 mt-1">{errors.content}</p>}
         </div>
       )}
+
+      {/* AI Assist */}
+      <div className="rounded-xl bg-surface-container p-4 space-y-3">
+        <button
+          onClick={() => setShowAi(!showAi)}
+          className="flex items-center gap-2 text-sm font-medium text-on-surface hover:text-white transition-colors"
+        >
+          <span className="text-base">✦</span>
+          AI Assist
+          <span className="text-[10px] text-on-surface-variant">{showAi ? '▲' : '▼'}</span>
+        </button>
+
+        {showAi && (
+          <div className="space-y-3 pt-1">
+            {/* Generate captions */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide">Generate Caption</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAiGenerate()}
+                  placeholder="Topic or prompt (e.g. 'AI in marketing')"
+                  className="flex-1 rounded-lg bg-surface px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none border border-transparent focus:border-outline-variant transition-colors"
+                />
+                <button
+                  onClick={handleAiGenerate}
+                  disabled={aiLoading || !aiPrompt.trim()}
+                  className="px-3 py-2 rounded-lg bg-white text-black font-label text-xs font-medium hover:bg-white/90 transition-colors disabled:opacity-50 shrink-0"
+                >
+                  {aiLoading ? 'Generating…' : 'Generate'}
+                </button>
+              </div>
+
+              {aiCaptions.length > 0 && (
+                <div className="space-y-1.5">
+                  {aiCaptions.map((caption, i) => (
+                    <div key={i} className="rounded-lg bg-surface p-2.5 group">
+                      <p className="text-xs text-on-surface leading-relaxed">{caption.text}</p>
+                      {caption.hashtags?.length > 0 && (
+                        <p className="text-[10px] text-on-surface-variant mt-1">{caption.hashtags.join(' ')}</p>
+                      )}
+                      <button
+                        onClick={() => useCaption(caption)}
+                        className="mt-1.5 text-[10px] text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                      >
+                        Use this caption
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Suggest hashtags */}
+            {content.trim() && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide">Suggest Hashtags</label>
+                  <button
+                    onClick={handleAiHashtags}
+                    disabled={aiLoading}
+                    className="px-2 py-1 rounded-lg bg-surface text-on-surface-variant font-label text-[10px] font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50"
+                  >
+                    {aiLoading ? 'Loading…' : 'Suggest'}
+                  </button>
+                </div>
+                {aiHashtags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {aiHashtags.map((h, i) => (
+                      <button
+                        key={i}
+                        onClick={() => useHashtag(h.tag)}
+                        disabled={hashtags.includes(h.tag)}
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${
+                          hashtags.includes(h.tag)
+                            ? 'bg-surface-container-high text-on-surface-variant/40'
+                            : 'bg-surface text-on-surface hover:bg-surface-container-high'
+                        }`}
+                      >
+                        {h.tag} <span className="text-on-surface-variant/60">{Math.round(h.relevance * 100)}%</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Schedule */}
       <div>
