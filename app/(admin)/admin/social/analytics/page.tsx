@@ -7,6 +7,46 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 /*  Types & constants                                                  */
 /* ------------------------------------------------------------------ */
 
+interface AnalyticsSnapshot {
+  id: string
+  postId: string
+  platform: string
+  platformPostId: string
+  snapshotType: string
+  metrics: {
+    impressions: number
+    reach: number
+    engagements: number
+    likes: number
+    comments: number
+    shares: number
+    saves: number
+    clicks: number
+    profileVisits: number | null
+    videoViews: number | null
+  }
+  collectedAt: any
+}
+
+interface PostData {
+  id: string
+  content: string | { text: string }
+  platforms?: string[]
+  platform?: string
+  status: string
+  publishedAt: any
+  scheduledFor: any
+  createdAt: any
+  platformResults?: Record<string, any>
+}
+
+interface BestTimeSlot {
+  dayOfWeek: number
+  hour: number
+  avgScore: number
+  postCount: number
+}
+
 const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
   twitter: { bg: 'bg-black', label: 'X' },
   x: { bg: 'bg-black', label: 'X' },
@@ -20,19 +60,22 @@ const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
   threads: { bg: 'bg-gray-700', label: 'TH' },
 }
 
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
 type DateRange = '7d' | '30d' | 'all'
+type Tab = 'overview' | 'posts' | 'best-times'
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function getPostText(post: any): string {
+function getPostText(post: PostData): string {
   if (typeof post.content === 'string') return post.content
   if (post.content?.text) return post.content.text
   return ''
 }
 
-function getPostPlatforms(post: any): string[] {
+function getPostPlatforms(post: PostData): string[] {
   if (post.platforms?.length) return post.platforms
   if (post.platform) return [post.platform]
   return []
@@ -47,29 +90,13 @@ function tsToDate(ts: any): Date | null {
 
 function fmtDate(ts: any) {
   const d = tsToDate(ts)
-  return d
-    ? d.toLocaleString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '—'
+  return d ? d.toLocaleString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 }
 
-function fmtDateTime(ts: any) {
-  const d = tsToDate(ts)
-  return d
-    ? d.toLocaleString('en-ZA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : '—'
-}
-
-/** Build an external URL for a platform result if possible */
-function platformPostUrl(platform: string, result: any): string | null {
-  if (result?.url) return result.url
-  if (result?.postUrl) return result.postUrl
-  const extId = result?.externalId ?? result?.postId
-  if (!extId) return null
-  if (platform === 'x' || platform === 'twitter')
-    return `https://x.com/i/web/status/${extId}`
-  if (platform === 'linkedin')
-    return `https://www.linkedin.com/feed/update/${extId}`
-  return null
+function fmtNum(n: number): string {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+  return n.toString()
 }
 
 /* ------------------------------------------------------------------ */
@@ -79,18 +106,42 @@ function platformPostUrl(platform: string, result: any): string | null {
 function PlatformBadge({ platform }: { platform: string }) {
   const cfg = PLATFORM_COLORS[platform.toLowerCase()]
   if (!cfg) return <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-surface-container-high text-on-surface-variant uppercase">{platform}</span>
-  return (
-    <span className={`${cfg.bg} text-white text-[10px] px-2 py-0.5 rounded font-bold`}>
-      {cfg.label}
-    </span>
-  )
+  return <span className={`${cfg.bg} text-white text-[10px] px-2 py-0.5 rounded font-bold`}>{cfg.label}</span>
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
+function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <div className="p-5 rounded-xl bg-surface-container">
       <p className="text-[10px] font-medium text-on-surface-variant uppercase tracking-wide">{label}</p>
       <p className="text-3xl font-bold text-on-surface mt-1">{value}</p>
+      {sub && <p className="text-[10px] text-on-surface-variant mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
+function MetricBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-on-surface-variant w-20 text-right shrink-0">{label}</span>
+      <div className="flex-1 h-5 bg-surface rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <span className="text-xs font-medium text-on-surface w-14 text-right">{fmtNum(value)}</span>
+    </div>
+  )
+}
+
+function HeatCell({ value, max }: { value: number; max: number }) {
+  const intensity = max > 0 ? Math.round((value / max) * 255) : 0
+  const bg = value > 0 ? `rgba(255, 255, 255, ${intensity / 255 * 0.7})` : 'transparent'
+  return (
+    <div
+      className="w-8 h-8 rounded flex items-center justify-center text-[9px] font-medium"
+      style={{ backgroundColor: bg, color: intensity > 128 ? '#000' : '#999' }}
+      title={`Score: ${value}`}
+    >
+      {value > 0 ? value : ''}
     </div>
   )
 }
@@ -100,28 +151,37 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 /* ------------------------------------------------------------------ */
 
 export default function AnalyticsPage() {
-  const [posts, setPosts] = useState<any[]>([])
+  const [posts, setPosts] = useState<PostData[]>([])
+  const [analytics, setAnalytics] = useState<AnalyticsSnapshot[]>([])
+  const [bestTimes, setBestTimes] = useState<BestTimeSlot[]>([])
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<DateRange>('30d')
+  const [tab, setTab] = useState<Tab>('overview')
 
-  const fetchPosts = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/v1/social/posts?status=published&limit=50')
-      const body = await res.json()
-      setPosts(body.data ?? [])
+      const [postsRes, analyticsRes, bestTimesRes] = await Promise.all([
+        fetch('/api/v1/social/posts?status=published&limit=100'),
+        fetch('/api/v1/social/analytics'),
+        fetch('/api/v1/social/analytics?view=best-times'),
+      ])
+      const [postsBody, analyticsBody, bestTimesBody] = await Promise.all([
+        postsRes.json(), analyticsRes.json(), bestTimesRes.json(),
+      ])
+      setPosts(postsBody.data ?? [])
+      setAnalytics(analyticsBody.data ?? [])
+      setBestTimes(bestTimesBody.data ?? [])
     } catch {
       setPosts([])
+      setAnalytics([])
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => {
-    fetchPosts()
-  }, [fetchPosts])
+  useEffect(() => { fetchData() }, [fetchData])
 
-  /* ---------- date-range filtering ---------- */
   const filtered = useMemo(() => {
     if (range === 'all') return posts
     const now = Date.now()
@@ -132,41 +192,92 @@ export default function AnalyticsPage() {
     })
   }, [posts, range])
 
-  /* ---------- aggregate stats ---------- */
   const stats = useMemo(() => {
-    const totalPublished = filtered.length
-    // Future: sum real impressions / engagements from platformResults or analytics endpoint
-    const totalImpressions = 0
-    const totalEngagements = 0
+    const latestByPost = new Map<string, AnalyticsSnapshot>()
+    for (const snap of analytics) {
+      const existing = latestByPost.get(snap.postId)
+      const existingTs = existing?.collectedAt?.seconds ?? existing?.collectedAt?._seconds ?? 0
+      const snapTs = snap.collectedAt?.seconds ?? snap.collectedAt?._seconds ?? 0
+      if (!existing || snapTs > existingTs) {
+        latestByPost.set(snap.postId, snap)
+      }
+    }
+
+    let totalImpressions = 0, totalEngagements = 0, totalLikes = 0, totalComments = 0, totalShares = 0, totalClicks = 0
+    for (const snap of latestByPost.values()) {
+      totalImpressions += snap.metrics.impressions ?? 0
+      totalEngagements += snap.metrics.engagements ?? 0
+      totalLikes += snap.metrics.likes ?? 0
+      totalComments += snap.metrics.comments ?? 0
+      totalShares += snap.metrics.shares ?? 0
+      totalClicks += snap.metrics.clicks ?? 0
+    }
+
     const avgEngagementRate = totalImpressions > 0
       ? ((totalEngagements / totalImpressions) * 100).toFixed(2) + '%'
       : '—'
-    return { totalPublished, totalImpressions, totalEngagements, avgEngagementRate }
-  }, [filtered])
 
-  /* ---------- render ---------- */
+    return { totalPublished: filtered.length, totalImpressions, totalEngagements, totalLikes, totalComments, totalShares, totalClicks, avgEngagementRate }
+  }, [analytics, filtered])
+
+  const platformBreakdown = useMemo(() => {
+    const breakdown: Record<string, { impressions: number; likes: number; comments: number; shares: number; clicks: number; posts: number }> = {}
+    for (const snap of analytics) {
+      const p = snap.platform
+      if (!breakdown[p]) breakdown[p] = { impressions: 0, likes: 0, comments: 0, shares: 0, clicks: 0, posts: 0 }
+      breakdown[p].impressions += snap.metrics.impressions ?? 0
+      breakdown[p].likes += snap.metrics.likes ?? 0
+      breakdown[p].comments += snap.metrics.comments ?? 0
+      breakdown[p].shares += snap.metrics.shares ?? 0
+      breakdown[p].clicks += snap.metrics.clicks ?? 0
+    }
+    for (const post of filtered) {
+      for (const p of getPostPlatforms(post)) {
+        if (!breakdown[p]) breakdown[p] = { impressions: 0, likes: 0, comments: 0, shares: 0, clicks: 0, posts: 0 }
+        breakdown[p].posts++
+      }
+    }
+    return breakdown
+  }, [analytics, filtered])
+
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
-      {/* Header */}
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-on-surface">Analytics</h1>
-        <p className="text-sm text-on-surface-variant mt-1">Per-post engagement data for published posts</p>
+        <p className="text-sm text-on-surface-variant mt-1">Engagement data and performance insights</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1">
+        {([
+          { key: 'overview' as Tab, label: 'Overview' },
+          { key: 'posts' as Tab, label: 'Per Post' },
+          { key: 'best-times' as Tab, label: 'Best Times' },
+        ]).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-3 py-1.5 rounded-lg font-label text-xs font-medium transition-colors ${
+              tab === t.key ? 'bg-white text-black' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* Date range filter */}
       <div className="flex gap-1">
         {([
-          { key: '7d', label: 'Last 7 days' },
-          { key: '30d', label: 'Last 30 days' },
-          { key: 'all', label: 'All time' },
-        ] as const).map((opt) => (
+          { key: '7d' as DateRange, label: 'Last 7 days' },
+          { key: '30d' as DateRange, label: 'Last 30 days' },
+          { key: 'all' as DateRange, label: 'All time' },
+        ]).map((opt) => (
           <button
             key={opt.key}
             onClick={() => setRange(opt.key)}
             className={`px-3 py-1.5 rounded-lg font-label text-xs font-medium transition-colors ${
-              range === opt.key
-                ? 'bg-white text-black'
-                : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+              range === opt.key ? 'bg-white text-black' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
             }`}
           >
             {opt.label}
@@ -174,96 +285,186 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Total Published" value={stats.totalPublished} />
-        <StatCard label="Total Impressions" value={stats.totalImpressions} />
-        <StatCard label="Total Engagements" value={stats.totalEngagements} />
-        <StatCard label="Avg Engagement Rate" value={stats.avgEngagementRate} />
-      </div>
-
-      {/* Notice */}
-      <div className="rounded-xl bg-surface-container px-4 py-3 text-xs text-on-surface-variant">
-        Impression and engagement metrics are placeholder values.{' '}
-        <span className="font-medium text-on-surface">Analytics collection coming soon</span> — once enabled, real impressions, likes, comments, and shares will populate automatically.
-      </div>
-
-      {/* Table */}
       {loading ? (
         <div className="space-y-2">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="h-12 rounded-xl bg-surface-container animate-pulse" />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-on-surface-variant text-sm">No published posts found.</div>
       ) : (
-        <div className="rounded-xl bg-surface-container overflow-hidden">
-          {/* Header row */}
-          <div className="grid grid-cols-[90px_1fr_110px_80px_80px_80px_80px] gap-3 px-4 py-2.5 border-b border-outline-variant">
-            {['Platform', 'Content', 'Published', 'Impr.', 'Likes', 'Comments', 'Shares'].map((h) => (
-              <span key={h} className="text-[10px] font-medium text-on-surface-variant uppercase tracking-wide">{h}</span>
-            ))}
-          </div>
+        <>
+          {/* ── Overview tab ── */}
+          {tab === 'overview' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard label="Published" value={stats.totalPublished} />
+                <StatCard label="Impressions" value={fmtNum(stats.totalImpressions)} />
+                <StatCard label="Engagements" value={fmtNum(stats.totalEngagements)} />
+                <StatCard label="Engagement Rate" value={stats.avgEngagementRate} />
+              </div>
 
-          {/* Data rows */}
-          {filtered.map((post, i) => {
-            const platforms = getPostPlatforms(post)
-            const text = getPostText(post)
-            const results: Record<string, any> = post.platformResults ?? {}
+              <div className="rounded-xl bg-surface-container p-5 space-y-3">
+                <h3 className="text-sm font-semibold text-on-surface">Engagement Breakdown</h3>
+                {(() => {
+                  const max = Math.max(stats.totalLikes, stats.totalComments, stats.totalShares, stats.totalClicks, 1)
+                  return (
+                    <div className="space-y-2">
+                      <MetricBar label="Likes" value={stats.totalLikes} max={max} color="#4ade80" />
+                      <MetricBar label="Comments" value={stats.totalComments} max={max} color="#60a5fa" />
+                      <MetricBar label="Shares" value={stats.totalShares} max={max} color="#f472b6" />
+                      <MetricBar label="Clicks" value={stats.totalClicks} max={max} color="#fbbf24" />
+                    </div>
+                  )
+                })()}
+              </div>
 
-            return (
-              <div
-                key={post.id ?? i}
-                className={`grid grid-cols-[90px_1fr_110px_80px_80px_80px_80px] gap-3 px-4 py-3 items-start ${i > 0 ? 'border-t border-outline-variant' : ''}`}
-              >
-                {/* Platforms */}
-                <div className="flex flex-wrap gap-1 pt-0.5">
-                  {platforms.map((p) => (
-                    <PlatformBadge key={p} platform={p} />
-                  ))}
-                </div>
-
-                {/* Content preview + platform links */}
-                <div className="min-w-0">
-                  <p className="text-sm text-on-surface truncate">
-                    {text.slice(0, 80)}{text.length > 80 ? '...' : ''}
-                  </p>
-                  {/* Platform post links */}
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {Object.entries(results).map(([key, result]) => {
-                      const url = platformPostUrl(key, result)
-                      if (!url) return null
-                      const cfg = PLATFORM_COLORS[key.toLowerCase()]
-                      return (
-                        <a
-                          key={key}
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] text-blue-400 hover:underline"
-                        >
-                          View on {cfg?.label ?? key}
-                        </a>
-                      )
-                    })}
+              {Object.keys(platformBreakdown).length > 0 && (
+                <div className="rounded-xl bg-surface-container p-5 space-y-3">
+                  <h3 className="text-sm font-semibold text-on-surface">By Platform</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {Object.entries(platformBreakdown).map(([platform, data]) => (
+                      <div key={platform} className="rounded-lg bg-surface p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <PlatformBadge platform={platform} />
+                          <span className="text-xs text-on-surface-variant">{data.posts} posts</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          {[
+                            { label: 'Impr.', val: data.impressions },
+                            { label: 'Likes', val: data.likes },
+                            { label: 'Comments', val: data.comments },
+                            { label: 'Shares', val: data.shares },
+                          ].map(m => (
+                            <div key={m.label}>
+                              <p className="text-xs text-on-surface-variant">{m.label}</p>
+                              <p className="text-sm font-semibold text-on-surface">{fmtNum(m.val)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
+              )}
 
-                {/* Published date */}
-                <span className="text-xs text-on-surface-variant pt-0.5">
-                  {fmtDate(post.publishedAt ?? post.scheduledFor)}
-                </span>
+              {analytics.length === 0 && (
+                <div className="rounded-xl bg-surface-container px-4 py-3 text-xs text-on-surface-variant">
+                  No analytics data collected yet. Analytics are gathered automatically at 1h, 24h, 7d, and 30d after publishing.{' '}
+                  <span className="font-medium text-on-surface">Published posts will start showing data after the first collection cycle.</span>
+                </div>
+              )}
+            </div>
+          )}
 
-                {/* Metrics (placeholder zeros) */}
-                <span className="text-xs text-on-surface-variant/40 pt-0.5">0</span>
-                <span className="text-xs text-on-surface-variant/40 pt-0.5">0</span>
-                <span className="text-xs text-on-surface-variant/40 pt-0.5">0</span>
-                <span className="text-xs text-on-surface-variant/40 pt-0.5">0</span>
-              </div>
-            )
-          })}
-        </div>
+          {/* ── Per-post tab ── */}
+          {tab === 'posts' && (
+            <div className="space-y-4">
+              {filtered.length === 0 ? (
+                <div className="py-16 text-center text-on-surface-variant text-sm">No published posts found.</div>
+              ) : (
+                <div className="rounded-xl bg-surface-container overflow-hidden">
+                  <div className="grid grid-cols-[90px_1fr_80px_80px_80px_80px_80px] gap-3 px-4 py-2.5 border-b border-outline-variant">
+                    {['Platform', 'Content', 'Impr.', 'Likes', 'Comments', 'Shares', 'Clicks'].map((h) => (
+                      <span key={h} className="text-[10px] font-medium text-on-surface-variant uppercase tracking-wide">{h}</span>
+                    ))}
+                  </div>
+
+                  {filtered.map((post, i) => {
+                    const platforms = getPostPlatforms(post)
+                    const text = getPostText(post)
+                    const postSnaps = analytics.filter(s => s.postId === post.id)
+                    const totals = { impressions: 0, likes: 0, comments: 0, shares: 0, clicks: 0 }
+                    const seen = new Set<string>()
+                    for (const snap of postSnaps.sort((a, b) => (b.collectedAt?.seconds ?? 0) - (a.collectedAt?.seconds ?? 0))) {
+                      if (seen.has(snap.platform)) continue
+                      seen.add(snap.platform)
+                      totals.impressions += snap.metrics.impressions ?? 0
+                      totals.likes += snap.metrics.likes ?? 0
+                      totals.comments += snap.metrics.comments ?? 0
+                      totals.shares += snap.metrics.shares ?? 0
+                      totals.clicks += snap.metrics.clicks ?? 0
+                    }
+                    const hasData = postSnaps.length > 0
+
+                    return (
+                      <div
+                        key={post.id ?? i}
+                        className={`grid grid-cols-[90px_1fr_80px_80px_80px_80px_80px] gap-3 px-4 py-3 items-start ${i > 0 ? 'border-t border-outline-variant' : ''}`}
+                      >
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {platforms.map((p) => <PlatformBadge key={p} platform={p} />)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm text-on-surface truncate">{text.slice(0, 80)}{text.length > 80 ? '…' : ''}</p>
+                          <p className="text-[10px] text-on-surface-variant mt-0.5">{fmtDate(post.publishedAt ?? post.scheduledFor)}</p>
+                        </div>
+                        <span className={`text-xs pt-0.5 ${hasData ? 'text-on-surface' : 'text-on-surface-variant/40'}`}>{fmtNum(totals.impressions)}</span>
+                        <span className={`text-xs pt-0.5 ${hasData ? 'text-on-surface' : 'text-on-surface-variant/40'}`}>{fmtNum(totals.likes)}</span>
+                        <span className={`text-xs pt-0.5 ${hasData ? 'text-on-surface' : 'text-on-surface-variant/40'}`}>{fmtNum(totals.comments)}</span>
+                        <span className={`text-xs pt-0.5 ${hasData ? 'text-on-surface' : 'text-on-surface-variant/40'}`}>{fmtNum(totals.shares)}</span>
+                        <span className={`text-xs pt-0.5 ${hasData ? 'text-on-surface' : 'text-on-surface-variant/40'}`}>{fmtNum(totals.clicks)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Best times tab ── */}
+          {tab === 'best-times' && (
+            <div className="space-y-4">
+              {bestTimes.length === 0 ? (
+                <div className="rounded-xl bg-surface-container px-4 py-8 text-center text-on-surface-variant text-sm">
+                  Not enough data to calculate best posting times. Keep publishing and analytics will be collected automatically.
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-xl bg-surface-container p-5 space-y-3">
+                    <h3 className="text-sm font-semibold text-on-surface">Top Posting Times</h3>
+                    <div className="space-y-2">
+                      {bestTimes.slice(0, 5).map((slot, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-on-surface w-5">{i + 1}.</span>
+                          <span className="text-sm text-on-surface w-24">{DAY_NAMES[slot.dayOfWeek]} {slot.hour.toString().padStart(2, '0')}:00</span>
+                          <div className="flex-1 h-5 bg-surface rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-white/60 transition-all" style={{ width: `${(slot.avgScore / (bestTimes[0]?.avgScore || 1)) * 100}%` }} />
+                          </div>
+                          <span className="text-xs text-on-surface-variant w-20 text-right">Score: {slot.avgScore} ({slot.postCount})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-surface-container p-5 space-y-3">
+                    <h3 className="text-sm font-semibold text-on-surface">Engagement Heatmap</h3>
+                    <div className="overflow-x-auto">
+                      <div className="min-w-[600px]">
+                        <div className="flex gap-1 ml-12 mb-1">
+                          {Array.from({ length: 24 }, (_, h) => (
+                            <div key={h} className="w-8 text-center text-[9px] text-on-surface-variant">{h.toString().padStart(2, '0')}</div>
+                          ))}
+                        </div>
+                        {DAY_NAMES.map((day, dayIdx) => {
+                          const maxScore = Math.max(...bestTimes.map(s => s.avgScore), 1)
+                          return (
+                            <div key={day} className="flex items-center gap-1 mb-1">
+                              <span className="text-xs text-on-surface-variant w-10 text-right">{day}</span>
+                              {Array.from({ length: 24 }, (_, h) => {
+                                const slot = bestTimes.find(s => s.dayOfWeek === dayIdx && s.hour === h)
+                                return <HeatCell key={h} value={slot?.avgScore ?? 0} max={maxScore} />
+                              })}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
