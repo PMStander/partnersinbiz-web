@@ -99,6 +99,38 @@ export const PUT = withAuth('admin', withTenant(async (req, user, orgId, context
 
   await adminDb.collection('social_posts').doc(id).update(updates)
 
+  // Sync queue entry when rescheduling
+  if (updates.scheduledAt) {
+    const queueDoc = await adminDb.collection('social_queue').doc(id).get()
+    if (queueDoc.exists) {
+      await adminDb.collection('social_queue').doc(id).update({
+        scheduledAt: updates.scheduledAt,
+        status: 'pending',
+        lockedBy: null,
+        lockedAt: null,
+      })
+    } else if (updates.status === 'scheduled' || existing.status === 'scheduled') {
+      await adminDb.collection('social_queue').doc(id).set({
+        orgId,
+        postId: id,
+        scheduledAt: updates.scheduledAt,
+        status: 'pending',
+        priority: 0,
+        attempts: 0,
+        maxAttempts: 5,
+        lastAttemptAt: null,
+        nextRetryAt: null,
+        backoffSeconds: 60,
+        lockedBy: null,
+        lockedAt: null,
+        startedAt: null,
+        completedAt: null,
+        error: null,
+        createdAt: FieldValue.serverTimestamp(),
+      })
+    }
+  }
+
   await logAudit({
     orgId,
     action: 'post.updated',

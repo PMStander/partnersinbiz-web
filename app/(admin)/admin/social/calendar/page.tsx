@@ -1,11 +1,16 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
 
 type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
-type SocialPostCategory = 'work' | 'personal' | 'ai' | 'sport' | 'sa' | 'other'
+type ViewMode = 'month' | 'week'
 
 interface SocialPost {
   id: string
@@ -19,25 +24,45 @@ interface SocialPost {
   publishedAt: any | null
   externalId: string | null
   error: string | null
-  category: SocialPostCategory
+  category: string
   tags: string[]
   createdBy: string
   createdAt: any
   updatedAt: any
 }
 
-const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
-  twitter: { bg: 'bg-black', label: 'X' },
-  x: { bg: 'bg-black', label: 'X' },
-  linkedin: { bg: 'bg-blue-700', label: 'LI' },
-  facebook: { bg: 'bg-blue-600', label: 'FB' },
-  instagram: { bg: 'bg-pink-600', label: 'IG' },
-  reddit: { bg: 'bg-orange-600', label: 'RD' },
-  tiktok: { bg: 'bg-gray-800', label: 'TT' },
-  pinterest: { bg: 'bg-red-700', label: 'PI' },
-  bluesky: { bg: 'bg-sky-500', label: 'BS' },
-  threads: { bg: 'bg-gray-700', label: 'TH' },
+/* ------------------------------------------------------------------ */
+/*  Constants                                                          */
+/* ------------------------------------------------------------------ */
+
+const PLATFORM_ICONS: Record<string, { label: string; color: string; icon: string }> = {
+  twitter: { label: 'X', color: '#000000', icon: '𝕏' },
+  x: { label: 'X', color: '#000000', icon: '𝕏' },
+  linkedin: { label: 'LI', color: '#0a66c2', icon: 'in' },
+  facebook: { label: 'FB', color: '#1877f2', icon: 'f' },
+  instagram: { label: 'IG', color: '#e4405f', icon: '📷' },
+  reddit: { label: 'RD', color: '#ff4500', icon: 'r/' },
+  tiktok: { label: 'TT', color: '#25f4ee', icon: '♪' },
+  pinterest: { label: 'PI', color: '#bd081c', icon: 'P' },
+  bluesky: { label: 'BS', color: '#0085ff', icon: '🦋' },
+  threads: { label: 'TH', color: '#000000', icon: '@' },
 }
+
+const STATUS_COLORS: Record<SocialPostStatus, { bg: string; text: string; border: string }> = {
+  scheduled: { bg: 'bg-blue-900/40', text: 'text-blue-300', border: 'border-blue-500/40' },
+  published: { bg: 'bg-green-900/40', text: 'text-green-300', border: 'border-green-500/40' },
+  failed: { bg: 'bg-red-900/40', text: 'text-red-300', border: 'border-red-500/40' },
+  draft: { bg: 'bg-surface-container-high', text: 'text-on-surface-variant', border: 'border-outline-variant' },
+  cancelled: { bg: 'bg-surface-container', text: 'text-on-surface-variant/40', border: 'border-outline-variant/30' },
+}
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December']
+const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
 
 function getPostText(post: SocialPost): string {
   if (typeof post.content === 'string') return post.content
@@ -53,8 +78,8 @@ function getPostPlatforms(post: SocialPost): string[] {
 
 function tsToDate(ts: any): Date | null {
   if (!ts) return null
-  if (ts._seconds) return new Date(ts._seconds * 1000)   // Firestore REST serialization
-  if (ts.seconds) return new Date(ts.seconds * 1000)     // Firestore SDK serialization
+  if (ts._seconds) return new Date(ts._seconds * 1000)
+  if (ts.seconds) return new Date(ts.seconds * 1000)
   return new Date(ts)
 }
 
@@ -71,72 +96,85 @@ function fmtDateLong(d: Date) {
   return d.toLocaleDateString('en-ZA', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-function PlatformBadge({ platform }: { platform: string }) {
-  const config = PLATFORM_COLORS[platform.toLowerCase()] ?? { bg: 'bg-surface-container-high', label: platform.slice(0, 2).toUpperCase() }
-  return (
-    <span className={`${config.bg} text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0`}>
-      {config.label}
-    </span>
-  )
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
-
-function StatusBadge({ status }: { status: SocialPostStatus }) {
-  const styles: Record<SocialPostStatus, string> = {
-    scheduled: 'bg-blue-900/30 text-blue-400',
-    published: 'bg-green-900/30 text-green-400',
-    failed: 'bg-red-900/30 text-red-400',
-    draft: 'bg-surface-container-high text-on-surface-variant',
-    cancelled: 'bg-surface-container text-on-surface-variant/50 line-through',
-  }
-  return (
-    <span className={`text-[10px] px-2 py-0.5 rounded font-medium capitalize ${styles[status]}`}>
-      {status}
-    </span>
-  )
-}
-
-// Chip color by status
-function postChipClass(status: SocialPostStatus) {
-  switch (status) {
-    case 'scheduled': return 'bg-blue-900/40 text-blue-300'
-    case 'published': return 'bg-green-900/40 text-green-300'
-    case 'failed': return 'bg-red-900/40 text-red-300'
-    case 'cancelled': return 'bg-surface-container text-on-surface-variant/40 line-through'
-    default: return 'bg-surface-container-high text-on-surface-variant'
-  }
-}
-
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December']
-const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function getCalendarDays(year: number, month: number): Date[] {
   const firstDay = new Date(year, month, 1)
   let startDow = firstDay.getDay() - 1
   if (startDow < 0) startDow = 6
-
   const days: Date[] = []
-  for (let i = startDow; i > 0; i--) {
-    days.push(new Date(year, month, 1 - i))
-  }
+  for (let i = startDow; i > 0; i--) days.push(new Date(year, month, 1 - i))
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  for (let i = 1; i <= daysInMonth; i++) {
-    days.push(new Date(year, month, i))
-  }
+  for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i))
   const remaining = 42 - days.length
-  for (let i = 1; i <= remaining; i++) {
-    days.push(new Date(year, month + 1, i))
+  for (let i = 1; i <= remaining; i++) days.push(new Date(year, month + 1, i))
+  return days
+}
+
+function getWeekDays(year: number, month: number, day: number): Date[] {
+  const d = new Date(year, month, day)
+  let dow = d.getDay() - 1
+  if (dow < 0) dow = 6
+  const days: Date[] = []
+  for (let i = 0; i < 7; i++) {
+    days.push(new Date(year, month, day - dow + i))
   }
   return days
 }
 
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+/* ------------------------------------------------------------------ */
+/*  Platform Icon Component                                            */
+/* ------------------------------------------------------------------ */
+
+function PlatformIcon({ platform }: { platform: string }) {
+  const cfg = PLATFORM_ICONS[platform.toLowerCase()]
+  if (!cfg) return null
+  return (
+    <span
+      className="inline-flex items-center justify-center w-4 h-4 rounded text-[8px] font-bold leading-none text-white shrink-0"
+      style={{ backgroundColor: cfg.color }}
+      title={cfg.label}
+    >
+      {cfg.icon}
+    </span>
+  )
 }
 
-// Slide-over panel for a selected post
+/* ------------------------------------------------------------------ */
+/*  Post Chip (draggable)                                              */
+/* ------------------------------------------------------------------ */
+
+function PostChip({ post, onSelect, onDragStart }: {
+  post: SocialPost
+  onSelect: (p: SocialPost) => void
+  onDragStart: (e: React.DragEvent, post: SocialPost) => void
+}) {
+  const text = getPostText(post)
+  const platforms = getPostPlatforms(post)
+  const colors = STATUS_COLORS[post.status] ?? STATUS_COLORS.draft
+
+  return (
+    <button
+      draggable={post.status === 'draft' || post.status === 'scheduled'}
+      onDragStart={(e) => onDragStart(e, post)}
+      onClick={() => onSelect(post)}
+      className={`w-full text-left flex items-center gap-1 px-1.5 py-1 rounded text-[9px] font-medium truncate transition-all
+        hover:opacity-80 cursor-grab active:cursor-grabbing border
+        ${colors.bg} ${colors.text} ${colors.border}`}
+    >
+      {platforms.map((p) => <PlatformIcon key={p} platform={p} />)}
+      <span className="truncate">{text.slice(0, 40)}</span>
+      <span className="ml-auto text-[8px] opacity-60 shrink-0">{fmtTime(post.scheduledAt ?? post.scheduledFor)}</span>
+    </button>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  Post Slide-Over                                                    */
+/* ------------------------------------------------------------------ */
+
 function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancelling }: {
   post: SocialPost
   onClose: () => void
@@ -148,6 +186,7 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
   const text = getPostText(post)
   const platforms = getPostPlatforms(post)
   const schedDate = getScheduledDate(post)
+  const colors = STATUS_COLORS[post.status] ?? STATUS_COLORS.draft
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -155,20 +194,13 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
       <div className="relative z-50 w-96 h-full bg-surface-container border-l border-outline-variant flex flex-col overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant">
           <h2 className="text-sm font-semibold text-on-surface">Post Details</h2>
-          <button
-            onClick={onClose}
-            className="text-on-surface-variant hover:text-on-surface text-xl leading-none transition-colors"
-          >
-            ×
-          </button>
+          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface text-xl leading-none transition-colors">×</button>
         </div>
 
         <div className="p-5 space-y-4 flex-1">
-          <div className="flex items-center gap-2">
-            {platforms.map((p) => (
-              <PlatformBadge key={p} platform={p} />
-            ))}
-            <StatusBadge status={post.status} />
+          <div className="flex items-center gap-2 flex-wrap">
+            {platforms.map((p) => <PlatformIcon key={p} platform={p} />)}
+            <span className={`text-[10px] px-2 py-0.5 rounded font-medium capitalize ${colors.bg} ${colors.text}`}>{post.status}</span>
           </div>
 
           <div>
@@ -192,19 +224,6 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
             </div>
           )}
 
-          {post.tags && post.tags.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-1">Tags</p>
-              <div className="flex flex-wrap gap-1.5">
-                {post.tags.map((tag) => (
-                  <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
           {post.error && (
             <div>
               <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-1">Error</p>
@@ -224,7 +243,7 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
             </button>
           )}
           <Link
-            href={`/admin/social/queue`}
+            href={`/admin/social/compose`}
             className="px-3 py-2 rounded-lg bg-surface-container-high text-on-surface font-label text-xs font-medium hover:bg-surface-container transition-colors"
           >
             Edit
@@ -244,15 +263,24 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
   )
 }
 
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+
 export default function CalendarPage() {
   const now = new Date()
+  const router = useRouter()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
+  const [weekStart, setWeekStart] = useState(now.getDate() - ((now.getDay() + 6) % 7))
+  const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [posts, setPosts] = useState<SocialPost[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPost, setSelectedPost] = useState<SocialPost | null>(null)
   const [publishing, setPublishing] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState<string | null>(null)
+  const [dragOverDay, setDragOverDay] = useState<string | null>(null)
+  const dragPostRef = useRef<SocialPost | null>(null)
 
   const fetchPosts = useCallback(async () => {
     setLoading(true)
@@ -269,9 +297,12 @@ export default function CalendarPage() {
 
   useEffect(() => { fetchPosts() }, [fetchPosts])
 
-  const days = getCalendarDays(year, month)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+
+  const days = viewMode === 'month'
+    ? getCalendarDays(year, month)
+    : getWeekDays(year, month, weekStart)
 
   const postsForDay = (day: Date) =>
     posts.filter((p) => {
@@ -279,22 +310,41 @@ export default function CalendarPage() {
       return d ? isSameDay(d, day) : false
     })
 
+  /* Navigation */
   const goPrev = () => {
-    if (month === 0) { setMonth(11); setYear(y => y - 1) }
-    else setMonth(m => m - 1)
-    setSelectedPost(null)
-  }
-  const goNext = () => {
-    if (month === 11) { setMonth(0); setYear(y => y + 1) }
-    else setMonth(m => m + 1)
-    setSelectedPost(null)
-  }
-  const goToday = () => {
-    setYear(now.getFullYear())
-    setMonth(now.getMonth())
+    if (viewMode === 'month') {
+      if (month === 0) { setMonth(11); setYear(y => y - 1) }
+      else setMonth(m => m - 1)
+    } else {
+      const d = new Date(year, month, weekStart - 7)
+      setYear(d.getFullYear())
+      setMonth(d.getMonth())
+      setWeekStart(d.getDate())
+    }
     setSelectedPost(null)
   }
 
+  const goNext = () => {
+    if (viewMode === 'month') {
+      if (month === 11) { setMonth(0); setYear(y => y + 1) }
+      else setMonth(m => m + 1)
+    } else {
+      const d = new Date(year, month, weekStart + 7)
+      setYear(d.getFullYear())
+      setMonth(d.getMonth())
+      setWeekStart(d.getDate())
+    }
+    setSelectedPost(null)
+  }
+
+  const goToday = () => {
+    setYear(now.getFullYear())
+    setMonth(now.getMonth())
+    setWeekStart(now.getDate() - ((now.getDay() + 6) % 7))
+    setSelectedPost(null)
+  }
+
+  /* Actions */
   const handlePublish = async (post: SocialPost) => {
     setPublishing(post.id)
     setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: 'published' } : p))
@@ -319,8 +369,68 @@ export default function CalendarPage() {
     }
   }
 
+  /* DnD: Reschedule post to a new day */
+  const handleDragStart = (_e: React.DragEvent, post: SocialPost) => {
+    dragPostRef.current = post
+  }
+
+  const handleDragOver = (e: React.DragEvent, dayKey: string) => {
+    e.preventDefault()
+    setDragOverDay(dayKey)
+  }
+
+  const handleDragLeave = () => {
+    setDragOverDay(null)
+  }
+
+  const handleDrop = async (e: React.DragEvent, targetDay: Date) => {
+    e.preventDefault()
+    setDragOverDay(null)
+    const post = dragPostRef.current
+    dragPostRef.current = null
+    if (!post) return
+    if (post.status !== 'draft' && post.status !== 'scheduled') return
+
+    // Preserve original time, change date
+    const origDate = getScheduledDate(post) ?? new Date()
+    const newDate = new Date(
+      targetDay.getFullYear(),
+      targetDay.getMonth(),
+      targetDay.getDate(),
+      origDate.getHours(),
+      origDate.getMinutes(),
+    )
+
+    // Optimistic update
+    setPosts(prev => prev.map(p => {
+      if (p.id !== post.id) return p
+      return { ...p, scheduledAt: { seconds: Math.floor(newDate.getTime() / 1000) }, scheduledFor: { seconds: Math.floor(newDate.getTime() / 1000) }, status: 'scheduled' }
+    }))
+
+    try {
+      await fetch(`/api/v1/social/posts/${post.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledAt: newDate.toISOString(), status: 'scheduled' }),
+      })
+    } catch {
+      fetchPosts() // Revert on failure
+    }
+  }
+
+  /* Click-to-create */
+  const handleDayClick = (day: Date) => {
+    const iso = day.toISOString().slice(0, 16)
+    router.push(`/admin/social/compose?scheduledAt=${iso}`)
+  }
+
+  /* Week header for week view */
+  const weekRangeLabel = viewMode === 'week' && days.length >= 7
+    ? `${days[0].toLocaleDateString('en-ZA', { day: '2-digit', month: 'short' })} – ${days[6].toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })}`
+    : ''
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 max-w-5xl mx-auto space-y-5">
       {selectedPost && (
         <PostSlideOver
           post={selectedPost}
@@ -335,7 +445,7 @@ export default function CalendarPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-on-surface">Calendar</h1>
-          <p className="text-sm text-on-surface-variant mt-1">Visualise your posting schedule</p>
+          <p className="text-sm text-on-surface-variant mt-1">Drag posts to reschedule, click a day to create</p>
         </div>
         <Link
           href="/admin/social/compose"
@@ -345,16 +455,16 @@ export default function CalendarPage() {
         </Link>
       </div>
 
-      {/* Month nav */}
-      <div className="flex items-center gap-3">
+      {/* Controls */}
+      <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={goPrev}
           className="px-3 py-1.5 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
         >
           &lt; Prev
         </button>
-        <h2 className="text-sm font-semibold text-on-surface min-w-[140px] text-center">
-          {MONTH_NAMES[month]} {year}
+        <h2 className="text-sm font-semibold text-on-surface min-w-[160px] text-center">
+          {viewMode === 'month' ? `${MONTH_NAMES[month]} ${year}` : weekRangeLabel}
         </h2>
         <button
           onClick={goNext}
@@ -364,22 +474,39 @@ export default function CalendarPage() {
         </button>
         <button
           onClick={goToday}
-          className="ml-2 px-3 py-1.5 rounded-lg bg-surface-container-high text-on-surface-variant font-label text-xs font-medium hover:bg-surface-container transition-colors"
+          className="px-3 py-1.5 rounded-lg bg-surface-container-high text-on-surface-variant font-label text-xs font-medium hover:bg-surface-container transition-colors"
         >
           Today
         </button>
-        {loading && (
-          <span className="text-xs text-on-surface-variant/50 ml-2">Loading…</span>
-        )}
+
+        {/* View mode toggle */}
+        <div className="ml-auto flex gap-1">
+          {(['month', 'week'] as ViewMode[]).map(mode => (
+            <button
+              key={mode}
+              onClick={() => {
+                setViewMode(mode)
+                if (mode === 'week') setWeekStart(now.getDate() - ((now.getDay() + 6) % 7))
+              }}
+              className={`px-3 py-1.5 rounded-lg font-label text-xs font-medium transition-colors capitalize ${
+                viewMode === mode ? 'bg-white text-black' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+
+        {loading && <span className="text-xs text-on-surface-variant/50">Loading…</span>}
       </div>
 
       {/* Legend */}
       <div className="flex gap-4 text-[11px]">
         {[
-          { label: 'Scheduled', cls: 'bg-blue-900/40 text-blue-300' },
-          { label: 'Published', cls: 'bg-green-900/40 text-green-300' },
-          { label: 'Failed', cls: 'bg-red-900/40 text-red-300' },
-          { label: 'Draft', cls: 'bg-surface-container-high text-on-surface-variant' },
+          { label: 'Scheduled', cls: 'bg-blue-900/40 text-blue-300 border border-blue-500/40' },
+          { label: 'Published', cls: 'bg-green-900/40 text-green-300 border border-green-500/40' },
+          { label: 'Failed', cls: 'bg-red-900/40 text-red-300 border border-red-500/40' },
+          { label: 'Draft', cls: 'bg-surface-container-high text-on-surface-variant border border-outline-variant' },
         ].map(({ label, cls }) => (
           <span key={label} className={`px-2 py-0.5 rounded font-medium ${cls}`}>{label}</span>
         ))}
@@ -390,9 +517,7 @@ export default function CalendarPage() {
         {/* Day headers */}
         <div className="grid grid-cols-7 border-b border-outline-variant">
           {DAY_HEADERS.map((d) => (
-            <div key={d} className="py-2 text-center text-[10px] font-medium text-on-surface-variant uppercase tracking-wide">
-              {d}
-            </div>
+            <div key={d} className="py-2 text-center text-[10px] font-medium text-on-surface-variant uppercase tracking-wide">{d}</div>
           ))}
         </div>
 
@@ -402,16 +527,23 @@ export default function CalendarPage() {
             const isCurrentMonth = day.getMonth() === month
             const isToday = isSameDay(day, today)
             const dayPosts = loading ? [] : postsForDay(day)
-            const visiblePosts = dayPosts.slice(0, 3)
+            const dayKey = day.toISOString().slice(0, 10)
+            const isDragOver = dragOverDay === dayKey
+            const visiblePosts = viewMode === 'week' ? dayPosts : dayPosts.slice(0, 3)
             const extraCount = dayPosts.length - visiblePosts.length
+            const minH = viewMode === 'week' ? 'min-h-[200px]' : 'min-h-[90px]'
 
             return (
               <div
                 key={i}
-                className={`min-h-[90px] p-1.5 border-b border-r border-outline-variant/30
-                  ${isCurrentMonth ? 'bg-transparent hover:bg-surface-container-high/30' : 'bg-surface/30'}
-                  transition-colors
+                className={`${minH} p-1.5 border-b border-r border-outline-variant/30 transition-colors
+                  ${isCurrentMonth ? 'bg-transparent' : 'bg-surface/30'}
+                  ${isDragOver ? 'bg-blue-900/20 ring-1 ring-blue-500/40 ring-inset' : 'hover:bg-surface-container-high/30'}
                 `}
+                onDragOver={(e) => handleDragOver(e, dayKey)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, day)}
+                onDoubleClick={() => handleDayClick(day)}
               >
                 <span className={`text-xs font-medium block mb-1 w-6 h-6 flex items-center justify-center rounded-full
                   ${!isCurrentMonth ? 'text-on-surface-variant/25' : isToday ? 'bg-white text-black' : 'text-on-surface'}
@@ -419,31 +551,16 @@ export default function CalendarPage() {
                   {day.getDate()}
                 </span>
                 <div className="space-y-0.5">
-                  {visiblePosts.map((post) => {
-                    const text = getPostText(post)
-                    const platforms = getPostPlatforms(post)
-                    return (
-                      <button
-                        key={post.id}
-                        onClick={() => setSelectedPost(post)}
-                        className={`w-full text-left flex items-center gap-1 px-1 py-0.5 rounded text-[9px] font-medium truncate transition-opacity hover:opacity-80 ${postChipClass(post.status)}`}
-                      >
-                        {platforms.map((p) => (
-                          <PlatformBadge key={p} platform={p} />
-                        ))}
-                        <span className="truncate">{text.slice(0, 40)}</span>
-                      </button>
-                    )
-                  })}
+                  {visiblePosts.map((post) => (
+                    <PostChip
+                      key={post.id}
+                      post={post}
+                      onSelect={setSelectedPost}
+                      onDragStart={handleDragStart}
+                    />
+                  ))}
                   {extraCount > 0 && (
-                    <span className="text-[9px] text-on-surface-variant/50 pl-1">
-                      +{extraCount} more
-                    </span>
-                  )}
-                  {dayPosts.length >= 2 && extraCount === 0 && (
-                    <span className="text-[9px] text-on-surface-variant/40 pl-1">
-                      {dayPosts.length} posts
-                    </span>
+                    <span className="text-[9px] text-on-surface-variant/50 pl-1">+{extraCount} more</span>
                   )}
                 </div>
               </div>
@@ -452,13 +569,12 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Month summary */}
+      {/* Summary */}
       {!loading && (
         <p className="text-xs text-on-surface-variant text-right">
-          {posts.filter(p => {
-            const d = getScheduledDate(p)
-            return d && d.getFullYear() === year && d.getMonth() === month
-          }).length} posts in {MONTH_NAMES[month]}
+          {viewMode === 'month'
+            ? `${posts.filter(p => { const d = getScheduledDate(p); return d && d.getFullYear() === year && d.getMonth() === month }).length} posts in ${MONTH_NAMES[month]}`
+            : `${days.reduce((sum, day) => sum + postsForDay(day).length, 0)} posts this week`}
         </p>
       )}
     </div>

@@ -70,7 +70,7 @@ export default function ComposePage() {
     fetch('/api/v1/social/accounts').then(r => r.json()).then(b => setAccounts(b.data ?? []))
   }, [])
 
-  // Pre-fill from URL params (replies page)
+  // Pre-fill from URL params (replies page + calendar click-to-create)
   useEffect(() => {
     const draft = searchParams.get('draft')
     if (draft) setContent(decodeURIComponent(draft))
@@ -78,6 +78,8 @@ export default function ComposePage() {
     if (topic) {
       setTags([decodeURIComponent(topic)])
     }
+    const scheduledAtParam = searchParams.get('scheduledAt')
+    if (scheduledAtParam) setScheduledFor(scheduledAtParam)
   }, [searchParams])
 
   // Reset mode to single when no thread-capable platform is selected
