@@ -1,10 +1,17 @@
-// app/api/cron/social/route.ts
+/**
+ * GET /api/cron/social — Cron endpoint for processing the social post queue.
+ *
+ * Called every 1 minute by Vercel Cron or external scheduler.
+ * Auth: CRON_SECRET or AI_API_KEY bearer tokens.
+ *
+ * Uses the queue processor from lib/social/queue.ts which handles:
+ *  - Optimistic locking for concurrent safety
+ *  - Stale lock detection (5min threshold)
+ *  - Exponential backoff retry (1m → 5m → 15m → 1hr, max 5 attempts)
+ */
 import { NextRequest } from 'next/server'
-import { adminDb } from '@/lib/firebase/admin'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import { FieldValue, Timestamp } from 'firebase-admin/firestore'
-import { postTweet, postThread } from '@/lib/social/twitter'
-import { postToLinkedIn } from '@/lib/social/linkedin'
+import { processQueue } from '@/lib/social/queue'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,59 +21,7 @@ export async function GET(req: NextRequest) {
   const validApiAuth = auth === `Bearer ${process.env.AI_API_KEY}`
   if (!validCronAuth && !validApiAuth) return apiError('Unauthorized', 401)
 
-  const now = Timestamp.now()
+  const result = await processQueue()
 
-  // Fetch only scheduled posts — avoid composite index by filtering scheduledFor in-memory
-  const snap = await (adminDb.collection('social_posts') as any)
-    .where('status', '==', 'scheduled')
-    .get()
-
-  let processed = 0
-  let failed = 0
-
-  for (const postDoc of snap.docs) {
-    const post = postDoc.data()
-
-    // In-memory filter: skip posts not yet due
-    if (post.scheduledFor > now) continue
-
-    try {
-      let externalId: string
-
-      if (post.platform === 'x') {
-        if (Array.isArray(post.threadParts) && post.threadParts.length > 0) {
-          const { ids } = await postThread(post.threadParts)
-          externalId = ids[0]
-        } else {
-          const { id } = await postTweet(post.content)
-          externalId = id
-        }
-      } else if (post.platform === 'linkedin') {
-        const { id } = await postToLinkedIn(post.content)
-        externalId = id
-      } else {
-        throw new Error(`Unsupported platform: ${post.platform}`)
-      }
-
-      await adminDb.collection('social_posts').doc(postDoc.id).update({
-        status: 'published',
-        publishedAt: FieldValue.serverTimestamp(),
-        externalId,
-        error: null,
-        updatedAt: FieldValue.serverTimestamp(),
-      })
-
-      processed++
-    } catch (err) {
-      await adminDb.collection('social_posts').doc(postDoc.id).update({
-        status: 'failed',
-        error: err instanceof Error ? err.message : 'Unknown error',
-        updatedAt: FieldValue.serverTimestamp(),
-      })
-
-      failed++
-    }
-  }
-
-  return apiSuccess({ processed, failed })
+  return apiSuccess(result)
 }
