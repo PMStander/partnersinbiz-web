@@ -1,4 +1,46 @@
+/**
+ * Social module types — re-exports from providers/types.ts (canonical)
+ * plus legacy types for backward compatibility with existing UI/cron.
+ */
 import { Timestamp } from 'firebase-admin/firestore'
+
+// Re-export all canonical types from providers
+export type {
+  SocialPlatformType,
+  AccountType,
+  AccountStatus,
+  SocialAccount,
+  EncryptedTokenBlock,
+  PostStatus,
+  PostSource,
+  PlatformOverride,
+  PostMediaAttachment,
+  PlatformResult,
+  PostComment,
+  EnhancedSocialPost,
+  MediaType,
+  MediaStatus,
+  SocialMedia,
+  MediaVariant,
+  QueueStatus,
+  QueueEntry,
+  AuditAction,
+  AuditEntityType,
+  AuditLogEntry,
+  PublishResult,
+  ProfileInfo,
+  AnalyticsData,
+  MediaConstraint,
+  PlatformConstraints,
+  ValidationError,
+  ValidationResult,
+} from './providers/types'
+
+export { ACTIVE_PLATFORMS } from './providers/types'
+
+// ---------------------------------------------------------------------------
+// Legacy types (kept for existing social_posts collection, cron, and admin UI)
+// ---------------------------------------------------------------------------
 
 export type SocialPlatform = 'x' | 'linkedin'
 export type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
@@ -8,11 +50,11 @@ export interface SocialPost {
   id?: string
   platform: SocialPlatform
   content: string
-  threadParts: string[]       // for X threads; empty for single tweets
+  threadParts: string[]
   scheduledFor: Timestamp
   status: SocialPostStatus
   publishedAt: Timestamp | null
-  externalId: string | null   // tweet ID or LinkedIn post URN
+  externalId: string | null
   error: string | null
   category: SocialPostCategory
   tags: string[]
@@ -21,14 +63,12 @@ export interface SocialPost {
   updatedAt: Timestamp
 }
 
-/** A SocialPost that has been persisted — id is always present */
 export type SocialPostDocument = SocialPost & { id: string }
 
 export interface SocialPostInput {
   platform: SocialPlatform
   content: string
-  /** ISO 8601 date-time string — must be a valid date, validated before conversion to Timestamp */
-  scheduledFor: string        // ISO date string from API caller
+  scheduledFor: string
   threadParts?: string[]
   category?: SocialPostCategory
   tags?: string[]

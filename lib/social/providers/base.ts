@@ -1,0 +1,138 @@
+/**
+ * SocialProvider — Abstract base class for all social media platform providers.
+ *
+ * Each platform implements this interface. The provider registry instantiates
+ * providers by platform type, hiding platform-specific logic behind a unified API.
+ */
+import type {
+  SocialPlatformType,
+  PublishResult,
+  ProfileInfo,
+  AnalyticsData,
+  PlatformConstraints,
+  ValidationResult,
+} from './types'
+import { getConstraints } from './constraints'
+
+export interface ProviderCredentials {
+  accessToken: string
+  accessTokenSecret?: string
+  refreshToken?: string
+  apiKey?: string
+  apiKeySecret?: string
+  personUrn?: string
+  instanceUrl?: string
+}
+
+export interface PublishOptions {
+  text: string
+  threadParts?: string[]
+  mediaUrls?: string[]
+  altTexts?: string[]
+  replyToId?: string
+  title?: string
+}
+
+export abstract class SocialProvider {
+  readonly platform: SocialPlatformType
+  protected credentials: ProviderCredentials
+
+  constructor(platform: SocialPlatformType, credentials: ProviderCredentials) {
+    this.platform = platform
+    this.credentials = credentials
+  }
+
+  /** Get the platform constraints config */
+  getConstraints(): PlatformConstraints {
+    return getConstraints(this.platform)
+  }
+
+  /** Publish a post (single or thread) to the platform */
+  abstract publishPost(options: PublishOptions): Promise<PublishResult>
+
+  /** Publish a thread (multi-part post) — defaults to publishPost for non-thread platforms */
+  async publishThread(parts: string[]): Promise<PublishResult[]> {
+    // Default: publish each part as a separate post. Thread-capable platforms override this.
+    const results: PublishResult[] = []
+    for (const part of parts) {
+      const result = await this.publishPost({ text: part, replyToId: results[results.length - 1]?.platformPostId })
+      results.push(result)
+    }
+    return results
+  }
+
+  /** Delete a post by its platform-native ID */
+  abstract deletePost(platformPostId: string): Promise<void>
+
+  /** Get profile info for the authenticated account */
+  abstract getProfile(): Promise<ProfileInfo>
+
+  /** Validate that credentials are still working */
+  abstract validateCredentials(): Promise<boolean>
+
+  /** Refresh OAuth tokens. Returns new credentials if refreshed, null if not needed or not supported. */
+  abstract refreshToken(): Promise<ProviderCredentials | null>
+
+  /** Get analytics for a specific post */
+  async getAnalytics(_platformPostId: string): Promise<AnalyticsData | null> {
+    // Default: not supported. Platforms override when available.
+    return null
+  }
+
+  /** Validate content against platform constraints */
+  validateContent(text: string, threadParts?: string[]): ValidationResult {
+    const constraints = this.getConstraints()
+    const errors: ValidationResult['errors'] = []
+    const warnings: ValidationResult['warnings'] = []
+
+    // Text length
+    if (text.length > constraints.maxTextLength) {
+      errors.push({
+        field: 'text',
+        message: `Text exceeds ${constraints.maxTextLength} character limit (${text.length} chars)`,
+        platform: this.platform,
+      })
+    }
+
+    // Thread parts
+    if (threadParts && threadParts.length > 0) {
+      if (!constraints.supportsThreads) {
+        errors.push({
+          field: 'threadParts',
+          message: `${this.platform} does not support threads`,
+          platform: this.platform,
+        })
+      }
+      if (constraints.maxThreadParts && threadParts.length > constraints.maxThreadParts) {
+        errors.push({
+          field: 'threadParts',
+          message: `Thread exceeds ${constraints.maxThreadParts} part limit (${threadParts.length} parts)`,
+          platform: this.platform,
+        })
+      }
+      if (constraints.maxThreadPartLength) {
+        threadParts.forEach((part, i) => {
+          if (part.length > constraints.maxThreadPartLength!) {
+            errors.push({
+              field: `threadParts[${i}]`,
+              message: `Thread part ${i + 1} exceeds ${constraints.maxThreadPartLength} character limit (${part.length} chars)`,
+              platform: this.platform,
+            })
+          }
+        })
+      }
+    }
+
+    // Hashtag count
+    const hashtags = (text.match(/#\w+/g) ?? [])
+    if (constraints.maxHashtags && hashtags.length > constraints.maxHashtags) {
+      warnings.push({
+        field: 'hashtags',
+        message: `${hashtags.length} hashtags exceeds recommended limit of ${constraints.maxHashtags}`,
+        platform: this.platform,
+      })
+    }
+
+    return { valid: errors.length === 0, errors, warnings }
+  }
+}
