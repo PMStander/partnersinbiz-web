@@ -18,7 +18,7 @@ export const GET = withAuth('admin', withTenant(async (_req, _user, orgId) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const feeds = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
 
-  return apiSuccess(feeds, 200, { total: feeds.length })
+  return apiSuccess(feeds, 200, { total: feeds.length, page: 1, limit: feeds.length })
 }))
 
 export const POST = withAuth('admin', withTenant(async (req, user, orgId) => {

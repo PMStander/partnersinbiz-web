@@ -33,7 +33,7 @@ export const GET = withAuth('admin', withTenant(async (req, _user, orgId) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
 
-    return apiSuccess(data, 200, { total: data.length })
+    return apiSuccess(data, 200, { total: data.length, page: 1, limit: data.length })
   }
 
   // Post analytics snapshots
@@ -48,5 +48,5 @@ export const GET = withAuth('admin', withTenant(async (req, _user, orgId) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
 
-  return apiSuccess(data, 200, { total: data.length })
+  return apiSuccess(data, 200, { total: data.length, page: 1, limit: data.length })
 }))
