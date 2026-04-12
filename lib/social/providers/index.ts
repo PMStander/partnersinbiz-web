@@ -11,6 +11,13 @@ export type { ProviderCredentials, PublishOptions } from './base'
 // Platform providers
 export { TwitterProvider } from './twitter'
 export { LinkedInProvider } from './linkedin'
+export { FacebookProvider } from './facebook'
+export { InstagramProvider } from './instagram'
+export { RedditProvider } from './reddit'
+export { TikTokProvider } from './tiktok'
+export { PinterestProvider } from './pinterest'
+export { BlueskyProvider } from './bluesky'
+export { ThreadsProvider } from './threads'
 
 // Registry
 export {

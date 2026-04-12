@@ -3,17 +3,47 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
 
-type SocialPlatform = 'x' | 'linkedin'
+type SocialPlatform = 'twitter' | 'x' | 'linkedin' | 'facebook' | 'instagram' | 'reddit' | 'tiktok' | 'pinterest' | 'bluesky' | 'threads'
 type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
 type SocialPostCategory = 'work' | 'personal' | 'ai' | 'sport' | 'sa' | 'other'
 
 const CATEGORIES: SocialPostCategory[] = ['work', 'personal', 'ai', 'sport', 'sa', 'other']
 
+const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
+  twitter: { bg: 'bg-black', label: 'X' },
+  x: { bg: 'bg-black', label: 'X' },
+  linkedin: { bg: 'bg-blue-700', label: 'LI' },
+  facebook: { bg: 'bg-blue-600', label: 'FB' },
+  instagram: { bg: 'bg-pink-600', label: 'IG' },
+  reddit: { bg: 'bg-orange-600', label: 'RD' },
+  tiktok: { bg: 'bg-gray-800', label: 'TT' },
+  pinterest: { bg: 'bg-red-700', label: 'PI' },
+  bluesky: { bg: 'bg-sky-500', label: 'BS' },
+  threads: { bg: 'bg-gray-700', label: 'TH' },
+}
+
+const FILTER_PLATFORMS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All Platforms' },
+  { value: 'twitter', label: 'X' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'reddit', label: 'Reddit' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'pinterest', label: 'Pinterest' },
+  { value: 'bluesky', label: 'Bluesky' },
+  { value: 'threads', label: 'Threads' },
+]
+
 interface SocialPost {
   id: string
-  platform: SocialPlatform
-  content: string
-  threadParts: string[]
+  // Legacy: single platform string. New: platforms array
+  platform?: SocialPlatform
+  platforms?: SocialPlatform[]
+  accountIds?: string[]
+  // Legacy: content as string. New: content as { text, platformOverrides? }
+  content: string | { text: string; platformOverrides?: Record<string, string> }
+  threadParts?: string[]
   scheduledFor: any
   status: SocialPostStatus
   publishedAt: any | null
@@ -24,6 +54,21 @@ interface SocialPost {
   createdBy: string
   createdAt: any
   updatedAt: any
+  // Queue / retry fields
+  retryCount?: number
+  nextRetryAt?: any
+}
+
+function getPostText(post: any): string {
+  if (typeof post.content === 'string') return post.content
+  if (post.content?.text) return post.content.text
+  return ''
+}
+
+function getPostPlatforms(post: any): string[] {
+  if (post.platforms?.length) return post.platforms
+  if (post.platform) return [post.platform]
+  return []
 }
 
 function tsToDate(ts: any): Date | null {
@@ -53,11 +98,28 @@ function StatusBadge({ status }: { status: SocialPostStatus }) {
   )
 }
 
-function PlatformBadge({ platform }: { platform: SocialPlatform }) {
-  if (platform === 'x') {
-    return <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded font-bold">X</span>
+function PlatformBadge({ platform }: { platform: string }) {
+  const config = PLATFORM_COLORS[platform] ?? { bg: 'bg-surface-container-high', label: platform.slice(0, 2).toUpperCase() }
+  return (
+    <span className={`${config.bg} text-white text-[10px] px-2 py-0.5 rounded font-bold`}>
+      {config.label}
+    </span>
+  )
+}
+
+function RetryInfo({ post }: { post: SocialPost }) {
+  if (post.status !== 'failed') return null
+  const parts: string[] = []
+  if (typeof post.retryCount === 'number' && post.retryCount > 0) {
+    parts.push(`${post.retryCount} retries`)
   }
-  return <span className="bg-blue-700 text-white text-[10px] px-2 py-0.5 rounded font-bold">LI</span>
+  if (post.nextRetryAt) {
+    parts.push(`next: ${fmtDateTime(post.nextRetryAt)}`)
+  }
+  if (parts.length === 0) return null
+  return (
+    <span className="text-[9px] text-red-400/70">{parts.join(' · ')}</span>
+  )
 }
 
 interface EditPanelProps {
@@ -67,7 +129,7 @@ interface EditPanelProps {
 }
 
 function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
-  const [content, setContent] = useState(post.content)
+  const [content, setContent] = useState(getPostText(post))
   const [scheduledFor, setScheduledFor] = useState(() => {
     const d = tsToDate(post.scheduledFor)
     return d ? d.toISOString().slice(0, 16) : ''
@@ -93,7 +155,12 @@ function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
     if (!content.trim()) { setError('Content cannot be empty.'); return }
     setSaving(true)
     try {
-      const body: any = { content, category, tags }
+      // Send content in the format the post originally used
+      const body: any = {
+        content: typeof post.content === 'string' ? content : { text: content },
+        category,
+        tags,
+      }
       if (scheduledFor) body.scheduledFor = new Date(scheduledFor).toISOString()
       const res = await fetch(`/api/v1/social/posts/${post.id}`, {
         method: 'PUT',
@@ -110,12 +177,21 @@ function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
     }
   }
 
+  const platforms = getPostPlatforms(post)
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative z-50 w-96 h-full bg-surface-container border-l border-outline-variant flex flex-col overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant">
-          <h2 className="text-sm font-semibold text-on-surface">Edit Post</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-on-surface">Edit Post</h2>
+            <div className="flex gap-1">
+              {platforms.map((p) => (
+                <PlatformBadge key={p} platform={p} />
+              ))}
+            </div>
+          </div>
           <button
             onClick={onClose}
             className="text-on-surface-variant hover:text-on-surface text-xl leading-none transition-colors"
@@ -211,7 +287,7 @@ function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
 export default function QueuePage() {
   const [posts, setPosts] = useState<SocialPost[]>([])
   const [loading, setLoading] = useState(true)
-  const [platformFilter, setPlatformFilter] = useState<'all' | SocialPlatform>('all')
+  const [platformFilter, setPlatformFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'scheduled' | 'failed'>('all')
   const [editPost, setEditPost] = useState<SocialPost | null>(null)
   const [publishing, setPublishing] = useState<string | null>(null)
@@ -235,13 +311,18 @@ export default function QueuePage() {
   }, [fetchPosts])
 
   const filtered = posts.filter((p) => {
-    // Default: show draft + scheduled
+    // Default: show draft + scheduled + failed
     if (statusFilter === 'all') {
       if (!['draft', 'scheduled', 'failed'].includes(p.status)) return false
     } else {
       if (p.status !== statusFilter) return false
     }
-    if (platformFilter !== 'all' && p.platform !== platformFilter) return false
+    if (platformFilter !== 'all') {
+      const postPlatforms = getPostPlatforms(p)
+      // Treat 'twitter' filter as matching both 'twitter' and 'x'
+      const matchPlatforms = platformFilter === 'twitter' ? ['twitter', 'x'] : [platformFilter]
+      if (!postPlatforms.some((pp) => matchPlatforms.includes(pp))) return false
+    }
     return true
   })
 
@@ -290,18 +371,18 @@ export default function QueuePage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4">
-        <div className="flex gap-1">
-          {(['all', 'x', 'linkedin'] as const).map((p) => (
+        <div className="flex gap-1 flex-wrap">
+          {FILTER_PLATFORMS.map((p) => (
             <button
-              key={p}
-              onClick={() => setPlatformFilter(p)}
-              className={`px-3 py-1.5 rounded-lg font-label text-xs font-medium transition-colors capitalize ${
-                platformFilter === p
+              key={p.value}
+              onClick={() => setPlatformFilter(p.value)}
+              className={`px-3 py-1.5 rounded-lg font-label text-xs font-medium transition-colors ${
+                platformFilter === p.value
                   ? 'bg-white text-black'
                   : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
               }`}
             >
-              {p === 'all' ? 'All Platforms' : p === 'x' ? 'X' : 'LinkedIn'}
+              {p.label}
             </button>
           ))}
         </div>
@@ -334,55 +415,66 @@ export default function QueuePage() {
       ) : (
         <div className="rounded-xl bg-surface-container overflow-hidden">
           {/* Header */}
-          <div className="grid grid-cols-[80px_1fr_90px_120px_80px_120px_160px] gap-3 px-4 py-2.5 border-b border-outline-variant">
-            {['Platform', 'Content', 'Category', 'Scheduled For', 'Status', 'Tags', 'Actions'].map((h) => (
+          <div className="grid grid-cols-[90px_1fr_90px_120px_80px_120px_160px] gap-3 px-4 py-2.5 border-b border-outline-variant">
+            {['Platforms', 'Content', 'Category', 'Scheduled For', 'Status', 'Tags', 'Actions'].map((h) => (
               <span key={h} className="text-[10px] font-medium text-on-surface-variant uppercase tracking-wide">{h}</span>
             ))}
           </div>
           {/* Rows */}
-          {filtered.map((post, i) => (
-            <div
-              key={post.id}
-              className={`grid grid-cols-[80px_1fr_90px_120px_80px_120px_160px] gap-3 px-4 py-3 items-center ${i > 0 ? 'border-t border-outline-variant' : ''}`}
-            >
-              <div><PlatformBadge platform={post.platform} /></div>
-              <p className="text-sm text-on-surface truncate min-w-0">
-                {post.content.slice(0, 60)}{post.content.length > 60 ? '…' : ''}
-              </p>
-              <span className="text-xs text-on-surface-variant capitalize">{post.category}</span>
-              <span className="text-xs text-on-surface-variant">{fmtDateTime(post.scheduledFor)}</span>
-              <StatusBadge status={post.status} />
-              <div className="flex flex-wrap gap-1 min-w-0">
-                {(post.tags ?? []).slice(0, 2).map((t) => (
-                  <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant">{t}</span>
-                ))}
-              </div>
-              <div className="flex gap-1.5 flex-wrap">
-                <button
-                  onClick={() => handlePublish(post)}
-                  disabled={publishing === post.id}
-                  className="px-2.5 py-1 rounded-lg bg-white text-black font-label text-[10px] font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
-                >
-                  Publish
-                </button>
-                <button
-                  onClick={() => setEditPost(post)}
-                  className="px-2.5 py-1 rounded-lg bg-surface-container-high text-on-surface font-label text-[10px] font-medium hover:bg-surface-container transition-colors"
-                >
-                  Edit
-                </button>
-                {['draft', 'scheduled'].includes(post.status) && (
+          {filtered.map((post, i) => {
+            const text = getPostText(post)
+            const platforms = getPostPlatforms(post)
+            return (
+              <div
+                key={post.id}
+                className={`grid grid-cols-[90px_1fr_90px_120px_80px_120px_160px] gap-3 px-4 py-3 items-center ${i > 0 ? 'border-t border-outline-variant' : ''}`}
+              >
+                <div className="flex flex-wrap gap-1">
+                  {platforms.map((p) => (
+                    <PlatformBadge key={p} platform={p} />
+                  ))}
+                </div>
+                <p className="text-sm text-on-surface truncate min-w-0">
+                  {text.slice(0, 60)}{text.length > 60 ? '…' : ''}
+                </p>
+                <span className="text-xs text-on-surface-variant capitalize">{post.category}</span>
+                <span className="text-xs text-on-surface-variant">{fmtDateTime(post.scheduledFor)}</span>
+                <div className="flex flex-col gap-0.5">
+                  <StatusBadge status={post.status} />
+                  <RetryInfo post={post} />
+                </div>
+                <div className="flex flex-wrap gap-1 min-w-0">
+                  {(post.tags ?? []).slice(0, 2).map((t) => (
+                    <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant">{t}</span>
+                  ))}
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
                   <button
-                    onClick={() => handleCancel(post)}
-                    disabled={cancelling === post.id}
-                    className="px-2.5 py-1 rounded-lg bg-red-900/30 text-red-400 font-label text-[10px] font-medium hover:bg-red-900/50 transition-colors disabled:opacity-50"
+                    onClick={() => handlePublish(post)}
+                    disabled={publishing === post.id}
+                    className="px-2.5 py-1 rounded-lg bg-white text-black font-label text-[10px] font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
                   >
-                    Cancel
+                    Publish
                   </button>
-                )}
+                  <button
+                    onClick={() => setEditPost(post)}
+                    className="px-2.5 py-1 rounded-lg bg-surface-container-high text-on-surface font-label text-[10px] font-medium hover:bg-surface-container transition-colors"
+                  >
+                    Edit
+                  </button>
+                  {['draft', 'scheduled'].includes(post.status) && (
+                    <button
+                      onClick={() => handleCancel(post)}
+                      disabled={cancelling === post.id}
+                      className="px-2.5 py-1 rounded-lg bg-red-900/30 text-red-400 font-label text-[10px] font-medium hover:bg-red-900/50 transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

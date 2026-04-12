@@ -25,7 +25,10 @@ export type SocialPlatformType =
   | 'dribbble'
 
 /** Platforms currently active with provider implementations */
-export const ACTIVE_PLATFORMS: SocialPlatformType[] = ['twitter', 'linkedin']
+export const ACTIVE_PLATFORMS: SocialPlatformType[] = [
+  'twitter', 'linkedin', 'facebook', 'instagram', 'reddit',
+  'tiktok', 'pinterest', 'bluesky', 'threads',
+]
 
 // ---------------------------------------------------------------------------
 // Account types

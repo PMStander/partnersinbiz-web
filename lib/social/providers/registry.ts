@@ -9,6 +9,13 @@ import type { ProviderCredentials } from './base'
 import { SocialProvider } from './base'
 import { TwitterProvider } from './twitter'
 import { LinkedInProvider } from './linkedin'
+import { FacebookProvider } from './facebook'
+import { InstagramProvider } from './instagram'
+import { RedditProvider } from './reddit'
+import { TikTokProvider } from './tiktok'
+import { PinterestProvider } from './pinterest'
+import { BlueskyProvider } from './bluesky'
+import { ThreadsProvider } from './threads'
 
 type ProviderConstructor = new (credentials: ProviderCredentials) => SocialProvider
 
@@ -16,6 +23,13 @@ type ProviderConstructor = new (credentials: ProviderCredentials) => SocialProvi
 const PROVIDER_MAP: Partial<Record<SocialPlatformType, ProviderConstructor>> = {
   twitter: TwitterProvider,
   linkedin: LinkedInProvider,
+  facebook: FacebookProvider,
+  instagram: InstagramProvider,
+  reddit: RedditProvider,
+  tiktok: TikTokProvider,
+  pinterest: PinterestProvider,
+  bluesky: BlueskyProvider,
+  threads: ThreadsProvider,
 }
 
 /**
@@ -40,6 +54,20 @@ export function getDefaultProvider(platform: SocialPlatformType): SocialProvider
       return TwitterProvider.fromEnv()
     case 'linkedin':
       return LinkedInProvider.fromEnv()
+    case 'facebook':
+      return FacebookProvider.fromEnv()
+    case 'instagram':
+      return InstagramProvider.fromEnv()
+    case 'reddit':
+      return RedditProvider.fromEnv()
+    case 'tiktok':
+      return TikTokProvider.fromEnv()
+    case 'pinterest':
+      return PinterestProvider.fromEnv()
+    case 'bluesky':
+      return BlueskyProvider.fromEnv()
+    case 'threads':
+      return ThreadsProvider.fromEnv()
     default:
       throw new Error(`No default provider for platform: ${platform}. Connect an account via OAuth.`)
   }

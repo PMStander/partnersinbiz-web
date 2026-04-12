@@ -9,6 +9,7 @@ import { logout } from '@/lib/firebase/auth'
 const NAV_LINKS = [
   { href: '/portal/dashboard', label: 'Dashboard' },
   { href: '/portal/project', label: 'Project' },
+  { href: '/portal/social', label: 'Social' },
   { href: '/portal/messages', label: 'Messages' },
   { href: '/portal/payments', label: 'Payments' },
 ]
@@ -57,7 +58,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 key={link.href}
                 href={link.href}
                 className={`px-3 py-1.5 text-sm font-label transition-colors rounded ${
-                  pathname === link.href
+                  pathname === link.href || pathname.startsWith(link.href + '/')
                     ? 'text-white bg-white/10'
                     : 'text-white/50 hover:text-white'
                 }`}

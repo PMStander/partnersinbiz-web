@@ -4,16 +4,17 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 
-type SocialPlatform = 'x' | 'linkedin'
 type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
 type SocialPostCategory = 'work' | 'personal' | 'ai' | 'sport' | 'sa' | 'other'
 
 interface SocialPost {
   id: string
-  platform: SocialPlatform
-  content: string
-  threadParts: string[]
-  scheduledFor: any
+  platform?: string
+  platforms?: string[]
+  content: string | { text: string }
+  threadParts?: string[]
+  scheduledFor?: any
+  scheduledAt?: any
   status: SocialPostStatus
   publishedAt: any | null
   externalId: string | null
@@ -25,11 +26,40 @@ interface SocialPost {
   updatedAt: any
 }
 
+const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
+  twitter: { bg: 'bg-black', label: 'X' },
+  x: { bg: 'bg-black', label: 'X' },
+  linkedin: { bg: 'bg-blue-700', label: 'LI' },
+  facebook: { bg: 'bg-blue-600', label: 'FB' },
+  instagram: { bg: 'bg-pink-600', label: 'IG' },
+  reddit: { bg: 'bg-orange-600', label: 'RD' },
+  tiktok: { bg: 'bg-gray-800', label: 'TT' },
+  pinterest: { bg: 'bg-red-700', label: 'PI' },
+  bluesky: { bg: 'bg-sky-500', label: 'BS' },
+  threads: { bg: 'bg-gray-700', label: 'TH' },
+}
+
+function getPostText(post: SocialPost): string {
+  if (typeof post.content === 'string') return post.content
+  if (post.content && typeof post.content === 'object' && 'text' in post.content) return post.content.text
+  return ''
+}
+
+function getPostPlatforms(post: SocialPost): string[] {
+  if (post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0) return post.platforms
+  if (post.platform) return [post.platform]
+  return []
+}
+
 function tsToDate(ts: any): Date | null {
   if (!ts) return null
   if (ts._seconds) return new Date(ts._seconds * 1000)   // Firestore REST serialization
   if (ts.seconds) return new Date(ts.seconds * 1000)     // Firestore SDK serialization
   return new Date(ts)
+}
+
+function getScheduledDate(post: SocialPost): Date | null {
+  return tsToDate(post.scheduledAt) ?? tsToDate(post.scheduledFor) ?? null
 }
 
 function fmtTime(ts: any) {
@@ -41,11 +71,13 @@ function fmtDateLong(d: Date) {
   return d.toLocaleDateString('en-ZA', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-function PlatformBadge({ platform }: { platform: SocialPlatform }) {
-  if (platform === 'x') {
-    return <span className="bg-black text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">X</span>
-  }
-  return <span className="bg-blue-700 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">LI</span>
+function PlatformBadge({ platform }: { platform: string }) {
+  const config = PLATFORM_COLORS[platform.toLowerCase()] ?? { bg: 'bg-surface-container-high', label: platform.slice(0, 2).toUpperCase() }
+  return (
+    <span className={`${config.bg} text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0`}>
+      {config.label}
+    </span>
+  )
 }
 
 function StatusBadge({ status }: { status: SocialPostStatus }) {
@@ -113,6 +145,10 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
   publishing: string | null
   cancelling: string | null
 }) {
+  const text = getPostText(post)
+  const platforms = getPostPlatforms(post)
+  const schedDate = getScheduledDate(post)
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -129,23 +165,22 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
 
         <div className="p-5 space-y-4 flex-1">
           <div className="flex items-center gap-2">
-            <PlatformBadge platform={post.platform} />
+            {platforms.map((p) => (
+              <PlatformBadge key={p} platform={p} />
+            ))}
             <StatusBadge status={post.status} />
           </div>
 
           <div>
             <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-1">Content</p>
-            <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap">{post.content}</p>
+            <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap">{text}</p>
           </div>
 
-          {post.scheduledFor && (
+          {schedDate && (
             <div>
               <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-1">Scheduled For</p>
               <p className="text-sm text-on-surface">
-                {(() => {
-                  const d = tsToDate(post.scheduledFor)
-                  return d ? d.toLocaleString('en-ZA', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
-                })()}
+                {schedDate.toLocaleString('en-ZA', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           )}
@@ -240,7 +275,7 @@ export default function CalendarPage() {
 
   const postsForDay = (day: Date) =>
     posts.filter((p) => {
-      const d = tsToDate(p.scheduledFor)
+      const d = getScheduledDate(p)
       return d ? isSameDay(d, day) : false
     })
 
@@ -384,16 +419,22 @@ export default function CalendarPage() {
                   {day.getDate()}
                 </span>
                 <div className="space-y-0.5">
-                  {visiblePosts.map((post) => (
-                    <button
-                      key={post.id}
-                      onClick={() => setSelectedPost(post)}
-                      className={`w-full text-left flex items-center gap-1 px-1 py-0.5 rounded text-[9px] font-medium truncate transition-opacity hover:opacity-80 ${postChipClass(post.status)}`}
-                    >
-                      <PlatformBadge platform={post.platform} />
-                      <span className="truncate">{post.content.slice(0, 40)}</span>
-                    </button>
-                  ))}
+                  {visiblePosts.map((post) => {
+                    const text = getPostText(post)
+                    const platforms = getPostPlatforms(post)
+                    return (
+                      <button
+                        key={post.id}
+                        onClick={() => setSelectedPost(post)}
+                        className={`w-full text-left flex items-center gap-1 px-1 py-0.5 rounded text-[9px] font-medium truncate transition-opacity hover:opacity-80 ${postChipClass(post.status)}`}
+                      >
+                        {platforms.map((p) => (
+                          <PlatformBadge key={p} platform={p} />
+                        ))}
+                        <span className="truncate">{text.slice(0, 40)}</span>
+                      </button>
+                    )
+                  })}
                   {extraCount > 0 && (
                     <span className="text-[9px] text-on-surface-variant/50 pl-1">
                       +{extraCount} more
@@ -415,7 +456,7 @@ export default function CalendarPage() {
       {!loading && (
         <p className="text-xs text-on-surface-variant text-right">
           {posts.filter(p => {
-            const d = tsToDate(p.scheduledFor)
+            const d = getScheduledDate(p)
             return d && d.getFullYear() === year && d.getMonth() === month
           }).length} posts in {MONTH_NAMES[month]}
         </p>

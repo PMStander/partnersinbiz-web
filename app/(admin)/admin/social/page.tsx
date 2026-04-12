@@ -4,16 +4,17 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 
-type SocialPlatform = 'x' | 'linkedin'
 type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
 type SocialPostCategory = 'work' | 'personal' | 'ai' | 'sport' | 'sa' | 'other'
 
 interface SocialPost {
   id: string
-  platform: SocialPlatform
-  content: string
-  threadParts: string[]
-  scheduledFor: any
+  platform?: string
+  platforms?: string[]
+  content: string | { text: string }
+  threadParts?: string[]
+  scheduledFor?: any
+  scheduledAt?: any
   status: SocialPostStatus
   publishedAt: any | null
   externalId: string | null
@@ -25,10 +26,40 @@ interface SocialPost {
   updatedAt: any
 }
 
+const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
+  twitter: { bg: 'bg-black', label: 'X' },
+  x: { bg: 'bg-black', label: 'X' },
+  linkedin: { bg: 'bg-blue-700', label: 'LI' },
+  facebook: { bg: 'bg-blue-600', label: 'FB' },
+  instagram: { bg: 'bg-pink-600', label: 'IG' },
+  reddit: { bg: 'bg-orange-600', label: 'RD' },
+  tiktok: { bg: 'bg-gray-800', label: 'TT' },
+  pinterest: { bg: 'bg-red-700', label: 'PI' },
+  bluesky: { bg: 'bg-sky-500', label: 'BS' },
+  threads: { bg: 'bg-gray-700', label: 'TH' },
+}
+
+function getPostText(post: SocialPost): string {
+  if (typeof post.content === 'string') return post.content
+  if (post.content && typeof post.content === 'object' && 'text' in post.content) return post.content.text
+  return ''
+}
+
+function getPostPlatforms(post: SocialPost): string[] {
+  if (post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0) return post.platforms
+  if (post.platform) return [post.platform]
+  return []
+}
+
 function tsToDate(ts: any): Date | null {
   if (!ts) return null
+  if (ts._seconds) return new Date(ts._seconds * 1000)
   if (ts.seconds) return new Date(ts.seconds * 1000)
   return new Date(ts)
+}
+
+function getScheduledDate(post: SocialPost): Date | null {
+  return tsToDate(post.scheduledAt) ?? tsToDate(post.scheduledFor) ?? null
 }
 
 function fmtDateTime(ts: any) {
@@ -61,16 +92,19 @@ function StatusBadge({ status }: { status: SocialPostStatus }) {
   )
 }
 
-function PlatformBadge({ platform }: { platform: SocialPlatform }) {
-  if (platform === 'x') {
-    return <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded font-bold">X</span>
-  }
-  return <span className="bg-blue-700 text-white text-[10px] px-2 py-0.5 rounded font-bold">LI</span>
+function PlatformBadge({ platform }: { platform: string }) {
+  const config = PLATFORM_COLORS[platform.toLowerCase()] ?? { bg: 'bg-surface-container-high', label: platform.slice(0, 2).toUpperCase() }
+  return (
+    <span className={`${config.bg} text-white text-[10px] px-2 py-0.5 rounded font-bold`}>
+      {config.label}
+    </span>
+  )
 }
 
 export default function SocialOverviewPage() {
   const [posts, setPosts] = useState<SocialPost[]>([])
   const [loading, setLoading] = useState(true)
+  const [accountCount, setAccountCount] = useState<number | null>(null)
 
   const fetchPosts = useCallback(async () => {
     setLoading(true)
@@ -85,9 +119,21 @@ export default function SocialOverviewPage() {
     }
   }, [])
 
+  const fetchAccounts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/social/accounts')
+      const body = await res.json()
+      const accounts = body.data ?? body.accounts ?? []
+      setAccountCount(Array.isArray(accounts) ? accounts.length : 0)
+    } catch {
+      setAccountCount(null)
+    }
+  }, [])
+
   useEffect(() => {
     fetchPosts()
-  }, [fetchPosts])
+    fetchAccounts()
+  }, [fetchPosts, fetchAccounts])
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -105,8 +151,8 @@ export default function SocialOverviewPage() {
 
   const recent = [...posts]
     .sort((a, b) => {
-      const da = tsToDate(a.scheduledFor)?.getTime() ?? 0
-      const db = tsToDate(b.scheduledFor)?.getTime() ?? 0
+      const da = getScheduledDate(a)?.getTime() ?? 0
+      const db = getScheduledDate(b)?.getTime() ?? 0
       return db - da
     })
     .slice(0, 10)
@@ -119,17 +165,18 @@ export default function SocialOverviewPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
             <div key={i} className="h-24 rounded-xl bg-surface-container animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="Scheduled" value={scheduled} sub="upcoming posts" />
           <StatCard label="Published Today" value={publishedToday} sub="posts live today" />
           <StatCard label="Failed" value={failed} sub="need attention" />
           <StatCard label="Drafts" value={drafts} sub="in progress" />
+          <StatCard label="Accounts" value={accountCount ?? '—'} sub="connected" />
         </div>
       )}
 
@@ -149,6 +196,18 @@ export default function SocialOverviewPage() {
           >
             View Queue
           </Link>
+          <Link
+            href="/admin/social/accounts"
+            className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
+          >
+            Accounts
+          </Link>
+          <Link
+            href="/admin/social/analytics"
+            className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
+          >
+            Analytics
+          </Link>
         </div>
       </div>
 
@@ -165,21 +224,30 @@ export default function SocialOverviewPage() {
           <p className="text-on-surface-variant text-sm text-center py-8">No posts yet.</p>
         ) : (
           <div className="rounded-xl bg-surface-container overflow-hidden">
-            {recent.map((post, i) => (
-              <div
-                key={post.id}
-                className={`flex items-center gap-4 px-5 py-3 ${i > 0 ? 'border-t border-outline-variant' : ''}`}
-              >
-                <PlatformBadge platform={post.platform} />
-                <p className="flex-1 text-sm text-on-surface truncate min-w-0">
-                  {post.content.slice(0, 80)}{post.content.length > 80 ? '…' : ''}
-                </p>
-                <StatusBadge status={post.status} />
-                <span className="text-xs text-on-surface-variant flex-shrink-0 w-28 text-right">
-                  {fmtDateTime(post.scheduledFor)}
-                </span>
-              </div>
-            ))}
+            {recent.map((post, i) => {
+              const text = getPostText(post)
+              const platforms = getPostPlatforms(post)
+              const schedDate = getScheduledDate(post)
+              return (
+                <div
+                  key={post.id}
+                  className={`flex items-center gap-4 px-5 py-3 ${i > 0 ? 'border-t border-outline-variant' : ''}`}
+                >
+                  <div className="flex items-center gap-1 shrink-0">
+                    {platforms.map((p) => (
+                      <PlatformBadge key={p} platform={p} />
+                    ))}
+                  </div>
+                  <p className="flex-1 text-sm text-on-surface truncate min-w-0">
+                    {text.slice(0, 80)}{text.length > 80 ? '…' : ''}
+                  </p>
+                  <StatusBadge status={post.status} />
+                  <span className="text-xs text-on-surface-variant flex-shrink-0 w-28 text-right">
+                    {schedDate ? fmtDateTime(post.scheduledAt ?? post.scheduledFor) : '—'}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

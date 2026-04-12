@@ -4,20 +4,52 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-type SocialPlatform = 'x' | 'linkedin'
 type SocialPostMode = 'single' | 'thread'
 type SocialPostCategory = 'work' | 'personal' | 'ai' | 'sport' | 'sa' | 'other'
 
 const CATEGORIES: SocialPostCategory[] = ['work', 'personal', 'ai', 'sport', 'sa', 'other']
 
-const X_LIMIT = 280
-const LI_LIMIT = 3000
+const PLATFORMS = [
+  { id: 'twitter', label: 'X (Twitter)', color: 'bg-black', short: 'X' },
+  { id: 'linkedin', label: 'LinkedIn', color: 'bg-blue-700', short: 'LI' },
+  { id: 'facebook', label: 'Facebook', color: 'bg-blue-600', short: 'FB' },
+  { id: 'instagram', label: 'Instagram', color: 'bg-pink-600', short: 'IG' },
+  { id: 'reddit', label: 'Reddit', color: 'bg-orange-600', short: 'RD' },
+  { id: 'tiktok', label: 'TikTok', color: 'bg-gray-800', short: 'TT' },
+  { id: 'pinterest', label: 'Pinterest', color: 'bg-red-700', short: 'PI' },
+  { id: 'bluesky', label: 'Bluesky', color: 'bg-sky-500', short: 'BS' },
+  { id: 'threads', label: 'Threads', color: 'bg-gray-700', short: 'TH' },
+] as const
+
+const THREAD_CAPABLE = ['twitter', 'bluesky', 'threads']
+
+const CHAR_LIMITS: Record<string, number> = {
+  twitter: 280,
+  linkedin: 3000,
+  facebook: 63206,
+  instagram: 2200,
+  reddit: 40000,
+  tiktok: 2200,
+  pinterest: 500,
+  bluesky: 300,
+  threads: 500,
+}
+
+interface Account {
+  id: string
+  platform: string
+  name?: string
+  username?: string
+  [key: string]: any
+}
 
 export default function ComposePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [platform, setPlatform] = useState<SocialPlatform>('x')
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['twitter'])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
   const [mode, setMode] = useState<SocialPostMode>('single')
   const [content, setContent] = useState('')
   const [threadParts, setThreadParts] = useState<string[]>([''])
@@ -25,9 +57,18 @@ export default function ComposePage() {
   const [category, setCategory] = useState<SocialPostCategory>('work')
   const [tagInput, setTagInput] = useState('')
   const [tags, setTags] = useState<string[]>([])
+  const [hashtagInput, setHashtagInput] = useState('')
+  const [hashtags, setHashtags] = useState<string[]>([])
+  const [labelInput, setLabelInput] = useState('')
+  const [labels, setLabels] = useState<string[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+
+  // Fetch connected accounts
+  useEffect(() => {
+    fetch('/api/v1/social/accounts').then(r => r.json()).then(b => setAccounts(b.data ?? []))
+  }, [])
 
   // Pre-fill from URL params (replies page)
   useEffect(() => {
@@ -35,58 +76,117 @@ export default function ComposePage() {
     if (draft) setContent(decodeURIComponent(draft))
     const topic = searchParams.get('topic')
     if (topic) {
-      // optionally set a tag for the topic
       setTags([decodeURIComponent(topic)])
     }
   }, [searchParams])
 
-  const charLimit = platform === 'x' ? X_LIMIT : LI_LIMIT
+  // Reset mode to single when no thread-capable platform is selected
+  useEffect(() => {
+    const hasThreadCapable = selectedPlatforms.some(p => THREAD_CAPABLE.includes(p))
+    if (!hasThreadCapable && mode === 'thread') {
+      setMode('single')
+    }
+  }, [selectedPlatforms, mode])
+
+  // Deselect accounts whose platform is no longer selected
+  useEffect(() => {
+    setSelectedAccountIds(prev =>
+      prev.filter(id => {
+        const acc = accounts.find(a => a.id === id)
+        return acc && selectedPlatforms.includes(acc.platform)
+      })
+    )
+  }, [selectedPlatforms, accounts])
+
+  const charLimit = selectedPlatforms.length > 0
+    ? Math.min(...selectedPlatforms.map(p => CHAR_LIMITS[p] ?? 5000))
+    : 280
+
+  const showThreadToggle = selectedPlatforms.some(p => THREAD_CAPABLE.includes(p))
+
+  const togglePlatform = (id: string) => {
+    setSelectedPlatforms(prev =>
+      prev.includes(id)
+        ? prev.filter(p => p !== id)
+        : [...prev, id]
+    )
+  }
+
+  const toggleAccount = (id: string) => {
+    setSelectedAccountIds(prev =>
+      prev.includes(id)
+        ? prev.filter(a => a !== id)
+        : [...prev, id]
+    )
+  }
+
+  const filteredAccounts = accounts.filter(a => selectedPlatforms.includes(a.platform))
 
   const validate = useCallback(() => {
     const errs: Record<string, string> = {}
-    if (platform === 'x' && mode === 'thread') {
+    if (selectedPlatforms.length === 0) errs['platforms'] = 'Select at least one platform.'
+    if (mode === 'thread' && showThreadToggle) {
       threadParts.forEach((part, i) => {
-        if (!part.trim()) errs[`thread_${i}`] = 'Tweet cannot be empty.'
-        if (part.length > X_LIMIT) errs[`thread_${i}_len`] = `Tweet ${i + 1} exceeds ${X_LIMIT} chars.`
+        if (!part.trim()) errs[`thread_${i}`] = 'Post cannot be empty.'
+        if (part.length > charLimit) errs[`thread_${i}_len`] = `Part ${i + 1} exceeds ${charLimit} chars.`
       })
     } else {
       if (!content.trim()) errs['content'] = 'Content cannot be empty.'
     }
     setErrors(errs)
     return Object.keys(errs).length === 0
-  }, [platform, mode, content, threadParts])
+  }, [selectedPlatforms, mode, content, threadParts, charLimit, showThreadToggle])
 
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const makeChipKeyDown = (
+    input: string,
+    setInput: (v: string) => void,
+    items: string[],
+    setItems: (fn: (prev: string[]) => string[]) => void,
+    prefix?: string,
+  ) => (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault()
-      const val = tagInput.trim().replace(/^,|,$/g, '')
-      if (val && !tags.includes(val)) setTags((prev) => [...prev, val])
-      setTagInput('')
+      let val = input.trim().replace(/^,|,$/g, '')
+      if (prefix && !val.startsWith(prefix)) val = prefix + val
+      if (val && (prefix ? val.length > prefix.length : val.length > 0) && !items.includes(val)) {
+        setItems(prev => [...prev, val])
+      }
+      setInput('')
     }
   }
 
-  const removeTag = (tag: string) => setTags((prev) => prev.filter((t) => t !== tag))
+  const handleTagKeyDown = makeChipKeyDown(tagInput, setTagInput, tags, setTags)
+  const handleHashtagKeyDown = makeChipKeyDown(hashtagInput, setHashtagInput, hashtags, setHashtags, '#')
+  const handleLabelKeyDown = makeChipKeyDown(labelInput, setLabelInput, labels, setLabels)
 
-  const addThreadPart = () => setThreadParts((prev) => [...prev, ''])
-  const removeThreadPart = (i: number) => setThreadParts((prev) => prev.filter((_, idx) => idx !== i))
-  const updateThreadPart = (i: number, val: string) => setThreadParts((prev) => prev.map((p, idx) => idx === i ? val : p))
+  const removeTag = (tag: string) => setTags(prev => prev.filter(t => t !== tag))
+  const removeHashtag = (h: string) => setHashtags(prev => prev.filter(t => t !== h))
+  const removeLabel = (l: string) => setLabels(prev => prev.filter(t => t !== l))
+
+  const addThreadPart = () => setThreadParts(prev => [...prev, ''])
+  const removeThreadPart = (i: number) => setThreadParts(prev => prev.filter((_, idx) => idx !== i))
+  const updateThreadPart = (i: number, val: string) => setThreadParts(prev => prev.map((p, idx) => idx === i ? val : p))
 
   const buildBody = (status: 'draft' | 'scheduled') => {
+    const isThread = mode === 'thread' && showThreadToggle
     const body: any = {
-      platform,
+      content: {
+        text: isThread ? (threadParts[0] ?? '') : content,
+        platformOverrides: {},
+      },
+      platforms: selectedPlatforms,
+      accountIds: selectedAccountIds,
       status,
       category,
       tags,
+      hashtags,
+      labels,
     }
-    if (platform === 'x' && mode === 'thread') {
-      body.content = threadParts[0] ?? ''
-      body.threadParts = threadParts
-    } else {
-      body.content = content
-      body.threadParts = []
+    if (isThread) {
+      body.content.threadParts = threadParts
     }
     if (scheduledFor) {
-      body.scheduledFor = new Date(scheduledFor).toISOString()
+      body.scheduledAt = new Date(scheduledFor).toISOString()
     }
     return body
   }
@@ -178,28 +278,65 @@ export default function ComposePage() {
         </div>
       )}
 
-      {/* Platform Toggle */}
+      {/* Platform Multi-Select */}
       <div>
-        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Platform</label>
-        <div className="flex gap-2">
-          {(['x', 'linkedin'] as SocialPlatform[]).map((p) => (
+        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Platforms</label>
+        <div className="flex flex-wrap gap-2">
+          {PLATFORMS.map((p) => (
             <button
-              key={p}
-              onClick={() => setPlatform(p)}
+              key={p.id}
+              onClick={() => togglePlatform(p.id)}
               className={`px-4 py-2 rounded-lg font-label text-sm font-medium transition-colors ${
-                platform === p
+                selectedPlatforms.includes(p.id)
                   ? 'bg-white text-black'
                   : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
               }`}
             >
-              {p === 'x' ? '𝕏 X (Twitter)' : 'LinkedIn'}
+              <span className={`inline-block w-5 h-5 rounded text-[10px] font-bold leading-5 text-center text-white mr-1.5 align-middle ${p.color}`}>
+                {p.short}
+              </span>
+              {p.label}
             </button>
           ))}
         </div>
+        {errors.platforms && <p className="text-xs text-red-400 mt-1">{errors.platforms}</p>}
       </div>
 
-      {/* Mode Toggle (X only) */}
-      {platform === 'x' && (
+      {/* Account Selector */}
+      {filteredAccounts.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Accounts</label>
+          <div className="rounded-xl bg-surface-container p-3 space-y-2">
+            {selectedPlatforms.map(platformId => {
+              const platformAccounts = filteredAccounts.filter(a => a.platform === platformId)
+              if (platformAccounts.length === 0) return null
+              const platformMeta = PLATFORMS.find(p => p.id === platformId)
+              return (
+                <div key={platformId}>
+                  <p className="text-xs text-on-surface-variant font-medium mb-1">{platformMeta?.label ?? platformId}</p>
+                  {platformAccounts.map(acc => (
+                    <label
+                      key={acc.id}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedAccountIds.includes(acc.id)}
+                        onChange={() => toggleAccount(acc.id)}
+                        className="accent-white"
+                      />
+                      <span className="text-sm text-on-surface">{acc.name || acc.username || acc.id}</span>
+                    </label>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Mode Toggle (thread-capable platforms only) */}
+      {showThreadToggle && (
         <div>
           <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Mode</label>
           <div className="flex gap-2">
@@ -213,7 +350,7 @@ export default function ComposePage() {
                     : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
                 }`}
               >
-                {m === 'single' ? 'Single Tweet' : 'Thread'}
+                {m === 'single' ? 'Single Post' : 'Thread'}
               </button>
             ))}
           </div>
@@ -221,13 +358,13 @@ export default function ComposePage() {
       )}
 
       {/* Content */}
-      {platform === 'x' && mode === 'thread' ? (
+      {mode === 'thread' && showThreadToggle ? (
         <div className="space-y-3">
           <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide">Thread Parts</label>
           {threadParts.map((part, i) => (
             <div key={i} className="rounded-xl bg-surface-container p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-on-surface-variant">Tweet {i + 1}</span>
+                <span className="text-xs text-on-surface-variant">Part {i + 1}</span>
                 {threadParts.length > 1 && (
                   <button
                     onClick={() => removeThreadPart(i)}
@@ -241,12 +378,12 @@ export default function ComposePage() {
                 rows={3}
                 value={part}
                 onChange={(e) => updateThreadPart(i, e.target.value)}
-                placeholder={`Tweet ${i + 1}…`}
+                placeholder={`Part ${i + 1}...`}
                 className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 resize-none outline-none"
               />
               <div className="flex justify-end">
-                <span className={`text-xs ${part.length > X_LIMIT ? 'text-red-400' : 'text-on-surface-variant'}`}>
-                  {part.length} / {X_LIMIT}
+                <span className={`text-xs ${part.length > charLimit ? 'text-red-400' : 'text-on-surface-variant'}`}>
+                  {part.length} / {charLimit}
                 </span>
               </div>
               {(errors[`thread_${i}`] || errors[`thread_${i}_len`]) && (
@@ -258,7 +395,7 @@ export default function ComposePage() {
             onClick={addThreadPart}
             className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
           >
-            + Add Tweet
+            + Add Part
           </button>
         </div>
       ) : (
@@ -269,7 +406,7 @@ export default function ComposePage() {
               rows={6}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your post…"
+              placeholder="Write your post..."
               className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 resize-none outline-none"
             />
             <div className="flex justify-end mt-1">
@@ -309,6 +446,58 @@ export default function ComposePage() {
         </select>
       </div>
 
+      {/* Hashtags */}
+      <div>
+        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Hashtags</label>
+        <input
+          type="text"
+          value={hashtagInput}
+          onChange={(e) => setHashtagInput(e.target.value)}
+          onKeyDown={handleHashtagKeyDown}
+          placeholder="Type a hashtag and press Enter or comma..."
+          className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none border border-transparent focus:border-outline-variant transition-colors"
+        />
+        {hashtags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {hashtags.map((h) => (
+              <span
+                key={h}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface text-xs font-medium"
+              >
+                {h}
+                <button onClick={() => removeHashtag(h)} className="text-on-surface-variant hover:text-on-surface transition-colors ml-0.5">x</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Labels */}
+      <div>
+        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Labels</label>
+        <input
+          type="text"
+          value={labelInput}
+          onChange={(e) => setLabelInput(e.target.value)}
+          onKeyDown={handleLabelKeyDown}
+          placeholder="Type a label and press Enter or comma..."
+          className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none border border-transparent focus:border-outline-variant transition-colors"
+        />
+        {labels.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {labels.map((l) => (
+              <span
+                key={l}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface text-xs font-medium"
+              >
+                {l}
+                <button onClick={() => removeLabel(l)} className="text-on-surface-variant hover:text-on-surface transition-colors ml-0.5">x</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Tags */}
       <div>
         <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Tags</label>
@@ -317,7 +506,7 @@ export default function ComposePage() {
           value={tagInput}
           onChange={(e) => setTagInput(e.target.value)}
           onKeyDown={handleTagKeyDown}
-          placeholder="Type a tag and press Enter or comma…"
+          placeholder="Type a tag and press Enter or comma..."
           className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none border border-transparent focus:border-outline-variant transition-colors"
         />
         {tags.length > 0 && (
@@ -328,7 +517,7 @@ export default function ComposePage() {
                 className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface text-xs font-medium"
               >
                 {tag}
-                <button onClick={() => removeTag(tag)} className="text-on-surface-variant hover:text-on-surface transition-colors ml-0.5">×</button>
+                <button onClick={() => removeTag(tag)} className="text-on-surface-variant hover:text-on-surface transition-colors ml-0.5">x</button>
               </span>
             ))}
           </div>
