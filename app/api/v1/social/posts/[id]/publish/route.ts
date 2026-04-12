@@ -6,44 +6,51 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import { postTweet, postThread } from '@/lib/social/twitter'
-import { postToLinkedIn } from '@/lib/social/linkedin'
+import { getDefaultProvider } from '@/lib/social/providers'
+import type { SocialPlatformType } from '@/lib/social/providers'
 
 export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
+/** Map legacy platform names to provider platform types */
+function toPlatformType(platform: string): SocialPlatformType | null {
+  if (platform === 'x' || platform === 'twitter') return 'twitter'
+  if (platform === 'linkedin') return 'linkedin'
+  return null
+}
+
 export const POST = withAuth('admin', async (_req: NextRequest, _user, context) => {
   const { id } = await (context as Params).params
 
-  // 1. Fetch the post document
   const doc = await adminDb.collection('social_posts').doc(id).get()
   if (!doc.exists) return apiError('Post not found', 404)
 
   const post = doc.data()!
 
-  // 2. Guard against already-published or cancelled posts
   if (post.status === 'published') return apiError('Post already published', 409)
   if (post.status === 'cancelled') return apiError('Cannot publish a cancelled post', 400)
 
-  // 3. Attempt to publish to the correct platform
+  // Resolve platform — supports both legacy 'x' and new 'twitter' naming
+  const platformType = toPlatformType(post.platform)
+  if (!platformType) return apiError(`Unsupported platform: ${post.platform}`, 400)
+
+  // Resolve content — supports both legacy flat string and new { text } structure
+  const text = typeof post.content === 'string' ? post.content : post.content?.text
+  if (!text) return apiError('Post has no content', 400)
+
   let externalId: string
 
   try {
-    if (post.platform === 'x') {
-      const threadParts: string[] | undefined = post.threadParts
-      if (Array.isArray(threadParts) && threadParts.length > 0) {
-        const { ids } = await postThread(threadParts)
-        externalId = ids[0]
-      } else {
-        const { id: tweetId } = await postTweet(post.content as string)
-        externalId = tweetId
-      }
-    } else if (post.platform === 'linkedin') {
-      const { id: urn } = await postToLinkedIn(post.content as string)
-      externalId = urn
+    const provider = getDefaultProvider(platformType)
+    const threadParts: string[] | undefined = post.threadParts
+
+    if (Array.isArray(threadParts) && threadParts.length > 0) {
+      const results = await provider.publishThread(threadParts)
+      externalId = results[0].platformPostId
     } else {
-      return apiError('Unsupported platform', 400)
+      const result = await provider.publishPost({ text })
+      externalId = result.platformPostId
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
@@ -55,7 +62,6 @@ export const POST = withAuth('admin', async (_req: NextRequest, _user, context) 
     return apiError('Publish failed: ' + message, 500)
   }
 
-  // 4. Mark post as published
   await adminDb.collection('social_posts').doc(id).update({
     status: 'published',
     publishedAt: FieldValue.serverTimestamp(),
