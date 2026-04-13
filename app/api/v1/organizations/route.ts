@@ -13,16 +13,22 @@ import type { Organization, OrgMember, OrganizationSummary } from '@/lib/organiz
 export const dynamic = 'force-dynamic'
 
 export const GET = withAuth('client', async (req, user) => {
+  // Single-field filter only — avoids requiring a composite Firestore index.
+  // Sorting is done in memory after fetch.
   const snapshot = await adminDb
     .collection('organizations')
     .where('active', '==', true)
-    .orderBy('createdAt', 'desc')
     .get()
 
   const orgs = snapshot.docs
     .map((doc) => {
       const data = doc.data() as Organization
       return { id: doc.id, ...data }
+    })
+    .sort((a, b) => {
+      const aTs = a.createdAt?._seconds ?? 0
+      const bTs = b.createdAt?._seconds ?? 0
+      return bTs - aTs
     })
     .filter((org) => {
       // AI agents and admins see all orgs; clients only see their own
