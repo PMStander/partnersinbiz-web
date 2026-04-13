@@ -182,6 +182,7 @@ function AccountCard({
 }
 
 function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
+  const { orgId } = useOrg()
   const [handle, setHandle] = useState('')
   const [appPassword, setAppPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -193,7 +194,7 @@ function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch('/api/v1/social/accounts', {
+      const res = await fetch(`/api/v1/social/accounts${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

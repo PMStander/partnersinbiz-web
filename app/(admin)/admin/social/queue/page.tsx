@@ -130,6 +130,7 @@ interface EditPanelProps {
 }
 
 function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
+  const { orgId } = useOrg()
   const [content, setContent] = useState(getPostText(post))
   const [scheduledFor, setScheduledFor] = useState(() => {
     const d = tsToDate(post.scheduledFor)
@@ -163,7 +164,7 @@ function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
         tags,
       }
       if (scheduledFor) body.scheduledFor = new Date(scheduledFor).toISOString()
-      const res = await fetch(`/api/v1/social/posts/${post.id}`, {
+      const res = await fetch(`/api/v1/social/posts/${post.id}${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -333,7 +334,7 @@ export default function QueuePage() {
     // Optimistic update
     setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, status: 'published' } : p))
     try {
-      await fetch(`/api/v1/social/posts/${post.id}/publish`, { method: 'POST' })
+      await fetch(`/api/v1/social/posts/${post.id}/publish${orgId ? `?orgId=${orgId}` : ''}`, { method: 'POST' })
     } catch {
       // revert on error
     } finally {
@@ -347,7 +348,7 @@ export default function QueuePage() {
     // Optimistic update
     setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, status: 'cancelled' } : p))
     try {
-      await fetch(`/api/v1/social/posts/${post.id}`, { method: 'DELETE' })
+      await fetch(`/api/v1/social/posts/${post.id}${orgId ? `?orgId=${orgId}` : ''}`, { method: 'DELETE' })
     } catch {
       // revert on error
     } finally {

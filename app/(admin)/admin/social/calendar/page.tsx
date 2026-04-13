@@ -351,7 +351,7 @@ export default function CalendarPage() {
     setPublishing(post.id)
     setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: 'published' } : p))
     try {
-      await fetch(`/api/v1/social/posts/${post.id}/publish`, { method: 'POST' })
+      await fetch(`/api/v1/social/posts/${post.id}/publish${orgId ? `?orgId=${orgId}` : ''}`, { method: 'POST' })
     } finally {
       setPublishing(null)
       setSelectedPost(null)
@@ -363,7 +363,7 @@ export default function CalendarPage() {
     setCancelling(post.id)
     setPosts(prev => prev.map(p => p.id === post.id ? { ...p, status: 'cancelled' } : p))
     try {
-      await fetch(`/api/v1/social/posts/${post.id}`, { method: 'DELETE' })
+      await fetch(`/api/v1/social/posts/${post.id}${orgId ? `?orgId=${orgId}` : ''}`, { method: 'DELETE' })
     } finally {
       setCancelling(null)
       setSelectedPost(null)
@@ -410,7 +410,7 @@ export default function CalendarPage() {
     }))
 
     try {
-      await fetch(`/api/v1/social/posts/${post.id}`, {
+      await fetch(`/api/v1/social/posts/${post.id}${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduledAt: newDate.toISOString(), status: 'scheduled' }),
