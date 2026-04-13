@@ -48,6 +48,12 @@ describe('GET /api/v1/organizations', () => {
     expect(body.success).toBe(true)
     expect(Array.isArray(body.data)).toBe(true)
   })
+
+  it('returns 401 without auth', async () => {
+    const req = new NextRequest('http://localhost/api/v1/organizations')
+    const res = await GET(req)
+    expect(res.status).toBe(401)
+  })
 })
 
 describe('POST /api/v1/organizations', () => {
@@ -71,5 +77,13 @@ describe('POST /api/v1/organizations', () => {
   it('returns 400 when name is missing', async () => {
     const res = await POST(adminReq('POST', { description: 'No name' }))
     expect(res.status).toBe(400)
+  })
+
+  it('returns 409 when slug already exists', async () => {
+    mockGet.mockResolvedValue({ empty: false, docs: [{ id: 'existing-org' }] })
+    mockWhere.mockReturnValue({ get: mockGet })
+    mockCollection.mockReturnValue({ where: mockWhere, add: mockAdd, orderBy: mockOrderBy, get: mockGet })
+    const res = await POST(adminReq('POST', { name: 'Velox' }))
+    expect(res.status).toBe(409)
   })
 })

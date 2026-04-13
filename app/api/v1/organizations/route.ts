@@ -8,7 +8,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { slugify, isMember } from '@/lib/organizations/helpers'
-import type { Organization, OrgMember } from '@/lib/organizations/types'
+import type { Organization, OrgMember, OrganizationSummary } from '@/lib/organizations/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,8 +29,8 @@ export const GET = withAuth('admin', async (req, user) => {
       if (user.role === 'ai' || user.role === 'admin') return true
       return isMember(org.members ?? [], user.uid)
     })
-    .map((org) => ({
-      id: org.id,
+    .map((org): OrganizationSummary => ({
+      id: org.id!,
       name: org.name,
       slug: org.slug,
       description: org.description,
