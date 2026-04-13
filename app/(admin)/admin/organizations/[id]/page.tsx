@@ -48,15 +48,19 @@ export default function OrgDetailPage() {
   const [selectedClientId, setSelectedClientId] = useState('')
 
   const fetchOrg = useCallback(async () => {
-    const res = await fetch(`/api/v1/organizations/${id}`)
-    const body = await res.json()
-    if (!body.success) { setError('Organisation not found'); return }
-    setOrg(body.data)
-    setName(body.data.name)
-    setDescription(body.data.description ?? '')
-    setWebsite(body.data.website ?? '')
-    setLogoUrl(body.data.logoUrl ?? '')
-    setSelectedClientId(body.data.linkedClientId ?? '')
+    try {
+      const res = await fetch(`/api/v1/organizations/${id}`)
+      const body = await res.json()
+      if (!body.success) { setError('Organisation not found'); return }
+      setOrg(body.data)
+      setName(body.data.name)
+      setDescription(body.data.description ?? '')
+      setWebsite(body.data.website ?? '')
+      setLogoUrl(body.data.logoUrl ?? '')
+      setSelectedClientId(body.data.linkedClientId ?? '')
+    } catch {
+      setError('Failed to load organisation — check your connection')
+    }
   }, [id])
 
   const fetchAccounts = useCallback(async () => {
@@ -94,44 +98,64 @@ export default function OrgDetailPage() {
 
   async function handleDelete() {
     if (!confirm(`Delete "${org?.name}"? This is a soft delete — it can be restored.`)) return
-    const res = await fetch(`/api/v1/organizations/${id}`, { method: 'DELETE' })
-    const body = await res.json()
-    if (body.success) router.push('/admin/organizations')
+    try {
+      const res = await fetch(`/api/v1/organizations/${id}`, { method: 'DELETE' })
+      const body = await res.json()
+      if (body.success) {
+        router.push('/admin/organizations')
+      } else {
+        setError(body.error ?? 'Failed to delete organisation')
+      }
+    } catch {
+      setError('Network error — please try again')
+    }
   }
 
   async function handleAddMember(e: React.FormEvent) {
     e.preventDefault()
     if (!newMemberUserId.trim()) return
-    const res = await fetch(`/api/v1/organizations/${id}/members`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: newMemberUserId.trim(), role: newMemberRole }),
-    })
-    const body = await res.json()
-    if (!body.success) { setError(body.error ?? 'Failed to add member'); return }
-    setNewMemberUserId('')
-    await fetchOrg()
+    try {
+      const res = await fetch(`/api/v1/organizations/${id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: newMemberUserId.trim(), role: newMemberRole }),
+      })
+      const body = await res.json()
+      if (!body.success) { setError(body.error ?? 'Failed to add member'); return }
+      setNewMemberUserId('')
+      await fetchOrg()
+    } catch {
+      setError('Network error — please try again')
+    }
   }
 
   async function handleRemoveMember(userId: string) {
     if (!confirm('Remove this member?')) return
-    const res = await fetch(`/api/v1/organizations/${id}/members/${userId}`, { method: 'DELETE' })
-    const body = await res.json()
-    if (!body.success) { setError(body.error ?? 'Failed to remove member'); return }
-    await fetchOrg()
+    try {
+      const res = await fetch(`/api/v1/organizations/${id}/members/${userId}`, { method: 'DELETE' })
+      const body = await res.json()
+      if (!body.success) { setError(body.error ?? 'Failed to remove member'); return }
+      await fetchOrg()
+    } catch {
+      setError('Network error — please try again')
+    }
   }
 
   async function handleLinkClient(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedClientId) return
-    const res = await fetch(`/api/v1/organizations/${id}/link-client`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: selectedClientId }),
-    })
-    const body = await res.json()
-    if (!body.success) { setError(body.error ?? 'Failed to link client'); return }
-    await fetchOrg()
+    try {
+      const res = await fetch(`/api/v1/organizations/${id}/link-client`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: selectedClientId }),
+      })
+      const body = await res.json()
+      if (!body.success) { setError(body.error ?? 'Failed to link client'); return }
+      await fetchOrg()
+    } catch {
+      setError('Network error — please try again')
+    }
   }
 
   const TABS: Array<{ key: Tab; label: string }> = [

@@ -18,11 +18,13 @@ interface OrgSummary {
 export default function OrganizationsPage() {
   const [orgs, setOrgs] = useState<OrgSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState('')
 
   useEffect(() => {
     fetch('/api/v1/organizations')
       .then((r) => r.json())
       .then((b) => setOrgs(b.data ?? []))
+      .catch(() => setFetchError('Failed to load organisations — please refresh'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -43,6 +45,10 @@ export default function OrganizationsPage() {
 
       {loading && (
         <div className="text-sm text-on-surface-variant">Loading…</div>
+      )}
+
+      {fetchError && (
+        <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded px-3 py-2">{fetchError}</p>
       )}
 
       {!loading && orgs.length === 0 && (
