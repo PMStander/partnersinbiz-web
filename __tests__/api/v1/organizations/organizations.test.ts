@@ -4,6 +4,8 @@ import { GET, POST } from '@/app/api/v1/organizations/route'
 import { GET as getById, PUT, DELETE } from '@/app/api/v1/organizations/[id]/route'
 import { POST as addMember } from '@/app/api/v1/organizations/[id]/members/route'
 import { DELETE as removeMember } from '@/app/api/v1/organizations/[id]/members/[userId]/route'
+import { POST as linkClient } from '@/app/api/v1/organizations/[id]/link-client/route'
+import { GET as getOrgAccounts } from '@/app/api/v1/organizations/[id]/accounts/route'
 
 const AI_KEY = 'test-ai-key'
 process.env.AI_API_KEY = AI_KEY
@@ -344,6 +346,147 @@ describe('DELETE /api/v1/organizations/[id]/members/[userId]', () => {
     const res = await removeMember(
       adminReq('DELETE'),
       { params: Promise.resolve({ id: 'ghost', userId: 'anyone' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /api/v1/organizations/[id]/link-client', () => {
+  const mockOrgDoc = jest.fn()
+  const mockClientDoc = jest.fn()
+  const mockOrgGet = jest.fn()
+  const mockClientGet = jest.fn()
+  const mockUpdate = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockClientGet.mockResolvedValue({ exists: true, id: 'client-1', data: () => ({ name: 'Acme' }) })
+    mockUpdate.mockResolvedValue(undefined)
+
+    mockOrgDoc.mockReturnValue({ get: mockOrgGet, update: mockUpdate })
+    mockClientDoc.mockReturnValue({ get: mockClientGet })
+
+    let callCount = 0
+    mockCollection.mockImplementation((collName) => {
+      callCount++
+      if (collName === 'organizations' || callCount === 1) {
+        // organizations collection
+        return { doc: mockOrgDoc }
+      }
+      // clients collection
+      return { doc: mockClientDoc }
+    })
+  })
+
+  it('links a client and returns 200', async () => {
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'client-1' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.linked).toBe(true)
+    expect(body.data.clientId).toBe('client-1')
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ linkedClientId: 'client-1' }))
+  })
+
+  it('returns 400 when clientId is missing', async () => {
+    const res = await linkClient(
+      adminReq('POST', {}),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when client does not exist', async () => {
+    mockClientGet.mockResolvedValue({ exists: false })
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'ghost-client' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockOrgGet.mockResolvedValue({ exists: false })
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'client-1' }),
+      { params: Promise.resolve({ id: 'ghost' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('GET /api/v1/organizations/[id]/accounts', () => {
+  const mockOrgDoc = jest.fn()
+  const mockOrgGet = jest.fn()
+  const mockAccountsGet = jest.fn()
+  const mockAccountsWhere = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockAccountsGet.mockResolvedValue({
+      docs: [
+        {
+          id: 'acct-1',
+          data: () => ({
+            orgId: 'org-1', platform: 'twitter', displayName: 'Pip AI',
+            encryptedTokens: { accessToken: 'secret' }, status: 'active',
+          }),
+        },
+      ],
+    })
+    mockAccountsWhere.mockReturnValue({ get: mockAccountsGet })
+    mockOrgDoc.mockReturnValue({ get: mockOrgGet })
+
+    let callCount = 0
+    mockCollection.mockImplementation((collName) => {
+      callCount++
+      if (collName === 'organizations' || callCount === 1) {
+        // organizations collection
+        return { doc: mockOrgDoc }
+      }
+      // social_accounts collection
+      return { where: mockAccountsWhere }
+    })
+  })
+
+  it('returns social accounts for the org and strips encryptedTokens', async () => {
+    const res = await getOrgAccounts(
+      adminReq('GET'),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data).toHaveLength(1)
+    expect(body.data[0].id).toBe('acct-1')
+    expect(body.data[0].encryptedTokens).toBeUndefined()
+    expect(body.meta.total).toBe(1)
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockOrgGet.mockResolvedValue({ exists: false })
+    const res = await getOrgAccounts(
+      adminReq('GET'),
+      { params: Promise.resolve({ id: 'ghost' }) } as any,
     )
     expect(res.status).toBe(404)
   })
