@@ -10,17 +10,9 @@ interface OrgSummary {
 }
 
 export function OrgSwitcher() {
-  const { orgId, orgName, setOrg, clearOrg } = useOrg()
-  const [orgs, setOrgs] = useState<OrgSummary[]>([])
+  const { selectedOrgId, orgName, orgs: contextOrgs, setOrg, clearOrg } = useOrg()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    fetch('/api/v1/organizations')
-      .then((r) => r.json())
-      .then((b) => setOrgs(b.data ?? []))
-      .catch(() => {})
-  }, [])
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -31,7 +23,7 @@ export function OrgSwitcher() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const label = orgName || orgId || 'All Orgs'
+  const label = orgName || selectedOrgId || 'All Orgs'
 
   return (
     <div ref={ref} className="relative px-3 py-2">
@@ -53,18 +45,18 @@ export function OrgSwitcher() {
           >
             All Orgs
           </button>
-          {orgs.map((org) => (
+          {contextOrgs.map((org) => (
             <button
               key={org.id}
               onClick={() => { setOrg(org.id, org.name); setOpen(false) }}
               className={`w-full text-left px-3 py-2 text-xs font-label transition-colors hover:bg-surface-container ${
-                orgId === org.id ? 'text-primary' : 'text-on-surface'
+                selectedOrgId === org.id ? 'text-primary' : 'text-on-surface'
               }`}
             >
               {org.name}
             </button>
           ))}
-          {orgs.length === 0 && (
+          {contextOrgs.length === 0 && (
             <p className="px-3 py-2 text-xs text-on-surface-variant/50">No organisations yet</p>
           )}
         </div>

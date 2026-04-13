@@ -1,74 +1,177 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { OrgSwitcher } from './OrgSwitcher'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
-const NAV = [
-  { label: 'Dashboard',     href: '/admin/dashboard' },
-  { label: 'Contacts',      href: '/admin/crm/contacts',         group: 'CRM' },
-  { label: 'Pipeline',      href: '/admin/crm/pipeline',         group: 'CRM' },
-  { label: 'Inbox',         href: '/admin/email',                group: 'Email' },
-  { label: 'Sequences',     href: '/admin/sequences' },
-  { label: 'Marketing',     href: '/admin/marketing' },
-  { label: 'Overview',      href: '/admin/social',               group: 'Social' },
-  { label: 'Compose',       href: '/admin/social/compose',       group: 'Social' },
-  { label: 'Queue',         href: '/admin/social/queue',         group: 'Social' },
-  { label: 'Calendar',      href: '/admin/social/calendar',      group: 'Social' },
-  { label: 'Replies',       href: '/admin/social/replies',       group: 'Social' },
-  { label: 'History',       href: '/admin/social/history',       group: 'Social' },
-  { label: 'Organisations', href: '/admin/organizations',        group: 'Admin' },
-  { label: 'Projects',      href: '/admin/projects' },
-  { label: 'Clients',       href: '/admin/clients' },
-  { label: 'Settings',      href: '/admin/settings' },
+// ── Nav definitions ────────────────────────────────────────────────────────
+
+interface NavItem {
+  label: string
+  href: string
+  icon: string
+}
+
+// Operator view — when no org is selected (platform_owner top-level)
+const OPERATOR_NAV: NavItem[] = [
+  { label: 'Command Center', href: '/admin/dashboard', icon: '◈' },
+  { label: 'Pipeline',       href: '/admin/crm/contacts', icon: '⟳' },
+  { label: 'Clients',        href: '/admin/clients', icon: '◻' },
+  { label: 'Invoicing',      href: '/admin/invoicing', icon: '◷' },
+  { label: 'Settings',       href: '/admin/settings', icon: '◎' },
 ]
 
+// Workspace view — when an org is selected (viewing a client workspace)
+function workspaceNav(slug: string): NavItem[] {
+  return [
+    { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: '◈' },
+    { label: 'Projects',  href: `/admin/org/${slug}/projects`, icon: '⊞' },
+    { label: 'Social',    href: '/admin/social', icon: '◉' },
+    { label: 'Team',      href: `/admin/org/${slug}/team`, icon: '◎' },
+    { label: 'Billing',   href: `/admin/org/${slug}/billing`, icon: '◷' },
+  ]
+}
+
+// ── Sidebar nav item ───────────────────────────────────────────────────────
+
+function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const isActive =
+    pathname === item.href || pathname.startsWith(item.href + '/')
+
+  return (
+    <Link
+      href={item.href}
+      className={[
+        'flex items-center gap-3 px-3 py-2.5 text-sm font-label pib-nav-item',
+        isActive
+          ? 'pib-nav-active'
+          : 'text-on-surface-variant hover:text-on-surface',
+      ].join(' ')}
+    >
+      <span className={['text-base shrink-0', isActive ? 'text-[var(--color-accent-v2)]' : 'text-on-surface-variant'].join(' ')}>
+        {item.icon}
+      </span>
+      {item.label}
+    </Link>
+  )
+}
+
+// ── Main sidebar ───────────────────────────────────────────────────────────
+
 export function AdminSidebar() {
-  let currentGroup = ''
+  const pathname = usePathname()
+  const { selectedOrgId, orgs } = useOrg()
+
+  // Find the selected org to get its slug
+  const selectedOrg = orgs.find((o) => o.id === selectedOrgId)
+  const isWorkspaceMode = !!selectedOrgId && !!selectedOrg
+
+  const navItems = isWorkspaceMode
+    ? workspaceNav(selectedOrg.slug)
+    : OPERATOR_NAV
+
+  const modeLabel = isWorkspaceMode ? selectedOrg.name : 'Operator'
+
   return (
     <aside
       className="w-56 shrink-0 flex flex-col border-r border-outline-variant h-screen sticky top-0 overflow-y-auto"
       style={{ background: 'var(--color-sidebar)' }}
     >
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-outline-variant">
+      <div className="px-5 py-4 border-b border-outline-variant flex items-center gap-2">
         <span className="font-headline text-sm font-bold tracking-widest uppercase text-on-surface">
           PiB
         </span>
-        <span className="ml-2 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-          Admin
+        <span
+          className="text-[9px] font-label uppercase tracking-widest px-1.5 py-0.5 rounded"
+          style={{
+            background: 'var(--color-accent-subtle)',
+            color: 'var(--color-accent-text)',
+          }}
+        >
+          {isWorkspaceMode ? 'Client' : 'Admin'}
         </span>
       </div>
 
       {/* Org Switcher */}
       <div className="border-b border-outline-variant py-2">
-        <p className="px-6 pt-1 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/50">
-          Organisation
+        <p className="px-5 pt-1 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/50">
+          Context
         </p>
         <OrgSwitcher />
       </div>
 
+      {/* Mode indicator */}
+      <div className="px-5 py-2 border-b border-outline-variant/50">
+        <p className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
+          {isWorkspaceMode ? 'Workspace' : 'Platform'}
+        </p>
+        <p className="text-xs font-label text-on-surface-variant truncate mt-0.5">
+          {modeLabel}
+        </p>
+      </div>
+
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {NAV.map((item) => {
-          const showGroupLabel = item.group && item.group !== currentGroup
-          if (item.group) currentGroup = item.group
-          return (
-            <div key={item.href}>
-              {showGroupLabel && (
-                <p className="px-3 pt-4 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/50">
-                  {item.group}
-                </p>
-              )}
-              <Link
-                href={item.href}
-                className="flex items-center px-3 py-2 text-sm font-label text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
-              >
-                {item.label}
-              </Link>
-            </div>
-          )
-        })}
+      <nav className="flex-1 px-2 py-3 space-y-0.5">
+        {navItems.map((item) => (
+          <NavLink key={item.href} item={item} pathname={pathname} />
+        ))}
       </nav>
+
+      {/* Bottom: social quick links when in workspace mode */}
+      {isWorkspaceMode && (
+        <div className="border-t border-outline-variant px-2 py-3 space-y-0.5">
+          <p className="px-3 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
+            Social
+          </p>
+          {[
+            { label: 'Compose', href: '/admin/social/compose' },
+            { label: 'Queue', href: '/admin/social/queue' },
+            { label: 'Calendar', href: '/admin/social/calendar' },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={[
+                'flex items-center px-3 py-2 text-sm font-label pib-nav-item',
+                pathname === item.href
+                  ? 'pib-nav-active'
+                  : 'text-on-surface-variant hover:text-on-surface',
+              ].join(' ')}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* Bottom: platform tools when in operator mode */}
+      {!isWorkspaceMode && (
+        <div className="border-t border-outline-variant px-2 py-3 space-y-0.5">
+          <p className="px-3 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
+            Tools
+          </p>
+          {[
+            { label: 'Social', href: '/admin/social' },
+            { label: 'Email', href: '/admin/email' },
+            { label: 'Sequences', href: '/admin/sequences' },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={[
+                'flex items-center px-3 py-2 text-sm font-label pib-nav-item',
+                pathname.startsWith(item.href)
+                  ? 'pib-nav-active'
+                  : 'text-on-surface-variant hover:text-on-surface',
+              ].join(' ')}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      )}
     </aside>
   )
 }

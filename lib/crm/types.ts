@@ -16,6 +16,8 @@ export type ContactStage =
 
 export interface Contact {
   id: string
+  orgId?: string
+  convertedToOrgId?: string | null
   name: string
   email: string
   phone: string
@@ -48,6 +50,7 @@ export type Currency = 'USD' | 'EUR' | 'ZAR'
 
 export interface Deal {
   id: string
+  orgId?: string
   contactId: string
   title: string
   value: number
@@ -75,6 +78,7 @@ export type ActivityType =
 
 export interface Activity {
   id: string
+  orgId?: string
   contactId: string
   dealId: string
   type: ActivityType

@@ -51,12 +51,30 @@
   --color-accent: #C0392B;
   --color-sidebar: #111111;
 
+  /* v2 accent — amber replaces red for primary actions */
+  --color-accent-v2: #F59E0B;
+  --color-accent-hover: #D97706;
+  --color-accent-subtle: rgba(245, 158, 11, 0.10);
+  --color-accent-text: #FCD34D;
+
+  /* Card system */
+  --color-card: #0A0A0A;
+  --color-card-border: rgba(255, 255, 255, 0.06);
+  --color-card-hover: rgba(255, 255, 255, 0.03);
+  --color-row-hover: rgba(255, 255, 255, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+  /* Updated border radius — more rounded than current 0.25rem */
+  --radius-btn: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-lg-card: 1rem;
+
   --font-headline: var(--font-space-grotesk), sans-serif;
   --font-body: var(--font-inter), sans-serif;
   --font-label: var(--font-inter), sans-serif;
 
-  --radius: 0.25rem;
-  --radius-lg: 0.5rem;
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
   --radius-xl: 0.75rem;
   --radius-2xl: 1.5rem;
   --radius-full: 9999px;
@@ -95,6 +113,84 @@
     background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
                       linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
     background-size: 100px 100px;
+  }
+
+  /* Card component */
+  .pib-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-card);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-card);
+  }
+  .pib-card-hover {
+    transition: background-color 200ms ease;
+  }
+  .pib-card-hover:hover {
+    background: color-mix(in srgb, var(--color-card) 100%, white 3%);
+  }
+
+  /* Amber accent button */
+  .pib-btn-primary {
+    background: var(--color-accent-v2);
+    color: #000000;
+    font-weight: 500;
+    border-radius: var(--radius-btn);
+    padding: 0.5rem 1rem;
+    transition: all 150ms ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .pib-btn-primary:hover {
+    background: var(--color-accent-hover);
+  }
+  .pib-btn-primary:active {
+    transform: scale(0.97);
+  }
+
+  /* Secondary button */
+  .pib-btn-secondary {
+    border: 1px solid var(--color-outline-variant);
+    color: var(--color-on-surface);
+    border-radius: var(--radius-btn);
+    padding: 0.5rem 1rem;
+    transition: all 150ms ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .pib-btn-secondary:hover {
+    background: var(--color-surface-container);
+  }
+  .pib-btn-secondary:active {
+    transform: scale(0.97);
+  }
+
+  /* Skeleton shimmer */
+  .pib-skeleton {
+    background: linear-gradient(90deg, var(--color-surface-container) 25%, var(--color-surface-container-high) 50%, var(--color-surface-container) 75%);
+    background-size: 200% 100%;
+    animation: pib-shimmer 1.5s infinite;
+    border-radius: var(--radius-btn);
+  }
+  @keyframes pib-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Active nav indicator */
+  .pib-nav-active {
+    background: var(--color-accent-subtle);
+    color: var(--color-accent-text);
+    border-left: 3px solid var(--color-accent-v2);
+  }
+  .pib-nav-item {
+    border-left: 3px solid transparent;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .pib-nav-item:hover:not(.pib-nav-active) {
+    background: var(--color-surface-container);
   }
 }
 

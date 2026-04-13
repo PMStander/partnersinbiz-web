@@ -26,8 +26,8 @@ export const GET = withAuth('client', async (req, user) => {
       return { id: doc.id, ...data }
     })
     .sort((a, b) => {
-      const aTs = a.createdAt?._seconds ?? 0
-      const bTs = b.createdAt?._seconds ?? 0
+      const aTs = (a.createdAt as any)?._seconds ?? 0
+      const bTs = (b.createdAt as any)?._seconds ?? 0
       return bTs - aTs
     })
     .filter((org) => {
@@ -39,12 +39,12 @@ export const GET = withAuth('client', async (req, user) => {
       id: org.id!,
       name: org.name,
       slug: org.slug,
+      type: org.type ?? 'client',
+      status: org.status ?? (org.active !== false ? 'active' : 'churned'),
       description: org.description,
       logoUrl: org.logoUrl,
       website: org.website,
-      active: org.active,
       memberCount: (org.members ?? []).length,
-      linkedClientId: org.linkedClientId ?? '',
       createdAt: org.createdAt,
       updatedAt: org.updatedAt,
     }))

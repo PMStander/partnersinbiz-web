@@ -1,132 +1,242 @@
-// app/(admin)/admin/crm/pipeline/page.tsx
 'use client'
 export const dynamic = 'force-dynamic'
-import { useEffect, useState, useRef } from 'react'
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
-const STAGES = ['discovery', 'proposal', 'negotiation', 'won', 'lost'] as const
-type Stage = typeof STAGES[number]
+interface Contact {
+  id: string
+  name: string
+  email: string
+  company?: string
+  stage: string
+  type: string
+  tags: string[]
+}
 
 interface Deal {
   id: string
-  title: string
   contactId: string
+  title: string
   value: number
   currency: string
-  stage: Stage
-  expectedCloseDate: { seconds: number } | null
+  stage: string
+}
+
+type Tab = 'contacts' | 'deals'
+
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`pib-skeleton ${className}`} />
+}
+
+const CONTACT_STAGES = ['new', 'contacted', 'replied', 'demo', 'proposal', 'won', 'lost']
+const DEAL_STAGES = ['discovery', 'proposal', 'negotiation', 'won', 'lost']
+
+function StageBadge({ stage }: { stage: string }) {
+  const winStages = ['won', 'demo', 'replied']
+  const lostStages = ['lost']
+  const color = lostStages.includes(stage)
+    ? 'var(--color-error)'
+    : winStages.includes(stage)
+    ? '#4ade80'
+    : 'var(--color-accent-v2)'
+  return (
+    <span
+      className="text-[10px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full capitalize"
+      style={{ background: `${color}20`, color }}
+    >
+      {stage}
+    </span>
+  )
 }
 
 export default function PipelinePage() {
+  const [tab, setTab] = useState<Tab>('contacts')
+  const [contacts, setContacts] = useState<Contact[]>([])
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
-  const dragging = useRef<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [stageFilter, setStageFilter] = useState('all')
 
   useEffect(() => {
-    fetch('/api/v1/crm/deals')
-      .then((r) => r.json())
-      .then((b) => { setDeals(b.data ?? []); setLoading(false) })
+    Promise.all([
+      fetch('/api/v1/crm/contacts').then(r => r.json()),
+      fetch('/api/v1/crm/deals').then(r => r.json()),
+    ]).then(([cBody, dBody]) => {
+      setContacts(cBody.data ?? [])
+      setDeals(dBody.data ?? [])
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
 
-  async function moveDeal(id: string, newStage: Stage) {
-    setDeals((prev) => prev.map((d) => d.id === id ? { ...d, stage: newStage } : d))
-    await fetch(`/api/v1/crm/deals/${id}`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ stage: newStage }),
-    })
-  }
+  const stages = tab === 'contacts' ? CONTACT_STAGES : DEAL_STAGES
 
-  function stageDeals(stage: Stage) {
-    return deals.filter((d) => d.stage === stage)
-  }
+  const filteredContacts = contacts.filter(c => {
+    const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase()) || c.company?.toLowerCase().includes(search.toLowerCase())
+    const matchStage = stageFilter === 'all' || c.stage === stageFilter
+    return matchSearch && matchStage
+  })
 
-  function stageValue(stage: Stage) {
-    return stageDeals(stage).reduce((sum, d) => sum + (d.value ?? 0), 0)
-  }
+  const filteredDeals = deals.filter(d => {
+    const matchSearch = !search || d.title.toLowerCase().includes(search.toLowerCase())
+    const matchStage = stageFilter === 'all' || d.stage === stageFilter
+    return matchSearch && matchStage
+  })
 
-  function fmt(value: number, currency: string) {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value)
-  }
+  // Pipeline value
+  const totalValue = deals.filter(d => d.stage !== 'lost').reduce((sum, d) => sum + (d.value || 0), 0)
+  const wonValue = deals.filter(d => d.stage === 'won').reduce((sum, d) => sum + (d.value || 0), 0)
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-headline text-2xl font-bold tracking-tighter">Pipeline</h1>
-          <p className="text-on-surface-variant text-sm mt-0.5">
-            Total open: {fmt(deals.filter((d) => d.stage !== 'lost').reduce((s, d) => s + d.value, 0), 'USD')}
-          </p>
+          <h1 className="text-2xl font-headline font-bold text-on-surface">Pipeline</h1>
+          <p className="text-sm text-on-surface-variant mt-0.5">CRM — contacts and deals</p>
         </div>
-        <Link
-          href="/admin/crm/contacts"
-          className="text-sm font-label text-on-surface-variant border border-outline-variant px-3 py-1.5 hover:text-on-surface transition-colors"
-        >
-          + New Deal via Contact
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/admin/crm/contacts" className="pib-btn-secondary text-sm font-label">
+            + Contact
+          </Link>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="flex gap-4">
-          {STAGES.map((s) => (
-            <div key={s} className="flex-1 h-64 bg-surface-container animate-pulse" />
-          ))}
-        </div>
-      ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {STAGES.map((stage) => (
-            <div
-              key={stage}
-              className="flex-1 min-w-[200px] flex flex-col"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => {
-                if (dragging.current) moveDeal(dragging.current, stage)
-                dragging.current = null
-              }}
-            >
-              {/* Column header */}
-              <div className="border border-outline-variant px-3 py-2 mb-2 flex justify-between items-center">
-                <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-                  {stage}
-                </span>
-                <span className="text-[10px] font-label text-on-surface-variant">
-                  {stageValue(stage) > 0 ? fmt(stageValue(stage), 'USD') : stageDeals(stage).length}
-                </span>
-              </div>
-
-              {/* Deal cards */}
-              <div className="flex flex-col gap-2 flex-1 min-h-[120px]">
-                {stageDeals(stage).length === 0 ? (
-                  <div className="border border-dashed border-outline-variant/40 p-4 text-center">
-                    <p className="text-[11px] text-on-surface-variant/50">Drop here</p>
-                  </div>
-                ) : (
-                  stageDeals(stage).map((deal) => (
-                    <div
-                      key={deal.id}
-                      draggable
-                      onDragStart={() => { dragging.current = deal.id }}
-                      className="border border-outline-variant p-3 cursor-grab active:cursor-grabbing hover:bg-surface-container transition-colors"
-                    >
-                      <p className="text-sm font-medium text-on-surface mb-1 truncate">{deal.title}</p>
-                      {deal.value > 0 && (
-                        <p className="text-[11px] text-on-surface-variant">
-                          {fmt(deal.value, deal.currency || 'USD')}
-                        </p>
-                      )}
-                      {deal.expectedCloseDate && (
-                        <p className="text-[10px] text-on-surface-variant/60 mt-1">
-                          Close {new Date(deal.expectedCloseDate.seconds * 1000).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          ))}
+      {/* Stats */}
+      {!loading && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="pib-card">
+            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Contacts</p>
+            <p className="text-2xl font-headline font-bold" style={{ color: 'var(--color-accent-v2)' }}>{contacts.length}</p>
+          </div>
+          <div className="pib-card">
+            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Pipeline Value</p>
+            <p className="text-2xl font-headline font-bold text-on-surface">${totalValue.toLocaleString()}</p>
+          </div>
+          <div className="pib-card">
+            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Won</p>
+            <p className="text-2xl font-headline font-bold text-on-surface">${wonValue.toLocaleString()}</p>
+          </div>
         </div>
       )}
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-[var(--color-card-border)] pb-0">
+        {(['contacts', 'deals'] as Tab[]).map(t => (
+          <button
+            key={t}
+            onClick={() => { setTab(t); setStageFilter('all') }}
+            className={[
+              'px-4 py-2 text-sm font-label capitalize border-b-2 -mb-px transition-colors',
+              tab === t
+                ? 'border-[var(--color-accent-v2)] text-on-surface'
+                : 'border-transparent text-on-surface-variant hover:text-on-surface',
+            ].join(' ')}
+          >
+            {t} ({t === 'contacts' ? contacts.length : deals.length})
+          </button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <input
+          type="text"
+          placeholder={`Search ${tab}...`}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="flex-1 min-w-48 px-4 py-2 text-sm bg-[var(--color-card)] border border-[var(--color-card-border)] rounded-[var(--radius-btn)] text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-[var(--color-accent-v2)] transition-colors"
+        />
+        {['all', ...stages].map(s => (
+          <button
+            key={s}
+            onClick={() => setStageFilter(s)}
+            className={[
+              'text-xs font-label px-3 py-1.5 rounded-[var(--radius-btn)] transition-colors capitalize',
+              stageFilter === s
+                ? 'text-black font-medium'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
+            ].join(' ')}
+            style={stageFilter === s ? { background: 'var(--color-accent-v2)' } : {}}
+          >
+            {s === 'all' ? 'All' : s}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="pib-card overflow-hidden !p-0">
+        {tab === 'contacts' ? (
+          <>
+            <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-[var(--color-card-border)]">
+              <p className="col-span-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Name</p>
+              <p className="col-span-3 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Company</p>
+              <p className="col-span-2 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Stage</p>
+              <p className="col-span-3 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Tags</p>
+            </div>
+            {loading ? (
+              <div className="divide-y divide-[var(--color-card-border)]">
+                {Array.from({ length: 6 }).map((_, i) => <div key={i} className="px-5 py-4"><Skeleton className="h-5 w-48" /></div>)}
+              </div>
+            ) : filteredContacts.length === 0 ? (
+              <div className="py-10 text-center"><p className="text-on-surface-variant text-sm">No contacts found.</p></div>
+            ) : (
+              <div className="divide-y divide-[var(--color-card-border)]">
+                {filteredContacts.map(c => (
+                  <Link
+                    key={c.id}
+                    href={`/admin/crm/contacts/${c.id}`}
+                    className="grid grid-cols-12 gap-4 items-center px-5 py-3 hover:bg-[var(--color-row-hover)] transition-colors"
+                  >
+                    <div className="col-span-4 min-w-0">
+                      <p className="text-sm font-medium text-on-surface truncate">{c.name}</p>
+                      <p className="text-xs text-on-surface-variant truncate">{c.email}</p>
+                    </div>
+                    <div className="col-span-3 min-w-0">
+                      <p className="text-sm text-on-surface-variant truncate">{c.company || '—'}</p>
+                    </div>
+                    <div className="col-span-2"><StageBadge stage={c.stage} /></div>
+                    <div className="col-span-3 flex gap-1 flex-wrap">
+                      {c.tags?.slice(0, 2).map(t => (
+                        <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">{t}</span>
+                      ))}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-[var(--color-card-border)]">
+              <p className="col-span-5 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Deal</p>
+              <p className="col-span-3 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Value</p>
+              <p className="col-span-4 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Stage</p>
+            </div>
+            {loading ? (
+              <div className="divide-y divide-[var(--color-card-border)]">
+                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="px-5 py-4"><Skeleton className="h-5 w-48" /></div>)}
+              </div>
+            ) : filteredDeals.length === 0 ? (
+              <div className="py-10 text-center"><p className="text-on-surface-variant text-sm">No deals found.</p></div>
+            ) : (
+              <div className="divide-y divide-[var(--color-card-border)]">
+                {filteredDeals.map(d => (
+                  <div key={d.id} className="grid grid-cols-12 gap-4 items-center px-5 py-3 hover:bg-[var(--color-row-hover)] transition-colors">
+                    <div className="col-span-5 min-w-0">
+                      <p className="text-sm font-medium text-on-surface truncate">{d.title}</p>
+                    </div>
+                    <div className="col-span-3">
+                      <p className="text-sm font-medium text-on-surface">${(d.value || 0).toLocaleString()} <span className="text-xs text-on-surface-variant">{d.currency}</span></p>
+                    </div>
+                    <div className="col-span-4"><StageBadge stage={d.stage} /></div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
