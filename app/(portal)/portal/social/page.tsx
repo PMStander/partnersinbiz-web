@@ -67,6 +67,8 @@ export default function PortalSocialDashboard() {
     ]).then(([accBody, postBody, orgBody]) => {
       setAccounts(accBody.data ?? [])
       setPosts(postBody.data ?? [])
+      // Uses the first org from the membership-filtered list. For multi-org clients,
+      // this should be refined to match the org linked to the user's clientId.
       if (orgBody.data?.[0]?.name) setOrgName(orgBody.data[0].name)
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])

@@ -18,8 +18,8 @@ export const DELETE = withAuth('admin', async (req, user, ctx) => {
   if (!doc.exists) return apiError('Organisation not found', 404)
 
   const data = doc.data()!
-  // This guard is unreachable with current roles ('admin', 'client', 'ai') because withAuth('admin') blocks clients.
-  // Kept intentionally for when lower-privilege roles are introduced.
+  // withAuth('admin') currently blocks client users from this endpoint.
+  // This membership check is kept for when lower-privilege roles are introduced.
   if (user.role !== 'admin' && user.role !== 'ai') {
     if (!isOwnerOrAdmin(data.members ?? [], user.uid)) return apiError('Forbidden', 403)
   }
@@ -28,6 +28,16 @@ export const DELETE = withAuth('admin', async (req, user, ctx) => {
     (m: { userId: string; role: string }) => m.userId === targetUserId,
   )
   if (!memberEntry) return apiError('User is not a member', 404)
+
+  // Prevent removing the last owner — would create an unmanageable orphan org
+  if (memberEntry.role === 'owner') {
+    const remainingOwners = (data.members ?? []).filter(
+      (m: { userId: string; role: string }) => m.role === 'owner' && m.userId !== targetUserId,
+    )
+    if (remainingOwners.length === 0) {
+      return apiError('Cannot remove the last owner. Assign another owner first.', 409)
+    }
+  }
 
   await adminDb.collection('organizations').doc(id).update({
     members: FieldValue.arrayRemove(memberEntry),

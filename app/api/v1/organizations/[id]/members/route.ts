@@ -20,8 +20,8 @@ export const POST = withAuth('admin', async (req, user, ctx) => {
   if (!doc.exists) return apiError('Organisation not found', 404)
 
   const data = doc.data()!
-  // This guard is unreachable with current roles ('admin', 'client', 'ai') because withAuth('admin') blocks clients.
-  // Kept intentionally for when lower-privilege roles are introduced.
+  // withAuth('admin') currently blocks client users from this endpoint.
+  // This membership check is kept for when lower-privilege roles are introduced.
   if (user.role !== 'admin' && user.role !== 'ai') {
     if (!isOwnerOrAdmin(data.members ?? [], user.uid)) return apiError('Forbidden', 403)
   }
@@ -29,6 +29,10 @@ export const POST = withAuth('admin', async (req, user, ctx) => {
   const body = await req.json().catch(() => ({}))
   const targetUserId = typeof body.userId === 'string' ? body.userId.trim() : ''
   if (!targetUserId) return apiError('userId is required', 400)
+
+  // Verify the target user exists before adding them as a member
+  const targetUserDoc = await adminDb.collection('users').doc(targetUserId).get()
+  if (!targetUserDoc.exists) return apiError('User not found', 404)
 
   const role: OrgRole = VALID_ROLES.includes(body.role) ? body.role : 'member'
 
