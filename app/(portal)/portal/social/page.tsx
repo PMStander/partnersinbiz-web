@@ -57,14 +57,17 @@ export default function PortalSocialDashboard() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [orgName, setOrgName] = useState('')
 
   useEffect(() => {
     Promise.all([
       fetch('/api/v1/social/accounts').then(r => r.json()),
       fetch('/api/v1/social/posts?limit=20').then(r => r.json()),
-    ]).then(([accBody, postBody]) => {
+      fetch('/api/v1/organizations').then(r => r.json()),
+    ]).then(([accBody, postBody, orgBody]) => {
       setAccounts(accBody.data ?? [])
       setPosts(postBody.data ?? [])
+      if (orgBody.data?.[0]?.name) setOrgName(orgBody.data[0].name)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -77,6 +80,7 @@ export default function PortalSocialDashboard() {
     <div className="space-y-8">
       <div>
         <h1 className="font-headline text-2xl font-bold tracking-tighter">Social Media</h1>
+        {orgName && <p className="text-xs text-white/40 mt-0.5">{orgName}</p>}
         <p className="text-sm text-white/40 mt-1">Manage your social media presence</p>
       </div>
 
