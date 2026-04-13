@@ -121,6 +121,41 @@ describe('GET /api/v1/organizations/[id]', () => {
     const res = await getById(adminReq('GET'), { params: Promise.resolve({ id: 'ghost' }) } as any)
     expect(res.status).toBe(404)
   })
+
+  it('returns 403 for a client user who is not a member', async () => {
+    // Simulate: session cookie resolves to a client user not in the members array
+    const { adminAuth, adminDb } = require('@/lib/firebase/admin')
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValueOnce({ uid: 'client-user' })
+    const userDocGet = jest.fn().mockResolvedValue({ exists: true, data: () => ({ role: 'client' }) })
+    const orgDocGet = jest.fn().mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'other-user', role: 'owner' }], // client-user is NOT a member
+        description: '', logoUrl: '', website: '', createdBy: 'other-user', linkedClientId: '',
+      }),
+    })
+    mockCollection.mockReturnValue({
+      doc: jest.fn().mockReturnValue({ get: orgDocGet }),
+    })
+    // Override collection to return user doc for first call, org doc for second
+    let callCount = 0
+    mockCollection.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        // auth.ts calls adminDb.collection('users').doc(uid).get()
+        return { doc: jest.fn().mockReturnValue({ get: userDocGet }) }
+      }
+      return { doc: jest.fn().mockReturnValue({ get: orgDocGet }) }
+    })
+
+    const req = new NextRequest('http://localhost/api/v1/organizations/org-1', {
+      headers: { cookie: '__session=fake-session-cookie' },
+    })
+    const res = await getById(req, { params: Promise.resolve({ id: 'org-1' }) } as any)
+    expect(res.status).toBe(403)
+  })
 })
 
 describe('PUT /api/v1/organizations/[id]', () => {

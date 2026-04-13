@@ -20,6 +20,7 @@ export const GET = withAuth('admin', async (req, user, ctx) => {
   if (!doc.exists) return apiError('Organisation not found', 404)
 
   const data = doc.data()!
+  // withAuth('admin') already blocks non-admin users; this guard is for any future role expansion
   // Non-admin roles must be a member
   if (user.role !== 'admin' && user.role !== 'ai') {
     if (!isMember(data.members ?? [], user.uid)) return apiError('Forbidden', 403)
@@ -34,6 +35,7 @@ export const PUT = withAuth('admin', async (req, user, ctx) => {
   if (!doc.exists) return apiError('Organisation not found', 404)
 
   const data = doc.data()!
+  // withAuth('admin') already blocks non-admin users; this guard is for any future role expansion
   if (user.role !== 'admin' && user.role !== 'ai') {
     if (!isOwnerOrAdmin(data.members ?? [], user.uid)) return apiError('Forbidden', 403)
   }
@@ -66,6 +68,7 @@ export const DELETE = withAuth('admin', async (req, user, ctx) => {
   if (!doc.exists) return apiError('Organisation not found', 404)
 
   const data = doc.data()!
+  // withAuth('admin') already blocks non-admin users; this guard is for any future role expansion
   if (user.role !== 'admin' && user.role !== 'ai') {
     if (!isOwner(data.members ?? [], user.uid)) return apiError('Forbidden — only owners can delete', 403)
   }
