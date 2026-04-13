@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
 import { AdminTopbar } from '@/components/admin/AdminTopbar'
+import { OrgProvider } from '@/lib/contexts/OrgContext'
 
 export default async function AdminLayout({
   children,
@@ -30,14 +31,16 @@ export default async function AdminLayout({
   if (role !== 'admin') redirect('/portal/dashboard')
 
   return (
-    <div className="flex h-screen overflow-hidden bg-black">
-      <AdminSidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <AdminTopbar userEmail={email} />
-        <main className="flex-1 overflow-y-auto p-6">
-          {children}
-        </main>
+    <OrgProvider>
+      <div className="flex h-screen overflow-hidden bg-black">
+        <AdminSidebar />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <AdminTopbar userEmail={email} />
+          <main className="flex-1 overflow-y-auto p-6">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </OrgProvider>
   )
 }
