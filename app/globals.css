@@ -96,6 +96,10 @@
 @layer utilities {
   .text-huge { font-size: clamp(4rem, 15vw, 12rem); }
   .text-mega { font-size: clamp(3rem, 10vw, 9rem); }
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
 }
 
 @layer components {

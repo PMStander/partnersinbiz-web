@@ -78,12 +78,41 @@ export function getOAuthConfig(platform: SocialPlatformType): OAuthConfig | null
         tokenUrl: 'https://graph.threads.net/oauth/access_token',
         scopes: ['threads_basic', 'threads_content_publish', 'threads_manage_replies'],
       }
+    case 'youtube':
+      return {
+        platform: 'youtube',
+        authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenUrl: 'https://oauth2.googleapis.com/token',
+        scopes: [
+          'https://www.googleapis.com/auth/youtube.upload',
+          'https://www.googleapis.com/auth/youtube.readonly',
+          'https://www.googleapis.com/auth/youtube.force-ssl',
+        ],
+        extraAuthParams: { access_type: 'offline', prompt: 'consent' },
+      }
     case 'twitter':
       // Twitter uses OAuth 1.0a — handled separately
       return null
     case 'bluesky':
       // Bluesky uses app passwords — no OAuth
       return null
+    case 'mastodon': {
+      // Mastodon is instance-specific; use env var for default instance
+      const instanceUrl = process.env.MASTODON_INSTANCE_URL || 'https://mastodon.social'
+      return {
+        platform: 'mastodon',
+        authUrl: `${instanceUrl}/oauth/authorize`,
+        tokenUrl: `${instanceUrl}/oauth/token`,
+        scopes: ['read', 'write', 'follow'],
+      }
+    }
+    case 'dribbble':
+      return {
+        platform: 'dribbble',
+        authUrl: 'https://dribbble.com/oauth/authorize',
+        tokenUrl: 'https://dribbble.com/oauth/token',
+        scopes: ['public', 'upload'],
+      }
     default:
       return null
   }

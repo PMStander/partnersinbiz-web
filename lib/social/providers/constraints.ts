@@ -92,7 +92,7 @@ export function getAllConstraints(): Record<SocialPlatformType, PlatformConstrai
 export function isPlatformActive(platform: SocialPlatformType): boolean {
   const active: SocialPlatformType[] = [
     'twitter', 'linkedin', 'facebook', 'instagram', 'reddit',
-    'tiktok', 'pinterest', 'bluesky', 'threads',
+    'tiktok', 'pinterest', 'bluesky', 'threads', 'youtube', 'mastodon', 'dribbble',
   ]
   return active.includes(platform)
 }

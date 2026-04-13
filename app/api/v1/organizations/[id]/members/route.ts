@@ -1,50 +1,122 @@
 /**
- * POST /api/v1/organizations/[id]/members — add a member to an org
- * Body: { userId: string, role: 'owner' | 'admin' | 'member' }
+ * GET  /api/v1/organizations/[id]/members — list members with user details
+ * POST /api/v1/organizations/[id]/members — add a member by email
  */
 import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import { isOwnerOrAdmin, VALID_ROLES } from '@/lib/organizations/helpers'
-import type { OrgRole } from '@/lib/organizations/types'
+import type { Organization, OrgMember } from '@/lib/organizations/types'
 
 export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
+interface MemberWithDetails extends OrgMember {
+  displayName?: string
+  email?: string
+  photoURL?: string
+}
+
+export const GET = withAuth('admin', async (req, user, ctx) => {
+  const { id } = await (ctx as Params).params
+
+  // Fetch organization
+  const orgDoc = await adminDb.collection('organizations').doc(id).get()
+  if (!orgDoc.exists) return apiError('Organisation not found', 404)
+
+  const org = orgDoc.data() as Organization
+  const members = org.members ?? []
+
+  // Fetch user details for each member
+  const membersWithDetails: MemberWithDetails[] = await Promise.all(
+    members.map(async (member) => {
+      const userDoc = await adminDb.collection('users').doc(member.userId).get()
+      const userData = userDoc.data()
+      return {
+        ...member,
+        displayName: userData?.displayName,
+        email: userData?.email,
+        photoURL: userData?.photoURL,
+      }
+    }),
+  )
+
+  return apiSuccess(membersWithDetails, 200, {
+    total: membersWithDetails.length,
+    page: 1,
+    limit: membersWithDetails.length,
+  })
+})
+
 export const POST = withAuth('admin', async (req, user, ctx) => {
   const { id } = await (ctx as Params).params
-  const doc = await adminDb.collection('organizations').doc(id).get()
-  if (!doc.exists) return apiError('Organisation not found', 404)
 
-  const data = doc.data()!
-  // withAuth('admin') currently blocks client users from this endpoint.
-  // This membership check is kept for when lower-privilege roles are introduced.
-  if (user.role !== 'admin' && user.role !== 'ai') {
-    if (!isOwnerOrAdmin(data.members ?? [], user.uid)) return apiError('Forbidden', 403)
-  }
-
+  // Parse request body
   const body = await req.json().catch(() => ({}))
-  const targetUserId = typeof body.userId === 'string' ? body.userId.trim() : ''
-  if (!targetUserId) return apiError('userId is required', 400)
+  const email = typeof body.email === 'string' ? body.email.trim() : ''
+  const role = body.role ?? 'member'
 
-  // Verify the target user exists before adding them as a member
-  const targetUserDoc = await adminDb.collection('users').doc(targetUserId).get()
-  if (!targetUserDoc.exists) return apiError('User not found', 404)
+  if (!email) return apiError('email is required', 400)
 
-  const role: OrgRole = VALID_ROLES.includes(body.role) ? body.role : 'member'
-
-  const members: Array<{ userId: string; role: OrgRole }> = data.members ?? []
-  if (members.some((m) => m.userId === targetUserId)) {
-    return apiError('User is already a member', 409)
+  // Validate role
+  const validRoles = ['owner', 'admin', 'member', 'viewer']
+  if (!validRoles.includes(role)) {
+    return apiError(`role must be one of: ${validRoles.join(', ')}`, 400)
   }
 
+  // Fetch organization
+  const orgDoc = await adminDb.collection('organizations').doc(id).get()
+  if (!orgDoc.exists) return apiError('Organisation not found', 404)
+
+  const org = orgDoc.data() as Organization
+
+  // Look up user by email
+  const userSnapshot = await adminDb
+    .collection('users')
+    .where('email', '==', email)
+    .get()
+
+  if (userSnapshot.empty) {
+    return apiError(
+      'User not found — they must have a PIB account first',
+      404,
+    )
+  }
+
+  const userDoc = userSnapshot.docs[0]
+  const userId = userDoc.id
+  const userData = userDoc.data()
+
+  // Check if already a member
+  const alreadyMember = (org.members ?? []).some((m) => m.userId === userId)
+  if (alreadyMember) {
+    return apiError('User is already a member of this organisation', 409)
+  }
+
+  // Add member
+  const newMember: OrgMember = {
+    userId,
+    role: role as any,
+    joinedAt: FieldValue.serverTimestamp() as any,
+    invitedBy: user.uid,
+  }
+
+  const updatedMembers = [...(org.members ?? []), newMember]
   await adminDb.collection('organizations').doc(id).update({
-    members: FieldValue.arrayUnion({ userId: targetUserId, role }),
+    members: updatedMembers,
     updatedAt: FieldValue.serverTimestamp(),
   })
 
-  return apiSuccess({ added: true, userId: targetUserId, role }, 201)
+  // Return the new member with details
+  return apiSuccess(
+    {
+      ...newMember,
+      displayName: userData.displayName,
+      email: userData.email,
+      photoURL: userData.photoURL,
+    },
+    201,
+  )
 })

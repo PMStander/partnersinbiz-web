@@ -8,6 +8,15 @@ import { useOrg } from '@/lib/contexts/OrgContext'
 type SocialPostMode = 'single' | 'thread'
 type SocialPostCategory = 'work' | 'personal' | 'ai' | 'sport' | 'sa' | 'other'
 
+interface ImageTemplate {
+  id: string
+  name: string
+  description: string
+  promptTemplate: string
+  suggestedSize: '1024x1024' | '1024x1536' | '1536x1024'
+  category: string
+}
+
 const CATEGORIES: SocialPostCategory[] = ['work', 'personal', 'ai', 'sport', 'sa', 'other']
 
 const PLATFORMS = [
@@ -20,9 +29,12 @@ const PLATFORMS = [
   { id: 'pinterest', label: 'Pinterest', color: 'bg-red-700', short: 'PI' },
   { id: 'bluesky', label: 'Bluesky', color: 'bg-sky-500', short: 'BS' },
   { id: 'threads', label: 'Threads', color: 'bg-gray-700', short: 'TH' },
+  { id: 'youtube', label: 'YouTube', color: 'bg-red-600', short: 'YT' },
+  { id: 'mastodon', label: 'Mastodon', color: 'bg-purple-600', short: 'MA' },
+  { id: 'dribbble', label: 'Dribbble', color: 'bg-pink-500', short: 'DR' },
 ] as const
 
-const THREAD_CAPABLE = ['twitter', 'bluesky', 'threads']
+const THREAD_CAPABLE = ['twitter', 'bluesky', 'threads', 'mastodon']
 
 const CHAR_LIMITS: Record<string, number> = {
   twitter: 280,
@@ -34,6 +46,9 @@ const CHAR_LIMITS: Record<string, number> = {
   pinterest: 500,
   bluesky: 300,
   threads: 500,
+  youtube: 5000,
+  mastodon: 500,
+  dribbble: 500,
 }
 
 interface Account {
@@ -74,10 +89,41 @@ export default function ComposePage() {
   const [aiHashtags, setAiHashtags] = useState<Array<{ tag: string; relevance: number }>>([])
   const [showAi, setShowAi] = useState(false)
 
+  // AI Image state
+  const [showImageModal, setShowImageModal] = useState(false)
+  const [imagePrompt, setImagePrompt] = useState('')
+  const [imageProvider, setImageProvider] = useState<'xai' | 'gemini'>('xai')
+  const [imageSize, setImageSize] = useState<'1024x1024' | '1024x1536' | '1536x1024'>('1024x1024')
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [imageTemplates, setImageTemplates] = useState<ImageTemplate[]>([])
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string>('')
+  const [generatedPrompt, setGeneratedPrompt] = useState<string>('')
+  const [imageLoading, setImageLoading] = useState(false)
+  const [imageError, setImageError] = useState<string>('')
+  const [mediaItems, setMediaItems] = useState<Array<{ id: string; url: string; type: 'image' }>>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+
   // Fetch connected accounts
   useEffect(() => {
     fetch(`/api/v1/social/accounts${orgId ? `?orgId=${orgId}` : ''}`).then(r => r.json()).then(b => setAccounts(b.data ?? []))
   }, [orgId])
+
+  // Fetch image templates
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      setTemplatesLoading(true)
+      try {
+        const res = await fetch('/api/v1/social/ai/image-templates')
+        const data = await res.json()
+        if (data.data) setImageTemplates(data.data)
+      } catch {
+        /* ignore */
+      } finally {
+        setTemplatesLoading(false)
+      }
+    }
+    fetchTemplates()
+  }, [])
 
   // Pre-fill from URL params (replies page + calendar click-to-create)
   useEffect(() => {
@@ -322,6 +368,74 @@ export default function ComposePage() {
     if (!hashtags.includes(tag)) setHashtags(prev => [...prev, tag])
   }
 
+  const handleGenerateImage = async () => {
+    if (!imagePrompt.trim()) {
+      setImageError('Please enter an image prompt')
+      return
+    }
+
+    setImageLoading(true)
+    setImageError('')
+    setGeneratedImageUrl('')
+    setGeneratedPrompt('')
+
+    try {
+      const res = await fetch('/api/v1/social/ai/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: imagePrompt,
+          provider: imageProvider,
+          size: imageSize,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setImageError(data.error ?? 'Failed to generate image')
+        return
+      }
+
+      if (data.data) {
+        setGeneratedImageUrl(data.data.url)
+        setGeneratedPrompt(data.data.revisedPrompt)
+      }
+    } catch (err: any) {
+      setImageError(err.message ?? 'Error generating image')
+    } finally {
+      setImageLoading(false)
+    }
+  }
+
+  const handleUseImage = () => {
+    if (!generatedImageUrl) return
+
+    const newMedia = {
+      id: `media-${Date.now()}`,
+      url: generatedImageUrl,
+      type: 'image' as const,
+    }
+
+    setMediaItems(prev => [...prev, newMedia])
+    setGeneratedImageUrl('')
+    setGeneratedPrompt('')
+    setImagePrompt('')
+    setSelectedTemplate('')
+    setShowImageModal(false)
+  }
+
+  const removeMediaItem = (id: string) => {
+    setMediaItems(prev => prev.filter(m => m.id !== id))
+  }
+
+  const fillTemplatePrompt = (template: ImageTemplate) => {
+    // Simple template filling - just show the template prompt
+    // User can edit it manually before generating
+    setImagePrompt(template.promptTemplate)
+    setImageSize(template.suggestedSize)
+  }
+
   const minDateTime = new Date().toISOString().slice(0, 16)
 
   return (
@@ -481,6 +595,158 @@ export default function ComposePage() {
             </div>
           </div>
           {errors.content && <p className="text-xs text-red-400 mt-1">{errors.content}</p>}
+        </div>
+      )}
+
+      {/* Media */}
+      <div>
+        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Media</label>
+        <div className="rounded-xl bg-surface-container p-3 space-y-2">
+          {mediaItems.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {mediaItems.map(media => (
+                <div key={media.id} className="relative rounded-lg overflow-hidden bg-surface">
+                  <img src={media.url} alt="media" className="w-full h-32 object-cover" />
+                  <button
+                    onClick={() => removeMediaItem(media.id)}
+                    className="absolute top-1 right-1 bg-red-500/80 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => setShowImageModal(true)}
+            className="w-full px-4 py-2 rounded-lg bg-surface text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors border border-dashed border-on-surface-variant/30"
+          >
+            + Generate Image with AI
+          </button>
+        </div>
+      </div>
+
+      {/* AI Image Modal */}
+      {showImageModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto space-y-4 p-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-on-surface">AI Image Generation</h2>
+              <button
+                onClick={() => {
+                  setShowImageModal(false)
+                  setImageError('')
+                  setGeneratedImageUrl('')
+                }}
+                className="text-on-surface-variant hover:text-on-surface transition-colors text-xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Template Selector */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide">Template (Optional)</label>
+              <select
+                value={selectedTemplate}
+                onChange={(e) => {
+                  const templateId = e.target.value
+                  setSelectedTemplate(templateId)
+                  if (templateId) {
+                    const template = imageTemplates.find(t => t.id === templateId)
+                    if (template) fillTemplatePrompt(template)
+                  }
+                }}
+                disabled={templatesLoading}
+                className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface outline-none border border-transparent focus:border-outline-variant transition-colors"
+              >
+                <option value="">Choose a template...</option>
+                {imageTemplates.map(template => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} — {template.description}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Image Prompt */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide">Image Prompt</label>
+              <textarea
+                rows={4}
+                value={imagePrompt}
+                onChange={(e) => setImagePrompt(e.target.value)}
+                placeholder="Describe the image you want to generate..."
+                className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none border border-transparent focus:border-outline-variant transition-colors resize-none"
+              />
+              <p className="text-[10px] text-on-surface-variant">{imagePrompt.length} / 4000 characters</p>
+            </div>
+
+            {/* Provider & Size */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide">Provider</label>
+                <select
+                  value={imageProvider}
+                  onChange={(e) => setImageProvider(e.target.value as 'xai' | 'gemini')}
+                  className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface outline-none border border-transparent focus:border-outline-variant transition-colors"
+                >
+                  <option value="xai">xAI (Grok)</option>
+                  <option value="gemini">Google Gemini</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide">Size</label>
+                <select
+                  value={imageSize}
+                  onChange={(e) => setImageSize(e.target.value as '1024x1024' | '1024x1536' | '1536x1024')}
+                  className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface outline-none border border-transparent focus:border-outline-variant transition-colors"
+                >
+                  <option value="1024x1024">Square (1024×1024)</option>
+                  <option value="1024x1536">Portrait (1024×1536)</option>
+                  <option value="1536x1024">Landscape (1536×1024)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Error */}
+            {imageError && (
+              <div className="px-4 py-3 rounded-xl bg-red-900/30 text-red-400 text-sm">
+                {imageError}
+              </div>
+            )}
+
+            {/* Generate Button */}
+            <button
+              onClick={handleGenerateImage}
+              disabled={imageLoading || !imagePrompt.trim()}
+              className="w-full px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-black font-label font-medium text-sm transition-colors"
+            >
+              {imageLoading ? 'Generating…' : 'Generate Image'}
+            </button>
+
+            {/* Preview */}
+            {generatedImageUrl && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide">Preview</label>
+                <div className="rounded-xl bg-surface-container overflow-hidden">
+                  <img src={generatedImageUrl} alt="generated" className="w-full" />
+                </div>
+                {generatedPrompt && (
+                  <div className="rounded-lg bg-surface p-2.5">
+                    <p className="text-[10px] text-on-surface-variant font-medium mb-1">Revised Prompt:</p>
+                    <p className="text-xs text-on-surface leading-relaxed">{generatedPrompt}</p>
+                  </div>
+                )}
+                <button
+                  onClick={handleUseImage}
+                  className="w-full px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-label font-medium text-sm transition-colors"
+                >
+                  Use This Image
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

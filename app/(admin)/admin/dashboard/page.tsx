@@ -21,6 +21,15 @@ interface Activity {
   createdAt: any
 }
 
+interface PendingApproval {
+  id: string
+  content: string
+  platform: string
+  orgId: string
+  orgName: string
+  scheduledAt: any
+}
+
 const ACTIVITY_ICONS: Record<string, string> = {
   email_sent: '✉',
   note: '◻',
@@ -99,25 +108,20 @@ function ActivityItem({ item }: { item: Activity }) {
   )
 }
 
-// ── Approval Item (placeholder data) ─────────────────────────────────────
+// ── Approval Item ────────────────────────────────────────────────────────
 
-const MOCK_APPROVALS = [
-  { id: '1', org: 'Batavia Wrestling', platform: 'X', preview: 'Season starts Monday! Come watch the...' },
-  { id: '2', org: 'GoHawk Wrestling', platform: 'LinkedIn', preview: 'We are proud to announce our new head coach...' },
-]
-
-function ApprovalItem({ item }: { item: typeof MOCK_APPROVALS[0] }) {
+function ApprovalItem({ item }: { item: PendingApproval }) {
   return (
     <div className="flex items-start gap-3 px-4 py-3 rounded-[var(--radius-btn)] hover:bg-[var(--color-row-hover)] transition-colors">
       <div
         className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5"
         style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent-text)' }}
       >
-        {item.platform[0]}
+        {item.platform[0]?.toUpperCase() || '·'}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] text-on-surface-variant uppercase tracking-wide">{item.org}</p>
-        <p className="text-sm text-on-surface truncate mt-0.5">{item.preview}</p>
+        <p className="text-[10px] text-on-surface-variant uppercase tracking-wide">{item.orgName}</p>
+        <p className="text-sm text-on-surface truncate mt-0.5">{item.content}</p>
       </div>
       <Link
         href="/admin/social/queue"
@@ -158,15 +162,18 @@ function MiniBarChart({ data }: { data: number[] }) {
 export default function CommandCenter() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [activity, setActivity] = useState<Activity[]>([])
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
       fetch('/api/v1/dashboard/stats').then((r) => r.json()),
       fetch('/api/v1/dashboard/activity?limit=10').then((r) => r.json()),
-    ]).then(([statsBody, activityBody]) => {
+      fetch('/api/v1/social/posts/pending?limit=5').then((r) => r.json()),
+    ]).then(([statsBody, activityBody, approvalsBody]) => {
       setStats(statsBody.data)
       setActivity(activityBody.data ?? [])
+      setPendingApprovals(approvalsBody.data ?? [])
       setLoading(false)
     })
   }, [])
@@ -285,11 +292,15 @@ export default function CommandCenter() {
               View all →
             </Link>
           </div>
-          {MOCK_APPROVALS.length === 0 ? (
-            <p className="text-sm text-on-surface-variant py-4 text-center">All clear 🎉</p>
+          {loading ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10" />)}
+            </div>
+          ) : pendingApprovals.length === 0 ? (
+            <p className="text-sm text-on-surface-variant py-4 text-center">No posts pending approval 🎉</p>
           ) : (
             <div className="space-y-1 -mx-4">
-              {MOCK_APPROVALS.map((item) => (
+              {pendingApprovals.map((item) => (
                 <ApprovalItem key={item.id} item={item} />
               ))}
             </div>

@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 
 const VALID_STATUSES: AccountStatus[] = ['active', 'token_expired', 'disconnected', 'rate_limited']
 
-export const GET = withAuth('admin', withTenant(async (req, _user, orgId) => {
+export const GET = withAuth('client', withTenant(async (req, _user, orgId) => {
   const { searchParams } = new URL(req.url)
   const platform = searchParams.get('platform')
   const status = searchParams.get('status') as AccountStatus | null
@@ -50,7 +50,7 @@ export const GET = withAuth('admin', withTenant(async (req, _user, orgId) => {
   return apiSuccess(accounts, 200, { total, page, limit })
 }))
 
-export const POST = withAuth('admin', withTenant(async (req, user, orgId) => {
+export const POST = withAuth('client', withTenant(async (req, user, orgId) => {
   const body = await req.json()
 
   if (!body.platform || !ACTIVE_PLATFORMS.includes(body.platform)) {

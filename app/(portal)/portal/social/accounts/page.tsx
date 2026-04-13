@@ -31,7 +31,7 @@ const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
 const STATUS_STYLES: Record<string, string> = {
   active: 'border-green-400/40 text-green-300',
   token_expired: 'border-red-400/40 text-red-300',
-  disconnected: 'border-white/10 text-white/20',
+  disconnected: 'border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)]',
   rate_limited: 'border-yellow-400/40 text-yellow-300',
 }
 
@@ -127,41 +127,41 @@ export default function PortalAccountsPage() {
     <div className="space-y-8">
       <div>
         <h1 className="font-headline text-2xl font-bold tracking-tighter">Social Accounts</h1>
-        <p className="text-sm text-white/40 mt-1">Connect and manage your social media accounts</p>
+        <p className="text-sm text-[var(--color-on-surface-variant)] mt-1">Connect and manage your social media accounts</p>
       </div>
 
       {message && (
         <div className={`border p-4 text-sm ${messageType === 'success' ? 'border-green-400/40 text-green-300' : 'border-red-400/40 text-red-300'}`}>
           {message}
-          <button onClick={() => setMessage('')} className="ml-3 text-white/30 hover:text-white">×</button>
+          <button onClick={() => setMessage('')} className="ml-3 text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)]">×</button>
         </div>
       )}
 
       {/* Connected Accounts */}
       <div>
-        <h2 className="text-xs font-label uppercase tracking-widest text-white/30 mb-3">Connected Accounts</h2>
+        <h2 className="text-xs font-label uppercase tracking-widest text-[var(--color-on-surface-variant)] mb-3">Connected Accounts</h2>
         {loading ? (
           <div className="space-y-3">
             {[...Array(2)].map((_, i) => (
-              <div key={i} className="border border-white/10 p-5 animate-pulse h-20" />
+              <div key={i} className="pib-skeleton p-5 h-20" />
             ))}
           </div>
         ) : accounts.filter(a => a.status !== 'disconnected').length === 0 ? (
-          <div className="border border-white/10 p-8 text-center">
-            <p className="text-white/40">No accounts connected yet. Connect one below.</p>
+          <div className="pib-card text-center">
+            <p className="text-[var(--color-on-surface-variant)]">No accounts connected yet. Connect one below.</p>
           </div>
         ) : (
           <div className="space-y-3">
             {accounts.filter(a => a.status !== 'disconnected').map((acc: any) => {
               const pcfg = PLATFORM_COLORS[acc.platform] ?? { bg: 'bg-gray-600', label: '??' }
               return (
-                <div key={acc.id} className="border border-white/10 p-4 flex items-center gap-4">
+                <div key={acc.id} className="pib-card p-4 flex items-center gap-4">
                   <span className={`${pcfg.bg} text-white text-[10px] px-2 py-0.5 rounded font-bold`}>{pcfg.label}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-headline font-bold tracking-tight">{acc.displayName}</p>
-                    <p className="text-white/30 text-xs">@{acc.username || acc.displayName}</p>
+                    <p className="text-[var(--color-on-surface-variant)] text-xs">@{acc.username || acc.displayName}</p>
                   </div>
-                  <span className={`text-xs font-label uppercase tracking-widest border px-2 py-0.5 ${STATUS_STYLES[acc.status] ?? 'border-white/20 text-white/40'}`}>
+                  <span className={`text-xs font-label uppercase tracking-widest border px-2 py-0.5 ${STATUS_STYLES[acc.status] ?? 'border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)]'}`}>
                     {acc.status === 'token_expired' ? 'Expired' : acc.status}
                   </span>
                   <button
@@ -180,7 +180,7 @@ export default function PortalAccountsPage() {
 
       {/* Connect New Account */}
       <div>
-        <h2 className="text-xs font-label uppercase tracking-widest text-white/30 mb-3">Connect New Account</h2>
+        <h2 className="text-xs font-label uppercase tracking-widest text-[var(--color-on-surface-variant)] mb-3">Connect New Account</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {PLATFORMS.map(plat => {
             const isConnected = connectedPlatformIds.has(plat.id)
@@ -189,8 +189,8 @@ export default function PortalAccountsPage() {
                 <a
                   key={plat.id}
                   href={`/api/v1/social/oauth/${plat.id}?redirectUrl=/portal/social/accounts`}
-                  className={`border border-white/10 p-4 flex items-center gap-3 transition-colors ${
-                    isConnected ? 'opacity-50 pointer-events-none' : 'hover:bg-white/5'
+                  className={`pib-card p-4 flex items-center gap-3 transition-colors ${
+                    isConnected ? 'opacity-50 pointer-events-none' : 'pib-card-hover'
                   }`}
                 >
                   <span className={`${plat.bg} text-white text-xs px-2 py-1 rounded font-bold`}>
@@ -199,7 +199,7 @@ export default function PortalAccountsPage() {
                   <span className="flex-1 text-sm font-label">
                     {isConnected ? `${plat.label} (connected)` : `Connect ${plat.label}`}
                   </span>
-                  {!isConnected && <span className="text-white/30 text-xs">→</span>}
+                  {!isConnected && <span className="text-[var(--color-on-surface-variant)] text-xs">→</span>}
                 </a>
               )
             }
@@ -208,11 +208,11 @@ export default function PortalAccountsPage() {
         </div>
 
         {/* Bluesky (App Password) */}
-        <div className="border border-white/10 p-4 mt-3 space-y-3">
+        <div className="pib-card p-4 mt-3 space-y-3">
           <div className="flex items-center gap-3">
             <span className="bg-sky-500 text-white text-xs px-2 py-1 rounded font-bold">BS</span>
             <span className="text-sm font-label">Connect Bluesky</span>
-            <span className="text-xs text-white/30">(App Password)</span>
+            <span className="text-xs text-[var(--color-on-surface-variant)]">(App Password)</span>
           </div>
           <div className="flex gap-3">
             <input
@@ -220,19 +220,19 @@ export default function PortalAccountsPage() {
               value={bskyHandle}
               onChange={e => setBskyHandle(e.target.value)}
               placeholder="handle.bsky.social"
-              className="flex-1 border border-white/10 bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/40"
+              className="flex-1 border border-[var(--color-outline-variant)] bg-transparent px-3 py-2 text-sm text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)] outline-none focus:border-[var(--color-on-surface-variant)]"
             />
             <input
               type="password"
               value={bskyPassword}
               onChange={e => setBskyPassword(e.target.value)}
               placeholder="App password"
-              className="flex-1 border border-white/10 bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/40"
+              className="flex-1 border border-[var(--color-outline-variant)] bg-transparent px-3 py-2 text-sm text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)] outline-none focus:border-[var(--color-on-surface-variant)]"
             />
             <button
               onClick={handleBlueskyConnect}
               disabled={bskyConnecting || !bskyHandle || !bskyPassword}
-              className="px-4 py-2 text-sm font-label font-bold uppercase tracking-widest border border-white text-white hover:bg-white hover:text-black transition-colors disabled:opacity-50"
+              className="pib-btn-primary"
             >
               {bskyConnecting ? 'Connecting…' : 'Connect'}
             </button>

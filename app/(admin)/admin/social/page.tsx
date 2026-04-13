@@ -105,6 +105,7 @@ export default function SocialOverviewPage() {
   const [posts, setPosts] = useState<SocialPost[]>([])
   const [loading, setLoading] = useState(true)
   const [accountCount, setAccountCount] = useState<number | null>(null)
+  const [unreadInboxCount, setUnreadInboxCount] = useState<number | null>(null)
 
   const fetchPosts = useCallback(async () => {
     setLoading(true)
@@ -130,10 +131,22 @@ export default function SocialOverviewPage() {
     }
   }, [])
 
+  const fetchUnreadInbox = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/social/inbox?status=unread&limit=1')
+      const body = await res.json()
+      const items = body.items ?? []
+      setUnreadInboxCount(items.length)
+    } catch {
+      setUnreadInboxCount(null)
+    }
+  }, [])
+
   useEffect(() => {
     fetchPosts()
     fetchAccounts()
-  }, [fetchPosts, fetchAccounts])
+    fetchUnreadInbox()
+  }, [fetchPosts, fetchAccounts, fetchUnreadInbox])
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -191,10 +204,33 @@ export default function SocialOverviewPage() {
             Compose Post
           </Link>
           <Link
+            href="/admin/social/inbox"
+            className="relative px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
+          >
+            Inbox
+            {unreadInboxCount !== null && unreadInboxCount > 0 && (
+              <span className="absolute top-0 right-0 transform translate-x-1/4 -translate-y-1/4 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                {unreadInboxCount}
+              </span>
+            )}
+          </Link>
+          <Link
             href="/admin/social/queue"
             className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
           >
             View Queue
+          </Link>
+          <Link
+            href="/admin/social/calendar"
+            className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
+          >
+            Calendar
+          </Link>
+          <Link
+            href="/admin/social/design"
+            className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
+          >
+            Design
           </Link>
           <Link
             href="/admin/social/accounts"
@@ -207,6 +243,12 @@ export default function SocialOverviewPage() {
             className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
           >
             Analytics
+          </Link>
+          <Link
+            href="/admin/social/links"
+            className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
+          >
+            Links
           </Link>
         </div>
       </div>

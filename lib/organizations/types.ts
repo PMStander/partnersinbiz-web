@@ -13,6 +13,24 @@ export type OrgType = 'platform_owner' | 'client' | 'partner'
 
 export type OrgStatus = 'active' | 'onboarding' | 'suspended' | 'churned'
 
+// ── Brand Profile ─────────────────────────────────────────────────────────
+
+export interface BrandProfile {
+  logoUrl?: string          // URL to logo (stored externally or Firebase Storage)
+  logoMarkUrl?: string      // URL to icon/mark variant
+  tagline?: string          // e.g. "Build faster, grow smarter"
+  toneOfVoice?: string      // e.g. "Professional but approachable, avoid jargon"
+  targetAudience?: string   // e.g. "SMB founders in tech"
+  doWords?: string[]        // Words/phrases to use: ["innovative", "partner"]
+  dontWords?: string[]      // Words/phrases to avoid: ["cheap", "basic"]
+  fonts?: {
+    heading?: string        // e.g. "Inter"
+    body?: string           // e.g. "DM Sans"
+  }
+  socialHandles?: Record<string, string>  // { twitter: "@handle", linkedin: "company/slug" }
+  guidelines?: string       // Free-form markdown for additional brand notes
+}
+
 // ── Org Settings ──────────────────────────────────────────────────────────
 
 export interface OrgSettings {
@@ -55,6 +73,7 @@ export interface Organization {
   createdBy: string
   members: OrgMember[]
   settings?: OrgSettings
+  brandProfile?: BrandProfile
 
   /** @deprecated Use status field instead */
   active?: boolean

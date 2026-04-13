@@ -71,7 +71,7 @@ export default function ClientsPage() {
             {loading ? '—' : `${activeCount} active of ${orgs.length} total`}
           </p>
         </div>
-        <button className="pib-btn-primary text-sm font-label">+ New Client</button>
+        <Link href="/admin/clients/new" className="pib-btn-primary text-sm font-label">+ New Client</Link>
       </div>
 
       {/* Search */}

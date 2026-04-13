@@ -59,6 +59,18 @@ export const PUT = withAuth('admin', async (req, user, ctx) => {
   if (typeof body.description === 'string') updates.description = body.description.trim()
   if (typeof body.logoUrl === 'string') updates.logoUrl = body.logoUrl.trim()
   if (typeof body.website === 'string') updates.website = body.website.trim()
+  if (typeof body.industry === 'string') updates.industry = body.industry.trim()
+  if (typeof body.billingEmail === 'string') updates.billingEmail = body.billingEmail.trim()
+  if (typeof body.status === 'string') updates.status = body.status.trim()
+  if (typeof body.plan === 'string') updates.plan = body.plan.trim()
+  if (body.brandProfile && typeof body.brandProfile === 'object') {
+    updates.brandProfile = body.brandProfile
+  }
+  if (body.settings && typeof body.settings === 'object') {
+    // Merge settings to avoid overwriting unrelated fields
+    const existingSettings = data.settings ?? {}
+    updates.settings = { ...existingSettings, ...body.settings }
+  }
 
   await adminDb.collection('organizations').doc(id).update(updates)
   return apiSuccess({ id, updated: true })

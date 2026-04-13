@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useOrg } from '@/lib/contexts/OrgContext'
 
 type SocialPlatform = 'twitter' | 'x' | 'linkedin' | 'facebook' | 'instagram' | 'reddit' | 'tiktok' | 'pinterest' | 'bluesky' | 'threads'
-type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
+type SocialPostStatus = 'draft' | 'pending_approval' | 'approved' | 'scheduled' | 'published' | 'failed' | 'cancelled'
 type SocialPostCategory = 'work' | 'personal' | 'ai' | 'sport' | 'sa' | 'other'
 
 const CATEGORIES: SocialPostCategory[] = ['work', 'personal', 'ai', 'sport', 'sa', 'other']
@@ -90,11 +90,14 @@ function StatusBadge({ status }: { status: SocialPostStatus }) {
     published: 'bg-green-900/30 text-green-400',
     failed: 'bg-red-900/30 text-red-400',
     draft: 'bg-surface-container-high text-on-surface-variant',
+    pending_approval: 'bg-amber-900/30 text-amber-400',
+    approved: 'bg-teal-900/30 text-teal-400',
     cancelled: 'bg-surface-container text-on-surface-variant/50 line-through',
   }
+  const displayLabel = status === 'pending_approval' ? 'Needs Approval' : status === 'approved' ? 'Approved' : status
   return (
     <span className={`text-[10px] px-2 py-0.5 rounded font-medium capitalize ${styles[status]}`}>
-      {status}
+      {displayLabel}
     </span>
   )
 }
@@ -291,10 +294,11 @@ export default function QueuePage() {
   const [posts, setPosts] = useState<SocialPost[]>([])
   const [loading, setLoading] = useState(true)
   const [platformFilter, setPlatformFilter] = useState<string>('all')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'scheduled' | 'failed'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'pending_approval' | 'scheduled' | 'failed'>('all')
   const [editPost, setEditPost] = useState<SocialPost | null>(null)
   const [publishing, setPublishing] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState<string | null>(null)
+  const [approving, setApproving] = useState<string | null>(null)
 
   const fetchPosts = useCallback(async () => {
     setLoading(true)
@@ -314,9 +318,9 @@ export default function QueuePage() {
   }, [fetchPosts])
 
   const filtered = posts.filter((p) => {
-    // Default: show draft + scheduled + failed
+    // Default: show draft + scheduled + pending_approval + failed
     if (statusFilter === 'all') {
-      if (!['draft', 'scheduled', 'failed'].includes(p.status)) return false
+      if (!['draft', 'scheduled', 'pending_approval', 'failed'].includes(p.status)) return false
     } else {
       if (p.status !== statusFilter) return false
     }
@@ -357,6 +361,42 @@ export default function QueuePage() {
     }
   }
 
+  const handleApprove = async (post: SocialPost) => {
+    setApproving(post.id)
+    // Optimistic update
+    setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, status: 'approved' } : p))
+    try {
+      await fetch(`/api/v1/social/posts/${post.id}/approve${orgId ? `?orgId=${orgId}` : ''}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      })
+    } catch {
+      // revert on error
+    } finally {
+      setApproving(null)
+      fetchPosts()
+    }
+  }
+
+  const handleRejectApproval = async (post: SocialPost) => {
+    setApproving(post.id)
+    // Optimistic update
+    setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, status: 'draft' } : p))
+    try {
+      await fetch(`/api/v1/social/posts/${post.id}/approve${orgId ? `?orgId=${orgId}` : ''}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reject' }),
+      })
+    } catch {
+      // revert on error
+    } finally {
+      setApproving(null)
+      fetchPosts()
+    }
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {editPost && (
@@ -390,7 +430,7 @@ export default function QueuePage() {
           ))}
         </div>
         <div className="flex gap-1">
-          {(['all', 'draft', 'scheduled', 'failed'] as const).map((s) => (
+          {(['all', 'draft', 'pending_approval', 'scheduled', 'failed'] as const).map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -400,7 +440,7 @@ export default function QueuePage() {
                   : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
               }`}
             >
-              {s === 'all' ? 'All' : s}
+              {s === 'all' ? 'All' : s === 'pending_approval' ? 'Needs Approval' : s}
             </button>
           ))}
         </div>
@@ -452,27 +492,48 @@ export default function QueuePage() {
                   ))}
                 </div>
                 <div className="flex gap-1.5 flex-wrap">
-                  <button
-                    onClick={() => handlePublish(post)}
-                    disabled={publishing === post.id}
-                    className="px-2.5 py-1 rounded-lg bg-white text-black font-label text-[10px] font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
-                  >
-                    Publish
-                  </button>
-                  <button
-                    onClick={() => setEditPost(post)}
-                    className="px-2.5 py-1 rounded-lg bg-surface-container-high text-on-surface font-label text-[10px] font-medium hover:bg-surface-container transition-colors"
-                  >
-                    Edit
-                  </button>
-                  {['draft', 'scheduled'].includes(post.status) && (
-                    <button
-                      onClick={() => handleCancel(post)}
-                      disabled={cancelling === post.id}
-                      className="px-2.5 py-1 rounded-lg bg-red-900/30 text-red-400 font-label text-[10px] font-medium hover:bg-red-900/50 transition-colors disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
+                  {post.status === 'pending_approval' ? (
+                    <>
+                      <button
+                        onClick={() => handleApprove(post)}
+                        disabled={approving === post.id}
+                        className="px-2.5 py-1 rounded-lg bg-green-600 text-white font-label text-[10px] font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                      >
+                        {approving === post.id ? 'Approving…' : 'Approve'}
+                      </button>
+                      <button
+                        onClick={() => handleRejectApproval(post)}
+                        disabled={approving === post.id}
+                        className="px-2.5 py-1 rounded-lg bg-red-900/30 text-red-400 font-label text-[10px] font-medium hover:bg-red-900/50 transition-colors disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handlePublish(post)}
+                        disabled={publishing === post.id}
+                        className="px-2.5 py-1 rounded-lg bg-white text-black font-label text-[10px] font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
+                      >
+                        Publish
+                      </button>
+                      <button
+                        onClick={() => setEditPost(post)}
+                        className="px-2.5 py-1 rounded-lg bg-surface-container-high text-on-surface font-label text-[10px] font-medium hover:bg-surface-container transition-colors"
+                      >
+                        Edit
+                      </button>
+                      {['draft', 'scheduled'].includes(post.status) && (
+                        <button
+                          onClick={() => handleCancel(post)}
+                          disabled={cancelling === post.id}
+                          className="px-2.5 py-1 rounded-lg bg-red-900/30 text-red-400 font-label text-[10px] font-medium hover:bg-red-900/50 transition-colors disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

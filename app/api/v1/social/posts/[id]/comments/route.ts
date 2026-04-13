@@ -1,0 +1,132 @@
+/**
+ * GET  /api/v1/social/posts/:id/comments — list comments for a post
+ * POST /api/v1/social/posts/:id/comments — create a comment on a post
+ */
+import { NextRequest } from 'next/server'
+import { FieldValue } from 'firebase-admin/firestore'
+import { adminDb } from '@/lib/firebase/admin'
+import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
+import { apiSuccess, apiError } from '@/lib/api/response'
+import { notifyNewComment } from '@/lib/notifications/notify'
+
+export const dynamic = 'force-dynamic'
+
+type RouteContext = { params: Promise<{ id: string }> }
+
+/**
+ * GET — list comments for a post, ordered by createdAt ascending
+ */
+export const GET = withAuth('client', withTenant(async (req, user, orgId, context) => {
+  const { id } = await (context as RouteContext).params
+
+  try {
+    const postRef = adminDb.collection('social_posts').doc(id)
+    const postDoc = await postRef.get()
+
+    // Verify post exists and belongs to org
+    if (!postDoc.exists) {
+      return apiError('Post not found', 404)
+    }
+
+    const postData = postDoc.data()!
+    if (postData.orgId && postData.orgId !== orgId) {
+      return apiError('Post not found', 404)
+    }
+
+    // Fetch comments, ordered by createdAt ascending
+    const commentsSnap = await postRef
+      .collection('comments')
+      .orderBy('createdAt', 'asc')
+      .get()
+
+    const comments = commentsSnap.docs.map(doc => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        text: data.text,
+        userId: data.userId,
+        userName: data.userName,
+        userRole: data.userRole,
+        createdAt: data.createdAt,
+        agentPickedUp: data.agentPickedUp ?? false,
+        agentPickedUpAt: data.agentPickedUpAt ?? null,
+      }
+    })
+
+    return apiSuccess(comments)
+  } catch (err) {
+    console.error('Error fetching comments:', err)
+    return apiError('Failed to fetch comments', 500)
+  }
+}))
+
+/**
+ * POST — create a comment on a post
+ * Body: { text: string }
+ */
+export const POST = withAuth('client', withTenant(async (req, user, orgId, context) => {
+  const { id } = await (context as RouteContext).params
+
+  try {
+    const body = await req.json().catch(() => ({}))
+    const { text } = body
+
+    // Validate text is non-empty
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      return apiError('Comment text is required and cannot be empty', 400)
+    }
+
+    // Verify post exists and belongs to org
+    const postRef = adminDb.collection('social_posts').doc(id)
+    const postDoc = await postRef.get()
+
+    if (!postDoc.exists) {
+      return apiError('Post not found', 404)
+    }
+
+    const postData = postDoc.data()!
+    if (postData.orgId && postData.orgId !== orgId) {
+      return apiError('Post not found', 404)
+    }
+
+    // Fetch user displayName
+    const userDoc = await adminDb.collection('users').doc(user.uid).get()
+    const displayName = userDoc.exists ? (userDoc.data()?.displayName || user.uid) : user.uid
+
+    // Determine userRole
+    const userRole = user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client'
+
+    // Create comment
+    const commentRef = postRef.collection('comments').doc()
+    const commentData = {
+      text: text.trim(),
+      userId: user.uid,
+      userName: displayName,
+      userRole,
+      createdAt: FieldValue.serverTimestamp(),
+      agentPickedUp: false,
+    }
+
+    await commentRef.set(commentData)
+
+    // Send notification for new comment
+    notifyNewComment({
+      commentText: text.trim(),
+      commenterName: displayName,
+      commenterRole: userRole,
+      context: `on social post for ${postData.orgId}`,
+      orgId,
+      viewUrl: `/portal/social`,
+    }).catch(() => {})
+
+    return apiSuccess({
+      id: commentRef.id,
+      ...commentData,
+      createdAt: new Date(), // Client will use serverTimestamp, but we return current time for immediate display
+    })
+  } catch (err) {
+    console.error('Error creating comment:', err)
+    return apiError('Failed to create comment', 500)
+  }
+}))

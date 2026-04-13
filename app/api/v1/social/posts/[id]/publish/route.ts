@@ -15,10 +15,16 @@ export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
+/** Resolve a platform string to SocialPlatformType. Handles legacy alias 'x' → 'twitter'. */
 function toPlatformType(platform: string): SocialPlatformType | null {
-  if (platform === 'x' || platform === 'twitter') return 'twitter'
-  if (platform === 'linkedin') return 'linkedin'
-  return null
+  if (platform === 'x') return 'twitter'
+  const SUPPORTED: SocialPlatformType[] = [
+    'twitter', 'linkedin', 'facebook', 'instagram', 'reddit',
+    'tiktok', 'pinterest', 'bluesky', 'threads', 'youtube', 'mastodon', 'dribbble',
+  ]
+  return SUPPORTED.includes(platform as SocialPlatformType)
+    ? (platform as SocialPlatformType)
+    : null
 }
 
 export const POST = withAuth('admin', withTenant(async (_req, user, orgId, context) => {

@@ -13,6 +13,7 @@ import type { SocialPlatformType, PostStatus } from '@/lib/social/providers'
 import { ACTIVE_PLATFORMS } from '@/lib/social/providers'
 import { validatePostContent } from '@/lib/social/validation'
 import { logAudit } from '@/lib/social/audit'
+import { notifyApprovalNeeded } from '@/lib/notifications/notify'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +32,7 @@ function toProviderPlatform(platform: string): SocialPlatformType | null {
   return null
 }
 
-export const GET = withAuth('admin', withTenant(async (req, _user, orgId) => {
+export const GET = withAuth('client', withTenant(async (req, _user, orgId) => {
   const { searchParams } = new URL(req.url)
   const platform = searchParams.get('platform') as SocialPlatform | null
   const status = searchParams.get('status') as SocialPostStatus | null
@@ -92,7 +93,7 @@ export const GET = withAuth('admin', withTenant(async (req, _user, orgId) => {
   return apiSuccess(posts, 200, { total: posts.length, page: 1, limit: posts.length })
 }))
 
-export const POST = withAuth('admin', withTenant(async (req, user, orgId) => {
+export const POST = withAuth('client', withTenant(async (req, user, orgId) => {
   const body = await req.json()
 
   // --- Resolve content ---
@@ -226,6 +227,17 @@ export const POST = withAuth('admin', withTenant(async (req, user, orgId) => {
     details: { platforms, status, contentLength: contentText.length },
     ip: req.headers.get('x-forwarded-for'),
   })
+
+  // Send approval notification if post requires approval
+  // Check org settings for default approval requirement
+  try {
+    const orgDoc = await adminDb.collection('organizations').doc(orgId).get()
+    if (orgDoc.exists && orgDoc.data()?.settings?.defaultApprovalRequired && status === 'draft') {
+      notifyApprovalNeeded(docRef.id, contentText, orgId).catch(() => {})
+    }
+  } catch (err) {
+    console.error('[Social] Failed to check approval requirement:', err)
+  }
 
   return apiSuccess({ id: docRef.id }, 201)
 }))

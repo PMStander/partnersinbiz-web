@@ -1,0 +1,112 @@
+/**
+ * GET /api/v1/agent/project/[projectId] — returns full project context for an AI agent
+ *
+ * Returns:
+ * {
+ *   project: { name, status, description, brief, orgId },
+ *   documents: [ { title, content, type } ],
+ *   tasks: [ { title, description, priority, columnId, attachments } ],
+ *   recentComments: [ ... ] // latest 10 comments across all tasks
+ * }
+ */
+import { NextRequest } from 'next/server'
+import { adminDb } from '@/lib/firebase/admin'
+import { withAuth } from '@/lib/api/auth'
+import { apiSuccess, apiError } from '@/lib/api/response'
+
+export const dynamic = 'force-dynamic'
+
+type RouteContext = { params: Promise<{ projectId: string }> }
+
+export const GET = withAuth('admin', async (req: NextRequest, user, ctx) => {
+  const { projectId } = await (ctx as RouteContext).params
+
+  // Get project
+  const projectDoc = await adminDb.collection('projects').doc(projectId).get()
+  if (!projectDoc.exists) return apiError('Project not found', 404)
+
+  const projectData = projectDoc.data()
+  const project = {
+    name: projectData?.name ?? '',
+    status: projectData?.status ?? '',
+    description: projectData?.description ?? '',
+    brief: projectData?.brief ?? '',
+    orgId: projectData?.orgId ?? '',
+  }
+
+  // Get documents
+  const docsSnapshot = await adminDb
+    .collection('projects')
+    .doc(projectId)
+    .collection('docs')
+    .orderBy('createdAt', 'desc')
+    .get()
+
+  const documents = docsSnapshot.docs.map(doc => {
+    const data = doc.data()
+    return {
+      title: data.title ?? '',
+      content: data.content ?? '',
+      type: data.type ?? 'notes',
+    }
+  })
+
+  // Get tasks
+  const tasksSnapshot = await adminDb
+    .collection('projects')
+    .doc(projectId)
+    .collection('tasks')
+    .orderBy('order', 'asc')
+    .get()
+
+  const tasks = tasksSnapshot.docs.map(doc => {
+    const data = doc.data()
+    return {
+      title: data.title ?? '',
+      description: data.description ?? '',
+      priority: data.priority ?? 'medium',
+      columnId: data.columnId ?? '',
+      attachments: data.attachments ?? [],
+    }
+  })
+
+  // Get recent comments (latest 10 across all tasks)
+  const recentComments: any[] = []
+  for (const taskDoc of tasksSnapshot.docs) {
+    const commentsSnapshot = await adminDb
+      .collection('projects')
+      .doc(projectId)
+      .collection('tasks')
+      .doc(taskDoc.id)
+      .collection('comments')
+      .orderBy('createdAt', 'desc')
+      .limit(5)
+      .get()
+
+    commentsSnapshot.docs.forEach(commentDoc => {
+      const data = commentDoc.data()
+      recentComments.push({
+        taskId: taskDoc.id,
+        text: data.text ?? '',
+        userId: data.userId ?? '',
+        userName: data.userName ?? '',
+        createdAt: data.createdAt,
+      })
+    })
+  }
+
+  // Sort and take top 10
+  recentComments.sort((a, b) => {
+    const aTime = a.createdAt?.toMillis?.() ?? 0
+    const bTime = b.createdAt?.toMillis?.() ?? 0
+    return bTime - aTime
+  })
+  const topComments = recentComments.slice(0, 10)
+
+  return apiSuccess({
+    project,
+    documents,
+    tasks,
+    recentComments: topComments,
+  })
+})

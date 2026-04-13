@@ -18,6 +18,9 @@ export { TikTokProvider } from './tiktok'
 export { PinterestProvider } from './pinterest'
 export { BlueskyProvider } from './bluesky'
 export { ThreadsProvider } from './threads'
+export { YouTubeProvider } from './youtube'
+export { MastodonProvider } from './mastodon'
+export { DribbbleProvider } from './dribbble'
 
 // Registry
 export {

@@ -1,10 +1,28 @@
 // app/(admin)/admin/settings/page.tsx
 // Server component — no 'use client'
 
+import Link from 'next/link'
+
 export default function SettingsPage() {
   return (
-    <div className="max-w-2xl">
-      <h1 className="font-headline text-2xl font-bold tracking-tighter mb-8">Settings</h1>
+    <div className="space-y-6 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-headline font-bold text-on-surface">Settings</h1>
+
+      {/* Platform */}
+      <div className="pib-card space-y-2">
+        <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-3">Platform</p>
+        {[
+          { label: 'API Keys', desc: 'Manage API keys for AI agents and integrations', href: '/admin/settings/api-keys' },
+        ].map(item => (
+          <Link key={item.href} href={item.href} className="flex items-center justify-between p-3 rounded-[var(--radius-btn)] hover:bg-[var(--color-row-hover)] transition-colors">
+            <div>
+              <p className="text-sm font-medium text-on-surface">{item.label}</p>
+              <p className="text-xs text-on-surface-variant mt-0.5">{item.desc}</p>
+            </div>
+            <span style={{ color: 'var(--color-accent-v2)' }}>→</span>
+          </Link>
+        ))}
+      </div>
 
       {/* Account */}
       <section className="border border-outline-variant mb-6">

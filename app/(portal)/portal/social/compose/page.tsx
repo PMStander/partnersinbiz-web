@@ -141,7 +141,7 @@ export default function PortalComposePage() {
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="font-headline text-2xl font-bold tracking-tighter">Compose Post</h1>
-        <p className="text-sm text-white/40 mt-1">Create and schedule social media content</p>
+        <p className="text-sm text-[var(--color-on-surface-variant)] mt-1">Create and schedule social media content</p>
       </div>
 
       {successMsg && (
@@ -153,9 +153,9 @@ export default function PortalComposePage() {
 
       {/* Platform Selection */}
       <div>
-        <label className="block text-xs font-label uppercase tracking-widest text-white/30 mb-2">Platforms</label>
+        <label className="block text-xs font-label uppercase tracking-widest text-[var(--color-on-surface-variant)] mb-2">Platforms</label>
         {availablePlatforms.length === 0 ? (
-          <p className="text-white/40 text-sm">No accounts connected. <a href="/portal/social/accounts" className="text-white underline">Connect an account</a> first.</p>
+          <p className="text-[var(--color-on-surface-variant)] text-sm">No accounts connected. <a href="/portal/social/accounts" className="text-[var(--color-accent-v2)] underline">Connect an account</a> first.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {availablePlatforms.map(p => {
@@ -168,8 +168,8 @@ export default function PortalComposePage() {
                   onClick={() => togglePlatform(p)}
                   className={`px-4 py-2 text-sm font-label font-bold uppercase tracking-widest border transition-colors ${
                     selected
-                      ? 'border-white text-white bg-white/10'
-                      : 'border-white/20 text-white/40 hover:text-white hover:border-white/40'
+                      ? 'pib-btn-primary'
+                      : 'pib-btn-secondary'
                   }`}
                 >
                   {cfg.label}
@@ -184,23 +184,23 @@ export default function PortalComposePage() {
       {/* Account Selection */}
       {selectedPlatforms.length > 0 && (
         <div>
-          <label className="block text-xs font-label uppercase tracking-widest text-white/30 mb-2">Accounts</label>
+          <label className="block text-xs font-label uppercase tracking-widest text-[var(--color-on-surface-variant)] mb-2">Accounts</label>
           <div className="space-y-2">
             {accounts
               .filter(a => selectedPlatforms.includes(a.platform))
               .map(acc => (
-                <label key={acc.id} className="flex items-center gap-3 border border-white/10 p-3 cursor-pointer hover:bg-white/5 transition-colors">
+                <label key={acc.id} className="pib-card pib-card-hover p-3 cursor-pointer flex items-center gap-3 transition-colors">
                   <input
                     type="checkbox"
                     checked={selectedAccounts.includes(acc.id)}
                     onChange={() => toggleAccount(acc.id)}
-                    className="accent-white"
+                    className="accent-[var(--color-accent-v2)]"
                   />
                   <span className={`${PLATFORM_CONFIG[acc.platform]?.bg ?? 'bg-gray-600'} text-white text-[10px] px-2 py-0.5 rounded font-bold`}>
                     {PLATFORM_CONFIG[acc.platform]?.short ?? acc.platform.slice(0, 2).toUpperCase()}
                   </span>
-                  <span className="text-sm">{acc.displayName}</span>
-                  <span className="text-xs text-white/30">@{acc.username || acc.displayName}</span>
+                  <span className="text-sm text-[var(--color-on-surface)]">{acc.displayName}</span>
+                  <span className="text-xs text-[var(--color-on-surface-variant)]">@{acc.username || acc.displayName}</span>
                 </label>
               ))}
           </div>
@@ -210,17 +210,17 @@ export default function PortalComposePage() {
 
       {/* Content */}
       <div>
-        <label className="block text-xs font-label uppercase tracking-widest text-white/30 mb-2">Content</label>
-        <div className="border border-white/10 p-3">
+        <label className="block text-xs font-label uppercase tracking-widest text-[var(--color-on-surface-variant)] mb-2">Content</label>
+        <div className="pib-card p-3">
           <textarea
             rows={6}
             value={content}
             onChange={e => setContent(e.target.value)}
             placeholder="Write your post…"
-            className="w-full bg-transparent text-sm text-white placeholder:text-white/20 resize-none outline-none"
+            className="w-full bg-transparent text-sm text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)] resize-none outline-none"
           />
           <div className="flex justify-end mt-1">
-            <span className={`text-xs ${content.length > charLimit ? 'text-red-400' : 'text-white/30'}`}>
+            <span className={`text-xs ${content.length > charLimit ? 'text-red-400' : 'text-[var(--color-on-surface-variant)]'}`}>
               {content.length} / {charLimit}
             </span>
           </div>
@@ -230,34 +230,34 @@ export default function PortalComposePage() {
 
       {/* Schedule */}
       <div>
-        <label className="block text-xs font-label uppercase tracking-widest text-white/30 mb-2">Schedule For</label>
+        <label className="block text-xs font-label uppercase tracking-widest text-[var(--color-on-surface-variant)] mb-2">Schedule For</label>
         <input
           type="datetime-local"
           value={scheduledFor}
           min={minDateTime}
           onChange={e => setScheduledFor(e.target.value)}
-          className="border border-white/10 bg-transparent px-4 py-2.5 text-sm text-white outline-none focus:border-white/40 transition-colors"
+          className="border border-[var(--color-outline-variant)] bg-transparent px-4 py-2.5 text-sm text-[var(--color-on-surface)] outline-none focus:border-[var(--color-on-surface-variant)] transition-colors"
         />
-        <p className="text-xs text-white/20 mt-1">Leave empty to save as draft.</p>
+        <p className="text-xs text-[var(--color-on-surface-variant)] mt-1">Leave empty to save as draft.</p>
       </div>
 
       {/* Hashtags */}
       <div>
-        <label className="block text-xs font-label uppercase tracking-widest text-white/30 mb-2">Hashtags</label>
+        <label className="block text-xs font-label uppercase tracking-widest text-[var(--color-on-surface-variant)] mb-2">Hashtags</label>
         <input
           type="text"
           value={hashtagInput}
           onChange={e => setHashtagInput(e.target.value)}
           onKeyDown={handleHashtagKey}
           placeholder="Type a hashtag and press Enter…"
-          className="w-full border border-white/10 bg-transparent px-4 py-2.5 text-sm text-white placeholder:text-white/20 outline-none focus:border-white/40 transition-colors"
+          className="w-full border border-[var(--color-outline-variant)] bg-transparent px-4 py-2.5 text-sm text-[var(--color-on-surface)] placeholder:text-[var(--color-on-surface-variant)] outline-none focus:border-[var(--color-on-surface-variant)] transition-colors"
         />
         {hashtags.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {hashtags.map(tag => (
-              <span key={tag} className="flex items-center gap-1 px-2 py-0.5 border border-white/20 text-white/60 text-xs">
+              <span key={tag} className="flex items-center gap-1 px-2 py-0.5 border border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] text-xs">
                 #{tag}
-                <button onClick={() => setHashtags(prev => prev.filter(t => t !== tag))} className="text-white/30 hover:text-white ml-1">×</button>
+                <button onClick={() => setHashtags(prev => prev.filter(t => t !== tag))} className="text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] ml-1">×</button>
               </span>
             ))}
           </div>
@@ -269,21 +269,21 @@ export default function PortalComposePage() {
         <button
           onClick={() => handleSubmit('draft')}
           disabled={submitting}
-          className="px-4 py-2 text-sm font-label uppercase tracking-widest border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-50"
+          className="pib-btn-secondary disabled:opacity-50"
         >
           Save Draft
         </button>
         <button
           onClick={() => handleSubmit('schedule')}
           disabled={submitting || !scheduledFor}
-          className="px-4 py-2 text-sm font-label font-bold uppercase tracking-widest border border-white text-white hover:bg-white hover:text-black transition-colors disabled:opacity-50"
+          className="pib-btn-primary disabled:opacity-50"
         >
           Schedule
         </button>
         <button
           onClick={() => handleSubmit('publish')}
           disabled={submitting}
-          className="px-4 py-2 text-sm font-label uppercase tracking-widest border border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-colors disabled:opacity-50"
+          className="pib-btn-secondary disabled:opacity-50"
         >
           Publish Now
         </button>

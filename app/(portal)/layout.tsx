@@ -38,18 +38,18 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   if (checking) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-5 h-5 border border-white/20 border-t-white rounded-full animate-spin" />
+      <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center">
+        <div className="w-5 h-5 border border-[var(--color-outline-variant)] border-t-[var(--color-accent-v2)] rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
+    <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-on-surface)] flex flex-col">
       {/* Portal top nav */}
-      <header className="border-b border-white/10 px-8 h-16 flex items-center justify-between shrink-0">
+      <header className="border-b border-[var(--color-outline-variant)] px-8 h-16 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-8">
-          <Link href="/portal/dashboard" className="font-headline font-bold tracking-tighter text-lg">
+          <Link href="/portal/dashboard" className="font-headline font-bold tracking-tighter text-lg text-[var(--color-accent-v2)]">
             PiB Portal
           </Link>
           <nav className="hidden md:flex items-center gap-1">
@@ -59,8 +59,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 href={link.href}
                 className={`px-3 py-1.5 text-sm font-label transition-colors rounded ${
                   pathname === link.href || pathname.startsWith(link.href + '/')
-                    ? 'text-white bg-white/10'
-                    : 'text-white/50 hover:text-white'
+                    ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-v2)]'
+                    : 'text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)]'
                 }`}
               >
                 {link.label}
@@ -69,10 +69,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-xs text-white/30 hidden sm:block">{email}</span>
+          <span className="text-xs text-[var(--color-on-surface-variant)] hidden sm:block">{email}</span>
           <button
             onClick={handleLogout}
-            className="text-xs text-white/40 hover:text-white transition-colors font-label uppercase tracking-widest"
+            className="text-xs text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] transition-colors font-label uppercase tracking-widest"
           >
             Sign out
           </button>

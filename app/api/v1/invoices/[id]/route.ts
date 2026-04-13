@@ -1,0 +1,85 @@
+import { NextRequest } from 'next/server'
+import { FieldValue } from 'firebase-admin/firestore'
+import { adminDb } from '@/lib/firebase/admin'
+import { withAuth } from '@/lib/api/auth'
+import { apiSuccess, apiError } from '@/lib/api/response'
+import { notifyInvoiceSent } from '@/lib/notifications/notify'
+import { logActivity } from '@/lib/activity/log'
+
+export const dynamic = 'force-dynamic'
+
+type RouteContext = { params: Promise<{ id: string }> }
+
+export const GET = withAuth('admin', async (req, user, ctx) => {
+  const { id } = await (ctx as RouteContext).params
+  const doc = await adminDb.collection('invoices').doc(id).get()
+  if (!doc.exists) return apiError('Invoice not found', 404)
+  return apiSuccess({ id: doc.id, ...doc.data() })
+})
+
+export const PATCH = withAuth('admin', async (req, user, ctx) => {
+  const { id } = await (ctx as RouteContext).params
+  const body = await req.json().catch(() => ({}))
+  const ref = adminDb.collection('invoices').doc(id)
+  const doc = await ref.get()
+  if (!doc.exists) return apiError('Invoice not found', 404)
+
+  // Recalculate totals if line items changed
+  let updates: Record<string, any> = { ...body, updatedAt: FieldValue.serverTimestamp() }
+  if (body.lineItems) {
+    const lineItems = body.lineItems.map((item: any) => ({
+      ...item,
+      amount: Number(item.quantity) * Number(item.unitPrice),
+    }))
+    const subtotal = lineItems.reduce((sum: number, item: any) => sum + item.amount, 0)
+    const taxRate = Number(body.taxRate ?? doc.data()?.taxRate ?? 0)
+    const taxAmount = subtotal * (taxRate / 100)
+    updates = { ...updates, lineItems, subtotal, taxRate, taxAmount, total: subtotal + taxAmount }
+  }
+
+  // Handle status transitions
+  if (body.status === 'paid' && doc.data()?.status !== 'paid') {
+    updates.paidAt = FieldValue.serverTimestamp()
+  }
+  if (body.status === 'sent' && doc.data()?.status === 'draft') {
+    updates.sentAt = FieldValue.serverTimestamp()
+  }
+
+  await ref.update(updates)
+
+  // Send invoice notification if transitioning to sent
+  if (body.status === 'sent' && doc.data()?.status === 'draft') {
+    notifyInvoiceSent(id).catch(() => {})
+  }
+
+  // Log activity event for invoice sent (fire and forget)
+  if (body.status === 'sent' && doc.data()?.status === 'draft') {
+    const orgId = doc.data()?.orgId
+    if (orgId) {
+      const actorName = user.uid === 'ai-agent'
+        ? 'AI Agent'
+        : (await adminDb.collection('users').doc(user.uid).get()).data()?.displayName ?? user.uid
+
+      const invoiceNumber = doc.data()?.invoiceNumber ?? id
+      logActivity({
+        orgId,
+        type: 'invoice_sent',
+        actorId: user.uid,
+        actorName,
+        actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+        description: `Sent invoice #${invoiceNumber}`,
+        entityId: id,
+        entityType: 'invoice',
+        entityTitle: `Invoice #${invoiceNumber}`,
+      }).catch(() => {})
+    }
+  }
+
+  return apiSuccess({ id })
+})
+
+export const DELETE = withAuth('admin', async (req, user, ctx) => {
+  const { id } = await (ctx as RouteContext).params
+  await adminDb.collection('invoices').doc(id).delete()
+  return apiSuccess({ deleted: true })
+})

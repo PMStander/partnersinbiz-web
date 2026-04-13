@@ -20,8 +20,8 @@ const STATUS_STYLES: Record<string, string> = {
   published: 'border-green-400/40 text-green-300',
   failed: 'border-red-400/40 text-red-300',
   scheduled: 'border-blue-400/40 text-blue-300',
-  draft: 'border-white/20 text-white/40',
-  cancelled: 'border-white/10 text-white/20 line-through',
+  draft: 'border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)]',
+  cancelled: 'border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] line-through',
 }
 
 function PlatformBadge({ platform }: { platform: string }) {
@@ -81,7 +81,7 @@ export default function PortalPostHistory() {
     <div className="space-y-6">
       <div>
         <h1 className="font-headline text-2xl font-bold tracking-tighter">Post History</h1>
-        <p className="text-sm text-white/40 mt-1">View all your published and scheduled posts</p>
+        <p className="text-sm text-[var(--color-on-surface-variant)] mt-1">View all your published and scheduled posts</p>
       </div>
 
       {/* Status Filter */}
@@ -92,8 +92,8 @@ export default function PortalPostHistory() {
             onClick={() => setStatusFilter(s)}
             className={`px-3 py-1.5 text-xs font-label uppercase tracking-widest border transition-colors capitalize ${
               statusFilter === s
-                ? 'border-white text-white bg-white/10'
-                : 'border-white/20 text-white/40 hover:text-white hover:border-white/40'
+                ? 'pib-btn-primary'
+                : 'pib-btn-secondary'
             }`}
           >
             {s === 'all' ? 'All' : s}
@@ -105,12 +105,12 @@ export default function PortalPostHistory() {
       {loading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="border border-white/10 p-5 animate-pulse h-20" />
+            <div key={i} className="pib-skeleton p-5 h-20" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="border border-white/10 p-12 text-center">
-          <p className="text-white/40">No posts found.</p>
+        <div className="pib-card text-center">
+          <p className="text-[var(--color-on-surface-variant)]">No posts found.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -122,19 +122,19 @@ export default function PortalPostHistory() {
             const platformResults = post.platformResults ?? {}
 
             return (
-              <div key={post.id} className="border border-white/10 p-4 space-y-2">
+              <div key={post.id} className="pib-card p-4 space-y-2">
                 <div className="flex items-center gap-3">
                   <div className="flex gap-1">
                     {platforms.map(p => <PlatformBadge key={p} platform={p} />)}
                   </div>
-                  <p className="flex-1 text-sm text-white/80 truncate min-w-0">
+                  <p className="flex-1 text-sm text-[var(--color-on-surface)] truncate min-w-0">
                     {text.slice(0, 100)}{text.length > 100 ? '…' : ''}
                   </p>
-                  <span className={`text-xs font-label uppercase tracking-widest border px-2 py-0.5 ${STATUS_STYLES[post.status] ?? 'border-white/20 text-white/40'}`}>
+                  <span className={`text-xs font-label uppercase tracking-widest border px-2 py-0.5 ${STATUS_STYLES[post.status] ?? 'border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)]'}`}>
                     {post.status}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-white/30">
+                <div className="flex items-center gap-4 text-xs text-[var(--color-on-surface-variant)]">
                   {post.status === 'published' && publishedAt && (
                     <span>Published: {fmtDateTime(publishedAt)}</span>
                   )}
@@ -152,7 +152,7 @@ export default function PortalPostHistory() {
                         href={result.platformPostUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-white/50 hover:text-white underline"
+                        className="text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] underline"
                       >
                         View on {result.platform}
                       </a>
@@ -168,7 +168,7 @@ export default function PortalPostHistory() {
                       }
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-white/50 hover:text-white underline"
+                      className="text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] underline"
                     >
                       View post
                     </a>

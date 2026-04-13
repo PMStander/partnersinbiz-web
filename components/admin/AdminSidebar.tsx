@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { OrgSwitcher } from './OrgSwitcher'
+import GlobalSearch from './GlobalSearch'
 import { useOrg } from '@/lib/contexts/OrgContext'
 
 // ── Nav definitions ────────────────────────────────────────────────────────
@@ -27,9 +28,12 @@ function workspaceNav(slug: string): NavItem[] {
   return [
     { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: '◈' },
     { label: 'Projects',  href: `/admin/org/${slug}/projects`, icon: '⊞' },
-    { label: 'Social',    href: '/admin/social', icon: '◉' },
+    { label: 'Social',    href: `/admin/org/${slug}/social`, icon: '◉' },
+    { label: 'Brand',     href: `/admin/org/${slug}/brand`, icon: '◆' },
     { label: 'Team',      href: `/admin/org/${slug}/team`, icon: '◎' },
     { label: 'Billing',   href: `/admin/org/${slug}/billing`, icon: '◷' },
+    { label: 'Activity',  href: `/admin/org/${slug}/activity`, icon: '◷' },
+    { label: 'Settings',  href: `/admin/org/${slug}/settings`, icon: '◎' },
   ]
 }
 
@@ -94,6 +98,11 @@ export function AdminSidebar() {
         </span>
       </div>
 
+      {/* Global Search */}
+      <div className="border-b border-outline-variant px-5 py-3">
+        <GlobalSearch />
+      </div>
+
       {/* Org Switcher */}
       <div className="border-b border-outline-variant py-2">
         <p className="px-5 pt-1 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/50">
@@ -127,8 +136,11 @@ export function AdminSidebar() {
           </p>
           {[
             { label: 'Compose', href: '/admin/social/compose' },
+            { label: 'Inbox', href: '/admin/social/inbox' },
             { label: 'Queue', href: '/admin/social/queue' },
             { label: 'Calendar', href: '/admin/social/calendar' },
+            { label: 'Design', href: '/admin/social/design' },
+            { label: 'Links', href: '/admin/social/links' },
           ].map((item) => (
             <Link
               key={item.href}

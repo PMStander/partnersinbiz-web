@@ -27,7 +27,7 @@ export type SocialPlatformType =
 /** Platforms currently active with provider implementations */
 export const ACTIVE_PLATFORMS: SocialPlatformType[] = [
   'twitter', 'linkedin', 'facebook', 'instagram', 'reddit',
-  'tiktok', 'pinterest', 'bluesky', 'threads',
+  'tiktok', 'pinterest', 'bluesky', 'threads', 'youtube', 'mastodon', 'dribbble',
 ]
 
 // ---------------------------------------------------------------------------
