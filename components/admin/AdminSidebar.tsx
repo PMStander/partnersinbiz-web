@@ -1,21 +1,25 @@
+'use client'
+
 import Link from 'next/link'
+import { OrgSwitcher } from './OrgSwitcher'
 
 const NAV = [
-  { label: 'Dashboard',  href: '/admin/dashboard' },
-  { label: 'Contacts',   href: '/admin/crm/contacts',  group: 'CRM' },
-  { label: 'Pipeline',   href: '/admin/crm/pipeline',  group: 'CRM' },
-  { label: 'Inbox',      href: '/admin/email',          group: 'Email' },
-  { label: 'Sequences',  href: '/admin/sequences' },
-  { label: 'Marketing',  href: '/admin/marketing' },
-  { label: 'Overview',   href: '/admin/social',          group: 'Social' },
-  { label: 'Compose',    href: '/admin/social/compose',   group: 'Social' },
-  { label: 'Queue',      href: '/admin/social/queue',     group: 'Social' },
-  { label: 'Calendar',   href: '/admin/social/calendar',  group: 'Social' },
-  { label: 'Replies',    href: '/admin/social/replies',   group: 'Social' },
-  { label: 'History',    href: '/admin/social/history',   group: 'Social' },
-  { label: 'Projects',   href: '/admin/projects' },
-  { label: 'Clients',    href: '/admin/clients' },
-  { label: 'Settings',   href: '/admin/settings' },
+  { label: 'Dashboard',     href: '/admin/dashboard' },
+  { label: 'Contacts',      href: '/admin/crm/contacts',         group: 'CRM' },
+  { label: 'Pipeline',      href: '/admin/crm/pipeline',         group: 'CRM' },
+  { label: 'Inbox',         href: '/admin/email',                group: 'Email' },
+  { label: 'Sequences',     href: '/admin/sequences' },
+  { label: 'Marketing',     href: '/admin/marketing' },
+  { label: 'Overview',      href: '/admin/social',               group: 'Social' },
+  { label: 'Compose',       href: '/admin/social/compose',       group: 'Social' },
+  { label: 'Queue',         href: '/admin/social/queue',         group: 'Social' },
+  { label: 'Calendar',      href: '/admin/social/calendar',      group: 'Social' },
+  { label: 'Replies',       href: '/admin/social/replies',       group: 'Social' },
+  { label: 'History',       href: '/admin/social/history',       group: 'Social' },
+  { label: 'Organisations', href: '/admin/organizations',        group: 'Admin' },
+  { label: 'Projects',      href: '/admin/projects' },
+  { label: 'Clients',       href: '/admin/clients' },
+  { label: 'Settings',      href: '/admin/settings' },
 ]
 
 export function AdminSidebar() {
@@ -33,6 +37,14 @@ export function AdminSidebar() {
         <span className="ml-2 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
           Admin
         </span>
+      </div>
+
+      {/* Org Switcher */}
+      <div className="border-b border-outline-variant py-2">
+        <p className="px-6 pt-1 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/50">
+          Organisation
+        </p>
+        <OrgSwitcher />
       </div>
 
       {/* Nav */}
