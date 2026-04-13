@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
 type SocialPlatform = 'twitter' | 'x' | 'linkedin' | 'facebook' | 'instagram' | 'reddit' | 'tiktok' | 'pinterest' | 'bluesky' | 'threads'
 type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
@@ -285,6 +286,7 @@ function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
 }
 
 export default function QueuePage() {
+  const { orgId } = useOrg()
   const [posts, setPosts] = useState<SocialPost[]>([])
   const [loading, setLoading] = useState(true)
   const [platformFilter, setPlatformFilter] = useState<string>('all')
@@ -296,7 +298,7 @@ export default function QueuePage() {
   const fetchPosts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/v1/social/posts?limit=200')
+      const res = await fetch(`/api/v1/social/posts?limit=200${orgId ? `&orgId=${orgId}` : ''}`)
       const body = await res.json()
       setPosts(body.data ?? [])
     } catch {
@@ -304,7 +306,7 @@ export default function QueuePage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [orgId])
 
   useEffect(() => {
     fetchPosts()

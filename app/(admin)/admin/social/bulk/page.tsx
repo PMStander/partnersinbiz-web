@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useRef } from 'react'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -56,6 +57,7 @@ function emptyRow(): BulkPostRow {
 /* ------------------------------------------------------------------ */
 
 export default function BulkComposePage() {
+  const { orgId } = useOrg()
   const [rows, setRows] = useState<BulkPostRow[]>([emptyRow()])
   const [csvPreview, setCsvPreview] = useState<BulkPostRow[] | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -133,7 +135,7 @@ export default function BulkComposePage() {
       if (source === 'csv' && fileRef.current?.files?.[0]) {
         const formData = new FormData()
         formData.append('file', fileRef.current.files[0])
-        const res = await fetch('/api/v1/social/posts/bulk', {
+        const res = await fetch(`/api/v1/social/posts/bulk${orgId ? `?orgId=${orgId}` : ''}`, {
           method: 'POST',
           body: formData,
         })
@@ -145,7 +147,7 @@ export default function BulkComposePage() {
         const validRows = rows.filter(r => r.content.trim())
         if (validRows.length === 0) { setError('Add at least one post with content'); setSubmitting(false); return }
 
-        const res = await fetch('/api/v1/social/posts/bulk', {
+        const res = await fetch(`/api/v1/social/posts/bulk${orgId ? `?orgId=${orgId}` : ''}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

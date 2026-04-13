@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
 type SocialPlatform = 'x' | 'linkedin'
 type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
@@ -76,6 +77,7 @@ function ExternalIdLink({ platform, externalId }: { platform: SocialPlatform; ex
 }
 
 export default function HistoryPage() {
+  const { orgId } = useOrg()
   const [posts, setPosts] = useState<SocialPost[]>([])
   const [loading, setLoading] = useState(true)
   const [platformFilter, setPlatformFilter] = useState<'all' | SocialPlatform>('all')
@@ -84,7 +86,7 @@ export default function HistoryPage() {
   const fetchPosts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/v1/social/posts?limit=200')
+      const res = await fetch(`/api/v1/social/posts?limit=200${orgId ? `&orgId=${orgId}` : ''}`)
       const body = await res.json()
       setPosts(body.data ?? [])
     } catch {
@@ -92,7 +94,7 @@ export default function HistoryPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [orgId])
 
   useEffect(() => {
     fetchPosts()

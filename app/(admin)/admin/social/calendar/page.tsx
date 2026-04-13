@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useOrg } from '@/lib/contexts/OrgContext'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -268,6 +269,7 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
 /* ------------------------------------------------------------------ */
 
 export default function CalendarPage() {
+  const { orgId } = useOrg()
   const now = new Date()
   const router = useRouter()
   const [year, setYear] = useState(now.getFullYear())
@@ -285,7 +287,7 @@ export default function CalendarPage() {
   const fetchPosts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/v1/social/posts?limit=500')
+      const res = await fetch(`/api/v1/social/posts?limit=500${orgId ? `&orgId=${orgId}` : ''}`)
       const body = await res.json()
       setPosts(body.data ?? [])
     } catch {
@@ -293,7 +295,7 @@ export default function CalendarPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [orgId])
 
   useEffect(() => { fetchPosts() }, [fetchPosts])
 
