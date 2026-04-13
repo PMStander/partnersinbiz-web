@@ -100,5 +100,27 @@ service cloud.firestore {
     match /ai_action_log/{id} {
       allow read, write: if isAdmin();
     }
+
+    // ── Organizations ────────────────────────────────────────────────────────
+    match /organizations/{orgId} {
+      // Only authenticated users who are members can read
+      allow read: if request.auth != null &&
+        (resource.data.members.hasAny([{ userId: request.auth.uid, role: 'owner' }]) ||
+         resource.data.members.hasAny([{ userId: request.auth.uid, role: 'admin' }]) ||
+         resource.data.members.hasAny([{ userId: request.auth.uid, role: 'member' }]));
+
+      // Only authenticated users can create; they become owner
+      allow create: if request.auth != null &&
+        request.resource.data.createdBy == request.auth.uid;
+
+      // Only owners/admins can update
+      allow update: if request.auth != null &&
+        (resource.data.members.hasAny([{ userId: request.auth.uid, role: 'owner' }]) ||
+         resource.data.members.hasAny([{ userId: request.auth.uid, role: 'admin' }]));
+
+      // Only owners can delete
+      allow delete: if request.auth != null &&
+        resource.data.members.hasAny([{ userId: request.auth.uid, role: 'owner' }]);
+    }
   }
 }
