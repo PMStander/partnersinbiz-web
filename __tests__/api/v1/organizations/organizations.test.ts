@@ -263,6 +263,7 @@ describe('POST /api/v1/organizations/[id]/members', () => {
     expect(body.data.userId).toBe('new-user')
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
       members: expect.anything(),
+      updatedAt: expect.anything(),
     }))
   })
 
@@ -326,6 +327,7 @@ describe('DELETE /api/v1/organizations/[id]/members/[userId]', () => {
     expect(body.data.removed).toBe(true)
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
       members: expect.anything(),
+      updatedAt: expect.anything(),
     }))
   })
 
