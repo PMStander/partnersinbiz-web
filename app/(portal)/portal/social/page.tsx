@@ -68,7 +68,7 @@ export default function PortalSocialDashboard() {
       setAccounts(accBody.data ?? [])
       setPosts(postBody.data ?? [])
       if (orgBody.data?.[0]?.name) setOrgName(orgBody.data[0].name)
-    }).finally(() => setLoading(false))
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   const activeAccounts = accounts.filter(a => a.status === 'active')

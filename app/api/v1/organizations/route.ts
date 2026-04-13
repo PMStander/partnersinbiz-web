@@ -12,7 +12,7 @@ import type { Organization, OrgMember, OrganizationSummary } from '@/lib/organiz
 
 export const dynamic = 'force-dynamic'
 
-export const GET = withAuth('admin', async (req, user) => {
+export const GET = withAuth('client', async (req, user) => {
   const snapshot = await adminDb
     .collection('organizations')
     .where('active', '==', true)
