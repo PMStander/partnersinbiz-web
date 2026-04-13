@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/sequences",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/emails",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/social",
@@ -14,11 +14,11 @@
     },
     {
       "path": "/api/cron/social-rss",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/social-analytics",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
