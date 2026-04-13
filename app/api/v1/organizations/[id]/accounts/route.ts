@@ -2,7 +2,6 @@
  * GET /api/v1/organizations/[id]/accounts
  * Lists social accounts for the given org.
  */
-import { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'

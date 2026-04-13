@@ -352,8 +352,6 @@ describe('DELETE /api/v1/organizations/[id]/members/[userId]', () => {
 })
 
 describe('POST /api/v1/organizations/[id]/link-client', () => {
-  const mockOrgDoc = jest.fn()
-  const mockClientDoc = jest.fn()
   const mockOrgGet = jest.fn()
   const mockClientGet = jest.fn()
   const mockUpdate = jest.fn()
@@ -372,18 +370,10 @@ describe('POST /api/v1/organizations/[id]/link-client', () => {
     mockClientGet.mockResolvedValue({ exists: true, id: 'client-1', data: () => ({ name: 'Acme' }) })
     mockUpdate.mockResolvedValue(undefined)
 
-    mockOrgDoc.mockReturnValue({ get: mockOrgGet, update: mockUpdate })
-    mockClientDoc.mockReturnValue({ get: mockClientGet })
-
-    let callCount = 0
-    mockCollection.mockImplementation((collName) => {
-      callCount++
-      if (collName === 'organizations' || callCount === 1) {
-        // organizations collection
-        return { doc: mockOrgDoc }
-      }
-      // clients collection
-      return { doc: mockClientDoc }
+    mockCollection.mockImplementation((collName: string) => {
+      if (collName === 'organizations') return { doc: jest.fn().mockReturnValue({ get: mockOrgGet, update: mockUpdate }) }
+      if (collName === 'clients') return { doc: jest.fn().mockReturnValue({ get: mockClientGet }) }
+      throw new Error(`Unexpected collection: ${collName}`)
     })
   })
 
@@ -424,10 +414,45 @@ describe('POST /api/v1/organizations/[id]/link-client', () => {
     )
     expect(res.status).toBe(404)
   })
+
+  it('returns 200 as no-op when same client is already linked', async () => {
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: 'client-1',
+      }),
+    })
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'client-1' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.linked).toBe(true)
+  })
+
+  it('returns 409 when org is already linked to a different client', async () => {
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: 'other-client',
+      }),
+    })
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'client-1' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(409)
+  })
 })
 
 describe('GET /api/v1/organizations/[id]/accounts', () => {
-  const mockOrgDoc = jest.fn()
   const mockOrgGet = jest.fn()
   const mockAccountsGet = jest.fn()
   const mockAccountsWhere = jest.fn()
@@ -455,17 +480,11 @@ describe('GET /api/v1/organizations/[id]/accounts', () => {
       ],
     })
     mockAccountsWhere.mockReturnValue({ get: mockAccountsGet })
-    mockOrgDoc.mockReturnValue({ get: mockOrgGet })
 
-    let callCount = 0
-    mockCollection.mockImplementation((collName) => {
-      callCount++
-      if (collName === 'organizations' || callCount === 1) {
-        // organizations collection
-        return { doc: mockOrgDoc }
-      }
-      // social_accounts collection
-      return { where: mockAccountsWhere }
+    mockCollection.mockImplementation((collName: string) => {
+      if (collName === 'organizations') return { doc: jest.fn().mockReturnValue({ get: mockOrgGet }) }
+      if (collName === 'social_accounts') return { where: mockAccountsWhere }
+      throw new Error(`Unexpected collection: ${collName}`)
     })
   })
 
@@ -489,5 +508,28 @@ describe('GET /api/v1/organizations/[id]/accounts', () => {
       { params: Promise.resolve({ id: 'ghost' }) } as any,
     )
     expect(res.status).toBe(404)
+  })
+
+  it('returns empty array when org has no social accounts', async () => {
+    mockAccountsGet.mockResolvedValue({ docs: [] })
+    const res = await getOrgAccounts(
+      adminReq('GET'),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data).toHaveLength(0)
+    expect(body.meta.total).toBe(0)
+  })
+
+  it('preserves platform and displayName fields while stripping encryptedTokens', async () => {
+    const res = await getOrgAccounts(
+      adminReq('GET'),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    const body = await res.json()
+    expect(body.data[0].platform).toBe('twitter')
+    expect(body.data[0].displayName).toBe('Pip AI')
+    expect(body.data[0].encryptedTokens).toBeUndefined()
   })
 })

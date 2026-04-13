@@ -2,7 +2,6 @@
  * POST /api/v1/organizations/[id]/link-client — link org to a client record
  * Body: { clientId: string }
  */
-import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
@@ -32,6 +31,15 @@ export const POST = withAuth('admin', async (req, user, ctx) => {
   // Verify client exists
   const clientDoc = await adminDb.collection('clients').doc(clientId).get()
   if (!clientDoc.exists) return apiError('Client not found', 404)
+
+  // Idempotency: same client → no-op. Different client → explicit conflict.
+  if (data.linkedClientId) {
+    if (data.linkedClientId === clientId) return apiSuccess({ linked: true, clientId })
+    return apiError(
+      `Organisation is already linked to client ${data.linkedClientId}. Unlink it first.`,
+      409,
+    )
+  }
 
   await adminDb.collection('organizations').doc(id).update({
     linkedClientId: clientId,
