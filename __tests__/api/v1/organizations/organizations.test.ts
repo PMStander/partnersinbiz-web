@@ -185,6 +185,7 @@ describe('PUT /api/v1/organizations/[id]', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.data.updated).toBe(true)
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ updatedAt: expect.anything() }))
   })
 
   it('returns 404 when org does not exist', async () => {
