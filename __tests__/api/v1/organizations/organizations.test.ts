@@ -2,6 +2,8 @@
 import { NextRequest } from 'next/server'
 import { GET, POST } from '@/app/api/v1/organizations/route'
 import { GET as getById, PUT, DELETE } from '@/app/api/v1/organizations/[id]/route'
+import { POST as addMember } from '@/app/api/v1/organizations/[id]/members/route'
+import { DELETE as removeMember } from '@/app/api/v1/organizations/[id]/members/[userId]/route'
 
 const AI_KEY = 'test-ai-key'
 process.env.AI_API_KEY = AI_KEY
@@ -225,6 +227,122 @@ describe('DELETE /api/v1/organizations/[id]', () => {
   it('returns 404 when org does not exist', async () => {
     mockDocGet.mockResolvedValue({ exists: false })
     const res = await DELETE(adminReq('DELETE'), { params: Promise.resolve({ id: 'ghost' }) } as any)
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /api/v1/organizations/[id]/members', () => {
+  const mockDocGet = jest.fn()
+  const mockDoc = jest.fn()
+  const mockUpdate = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockUpdate.mockResolvedValue(undefined)
+    mockDoc.mockReturnValue({ get: mockDocGet, update: mockUpdate })
+    mockCollection.mockReturnValue({ doc: mockDoc })
+  })
+
+  it('adds a member and returns 201', async () => {
+    const res = await addMember(
+      adminReq('POST', { userId: 'new-user', role: 'member' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.data.added).toBe(true)
+    expect(body.data.userId).toBe('new-user')
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      members: expect.anything(),
+    }))
+  })
+
+  it('returns 409 when user is already a member', async () => {
+    const res = await addMember(
+      adminReq('POST', { userId: 'ai-agent', role: 'member' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(409)
+  })
+
+  it('returns 400 when userId is missing', async () => {
+    const res = await addMember(
+      adminReq('POST', {}),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false })
+    const res = await addMember(
+      adminReq('POST', { userId: 'new-user' }),
+      { params: Promise.resolve({ id: 'ghost' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('DELETE /api/v1/organizations/[id]/members/[userId]', () => {
+  const mockDocGet = jest.fn()
+  const mockDoc = jest.fn()
+  const mockUpdate = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [
+          { userId: 'ai-agent', role: 'owner' },
+          { userId: 'member-to-remove', role: 'member' },
+        ],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockUpdate.mockResolvedValue(undefined)
+    mockDoc.mockReturnValue({ get: mockDocGet, update: mockUpdate })
+    mockCollection.mockReturnValue({ doc: mockDoc })
+  })
+
+  it('removes a member and returns 200', async () => {
+    const res = await removeMember(
+      adminReq('DELETE'),
+      { params: Promise.resolve({ id: 'org-1', userId: 'member-to-remove' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.removed).toBe(true)
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      members: expect.anything(),
+    }))
+  })
+
+  it('returns 404 when user is not a member', async () => {
+    const res = await removeMember(
+      adminReq('DELETE'),
+      { params: Promise.resolve({ id: 'org-1', userId: 'non-member' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false })
+    const res = await removeMember(
+      adminReq('DELETE'),
+      { params: Promise.resolve({ id: 'ghost', userId: 'anyone' }) } as any,
+    )
     expect(res.status).toBe(404)
   })
 })
