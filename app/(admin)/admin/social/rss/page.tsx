@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -88,6 +89,7 @@ function StatusBadge({ status }: { status: string }) {
 /* ------------------------------------------------------------------ */
 
 export default function RssPage() {
+  const { orgId } = useOrg()
   const [feeds, setFeeds] = useState<RssFeed[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -106,7 +108,7 @@ export default function RssPage() {
   const fetchFeeds = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/v1/social/rss/feeds')
+      const res = await fetch(`/api/v1/social/rss/feeds${orgId ? `?orgId=${orgId}` : ''}`)
       const body = await res.json()
       setFeeds(body.data ?? [])
     } catch {
@@ -114,7 +116,7 @@ export default function RssPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [orgId])
 
   useEffect(() => { fetchFeeds() }, [fetchFeeds])
 
@@ -132,7 +134,7 @@ export default function RssPage() {
 
     setSubmitting(true)
     try {
-      const res = await fetch('/api/v1/social/rss/feeds', {
+      const res = await fetch(`/api/v1/social/rss/feeds${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

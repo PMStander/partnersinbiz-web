@@ -63,17 +63,14 @@ export default function PortalSocialDashboard() {
     Promise.all([
       fetch('/api/v1/social/accounts').then(r => r.json()),
       fetch('/api/v1/social/posts?limit=20').then(r => r.json()),
-    ]).then(([accBody, postBody]) => {
+      fetch('/api/v1/organizations').then(r => r.json()),
+    ]).then(([accBody, postBody, orgBody]) => {
       setAccounts(accBody.data ?? [])
       setPosts(postBody.data ?? [])
-    }).finally(() => setLoading(false))
-
-    fetch('/api/v1/organizations')
-      .then(r => r.json())
-      .then(b => {
-        if (b.data?.length > 0) setOrgName(b.data[0].name)
-      })
-      .catch(() => {})
+      // Uses the first org from the membership-filtered list. For multi-org clients,
+      // this should be refined to match the org linked to the user's clientId.
+      if (orgBody.data?.[0]?.name) setOrgName(orgBody.data[0].name)
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   const activeAccounts = accounts.filter(a => a.status === 'active')
@@ -85,9 +82,7 @@ export default function PortalSocialDashboard() {
     <div className="space-y-8">
       <div>
         <h1 className="font-headline text-2xl font-bold tracking-tighter">Social Media</h1>
-        {orgName && (
-          <p className="text-xs text-on-surface-variant/60 mt-0.5">{orgName}</p>
-        )}
+        {orgName && <p className="text-xs text-on-surface-variant/60 mt-0.5">{orgName}</p>}
         <p className="text-sm text-white/40 mt-1">Manage your social media presence</p>
       </div>
 

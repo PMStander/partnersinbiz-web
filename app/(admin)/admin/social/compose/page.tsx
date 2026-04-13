@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
 type SocialPostMode = 'single' | 'thread'
 type SocialPostCategory = 'work' | 'personal' | 'ai' | 'sport' | 'sa' | 'other'
@@ -44,6 +45,7 @@ interface Account {
 }
 
 export default function ComposePage() {
+  const { orgId } = useOrg()
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -74,8 +76,8 @@ export default function ComposePage() {
 
   // Fetch connected accounts
   useEffect(() => {
-    fetch('/api/v1/social/accounts').then(r => r.json()).then(b => setAccounts(b.data ?? []))
-  }, [])
+    fetch(`/api/v1/social/accounts${orgId ? `?orgId=${orgId}` : ''}`).then(r => r.json()).then(b => setAccounts(b.data ?? []))
+  }, [orgId])
 
   // Pre-fill from URL params (replies page + calendar click-to-create)
   useEffect(() => {
@@ -204,7 +206,7 @@ export default function ComposePage() {
     if (!validate()) return
     setSubmitting(true)
     try {
-      const res = await fetch('/api/v1/social/posts', {
+      const res = await fetch(`/api/v1/social/posts${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildBody('draft')),
@@ -225,7 +227,7 @@ export default function ComposePage() {
     if (!scheduledFor) { setErrors({ submit: 'Set a schedule date/time first.' }); return }
     setSubmitting(true)
     try {
-      const res = await fetch('/api/v1/social/posts', {
+      const res = await fetch(`/api/v1/social/posts${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildBody('scheduled')),
@@ -245,7 +247,7 @@ export default function ComposePage() {
     if (!validate()) return
     setSubmitting(true)
     try {
-      const createRes = await fetch('/api/v1/social/posts', {
+      const createRes = await fetch(`/api/v1/social/posts${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildBody('draft')),
@@ -254,7 +256,7 @@ export default function ComposePage() {
       if (!createRes.ok) throw new Error(createBody.error ?? 'Failed to create post')
       const postId = createBody.data?.id
       if (!postId) throw new Error('No post ID returned')
-      const pubRes = await fetch(`/api/v1/social/posts/${postId}/publish`, { method: 'POST' })
+      const pubRes = await fetch(`/api/v1/social/posts/${postId}/publish${orgId ? `?orgId=${orgId}` : ''}`, { method: 'POST' })
       const pubBody = await pubRes.json()
       if (!pubRes.ok) throw new Error(pubBody.error ?? 'Failed to publish')
       setSuccessMsg('Published successfully.')

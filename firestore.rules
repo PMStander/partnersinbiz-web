@@ -102,23 +102,18 @@ service cloud.firestore {
     }
 
     // ── Organizations ────────────────────────────────────────────────────────
+    // Note: members array items must have exactly {userId, role} — no extra fields —
+    // for hasAny map-equality checks to work correctly.
     match /organizations/{orgId} {
-      // Only authenticated users who are members can read
-      allow read: if request.auth != null &&
+      allow read: if isAdmin() || (request.auth != null &&
         (resource.data.members.hasAny([{ userId: request.auth.uid, role: 'owner' }]) ||
          resource.data.members.hasAny([{ userId: request.auth.uid, role: 'admin' }]) ||
-         resource.data.members.hasAny([{ userId: request.auth.uid, role: 'member' }]));
-
-      // Only authenticated users can create; they become owner
+         resource.data.members.hasAny([{ userId: request.auth.uid, role: 'member' }])));
       allow create: if request.auth != null &&
         request.resource.data.createdBy == request.auth.uid;
-
-      // Only owners/admins can update
-      allow update: if request.auth != null &&
+      allow update: if isAdmin() || (request.auth != null &&
         (resource.data.members.hasAny([{ userId: request.auth.uid, role: 'owner' }]) ||
-         resource.data.members.hasAny([{ userId: request.auth.uid, role: 'admin' }]));
-
-      // Only owners can delete
+         resource.data.members.hasAny([{ userId: request.auth.uid, role: 'admin' }])));
       allow delete: if request.auth != null &&
         resource.data.members.hasAny([{ userId: request.auth.uid, role: 'owner' }]);
     }

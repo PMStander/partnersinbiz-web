@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
 /* ------------------------------------------------------------------ */
 /*  Types & constants                                                  */
@@ -151,6 +152,7 @@ function HeatCell({ value, max }: { value: number; max: number }) {
 /* ------------------------------------------------------------------ */
 
 export default function AnalyticsPage() {
+  const { orgId } = useOrg()
   const [posts, setPosts] = useState<PostData[]>([])
   const [analytics, setAnalytics] = useState<AnalyticsSnapshot[]>([])
   const [bestTimes, setBestTimes] = useState<BestTimeSlot[]>([])
@@ -162,9 +164,9 @@ export default function AnalyticsPage() {
     setLoading(true)
     try {
       const [postsRes, analyticsRes, bestTimesRes] = await Promise.all([
-        fetch('/api/v1/social/posts?status=published&limit=100'),
-        fetch('/api/v1/social/analytics'),
-        fetch('/api/v1/social/analytics?view=best-times'),
+        fetch(`/api/v1/social/posts?status=published&limit=100${orgId ? `&orgId=${orgId}` : ''}`),
+        fetch(`/api/v1/social/analytics${orgId ? `?orgId=${orgId}` : ''}`),
+        fetch(`/api/v1/social/analytics?view=best-times${orgId ? `&orgId=${orgId}` : ''}`),
       ])
       const [postsBody, analyticsBody, bestTimesBody] = await Promise.all([
         postsRes.json(), analyticsRes.json(), bestTimesRes.json(),
@@ -178,7 +180,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [orgId])
 
   useEffect(() => { fetchData() }, [fetchData])
 

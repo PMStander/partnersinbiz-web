@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
 /* ------------------------------------------------------------------ */
 /*  Types & config                                                     */
@@ -181,6 +182,7 @@ function AccountCard({
 }
 
 function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
+  const { orgId } = useOrg()
   const [handle, setHandle] = useState('')
   const [appPassword, setAppPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -192,7 +194,7 @@ function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch('/api/v1/social/accounts', {
+      const res = await fetch(`/api/v1/social/accounts${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -266,6 +268,7 @@ function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
 /* ------------------------------------------------------------------ */
 
 export default function AccountsPage() {
+  const { orgId } = useOrg()
   const searchParams = useSearchParams()
   const [accounts, setAccounts] = useState<SocialAccount[]>([])
   const [loading, setLoading] = useState(true)
@@ -282,7 +285,7 @@ export default function AccountsPage() {
   const fetchAccounts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/v1/social/accounts')
+      const res = await fetch(`/api/v1/social/accounts${orgId ? `?orgId=${orgId}` : ''}`)
       const body = await res.json()
       setAccounts(body.data ?? [])
     } catch {
@@ -290,7 +293,7 @@ export default function AccountsPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [orgId])
 
   useEffect(() => {
     fetchAccounts()

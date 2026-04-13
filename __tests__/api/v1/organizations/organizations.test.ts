@@ -1,0 +1,535 @@
+// __tests__/api/v1/organizations/organizations.test.ts
+import { NextRequest } from 'next/server'
+import { GET, POST } from '@/app/api/v1/organizations/route'
+import { GET as getById, PUT, DELETE } from '@/app/api/v1/organizations/[id]/route'
+import { POST as addMember } from '@/app/api/v1/organizations/[id]/members/route'
+import { DELETE as removeMember } from '@/app/api/v1/organizations/[id]/members/[userId]/route'
+import { POST as linkClient } from '@/app/api/v1/organizations/[id]/link-client/route'
+import { GET as getOrgAccounts } from '@/app/api/v1/organizations/[id]/accounts/route'
+
+const AI_KEY = 'test-ai-key'
+process.env.AI_API_KEY = AI_KEY
+process.env.SESSION_COOKIE_NAME = '__session'
+
+const mockGet = jest.fn()
+const mockAdd = jest.fn()
+const mockWhere = jest.fn()
+const mockOrderBy = jest.fn()
+const mockCollection = jest.fn()
+
+jest.mock('@/lib/firebase/admin', () => ({
+  adminAuth: {
+    verifyIdToken: jest.fn(),
+    verifySessionCookie: jest.fn(),
+  },
+  adminDb: { collection: (...args: unknown[]) => mockCollection(...args) },
+}))
+
+function adminReq(method = 'GET', body?: unknown, url = 'http://localhost/api/v1/organizations') {
+  return new NextRequest(url, {
+    method,
+    headers: { authorization: `Bearer ${AI_KEY}`, 'x-org-id': 'default' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+}
+
+describe('GET /api/v1/organizations', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockGet.mockResolvedValue({
+      docs: [
+        { id: 'org-1', data: () => ({ name: 'Lumen', slug: 'lumen', active: true, members: [{ userId: 'ai-agent', role: 'owner' }], description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '' }) },
+      ],
+    })
+    mockWhere.mockReturnValue({ orderBy: mockOrderBy, get: mockGet })
+    mockOrderBy.mockReturnValue({ get: mockGet })
+    mockCollection.mockReturnValue({ where: mockWhere, orderBy: mockOrderBy, get: mockGet })
+  })
+
+  it('returns list of orgs the user is a member of', async () => {
+    const res = await GET(adminReq())
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(Array.isArray(body.data)).toBe(true)
+  })
+
+  it('returns 401 without auth', async () => {
+    const req = new NextRequest('http://localhost/api/v1/organizations')
+    const res = await GET(req)
+    expect(res.status).toBe(401)
+  })
+})
+
+describe('POST /api/v1/organizations', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockGet.mockResolvedValue({ empty: true, docs: [] })
+    mockWhere.mockReturnValue({ get: mockGet })
+    mockAdd.mockResolvedValue({ id: 'new-org-id' })
+    mockCollection.mockReturnValue({ where: mockWhere, add: mockAdd, orderBy: mockOrderBy, get: mockGet })
+    mockOrderBy.mockReturnValue({ get: mockGet })
+  })
+
+  it('creates an org and returns 201', async () => {
+    const res = await POST(adminReq('POST', { name: 'Velox', description: 'Test org' }))
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.data.id).toBe('new-org-id')
+  })
+
+  it('returns 400 when name is missing', async () => {
+    const res = await POST(adminReq('POST', { description: 'No name' }))
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 409 when slug already exists', async () => {
+    mockGet.mockResolvedValue({ empty: false, docs: [{ id: 'existing-org' }] })
+    mockWhere.mockReturnValue({ get: mockGet })
+    mockCollection.mockReturnValue({ where: mockWhere, add: mockAdd, orderBy: mockOrderBy, get: mockGet })
+    const res = await POST(adminReq('POST', { name: 'Velox' }))
+    expect(res.status).toBe(409)
+  })
+})
+
+describe('GET /api/v1/organizations/[id]', () => {
+  const mockDocGet = jest.fn()
+  const mockDoc = jest.fn()
+  const mockUpdate = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockDoc.mockReturnValue({ get: mockDocGet, update: mockUpdate })
+    mockCollection.mockReturnValue({ doc: mockDoc, where: mockWhere, orderBy: mockOrderBy, get: mockGet, add: mockAdd })
+  })
+
+  it('returns org details', async () => {
+    const res = await getById(adminReq('GET'), { params: Promise.resolve({ id: 'org-1' }) } as any)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.name).toBe('Lumen')
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false })
+    const res = await getById(adminReq('GET'), { params: Promise.resolve({ id: 'ghost' }) } as any)
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 403 for a client user who is not a member', async () => {
+    // Simulate: session cookie resolves to a client user not in the members array
+    const { adminAuth, adminDb } = require('@/lib/firebase/admin')
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValueOnce({ uid: 'client-user' })
+    const userDocGet = jest.fn().mockResolvedValue({ exists: true, data: () => ({ role: 'client' }) })
+    const orgDocGet = jest.fn().mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'other-user', role: 'owner' }], // client-user is NOT a member
+        description: '', logoUrl: '', website: '', createdBy: 'other-user', linkedClientId: '',
+      }),
+    })
+    mockCollection.mockReturnValue({
+      doc: jest.fn().mockReturnValue({ get: orgDocGet }),
+    })
+    // Override collection to return user doc for first call, org doc for second
+    let callCount = 0
+    mockCollection.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) {
+        // auth.ts calls adminDb.collection('users').doc(uid).get()
+        return { doc: jest.fn().mockReturnValue({ get: userDocGet }) }
+      }
+      return { doc: jest.fn().mockReturnValue({ get: orgDocGet }) }
+    })
+
+    const req = new NextRequest('http://localhost/api/v1/organizations/org-1', {
+      headers: { cookie: '__session=fake-session-cookie' },
+    })
+    const res = await getById(req, { params: Promise.resolve({ id: 'org-1' }) } as any)
+    expect(res.status).toBe(403)
+  })
+})
+
+describe('PUT /api/v1/organizations/[id]', () => {
+  const mockDocGet = jest.fn()
+  const mockDoc = jest.fn()
+  const mockUpdate = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockUpdate.mockResolvedValue(undefined)
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockDoc.mockReturnValue({ get: mockDocGet, update: mockUpdate })
+    mockWhere.mockReturnValue({ get: jest.fn().mockResolvedValue({ empty: true }) })
+    mockCollection.mockReturnValue({ doc: mockDoc, where: mockWhere, orderBy: mockOrderBy, get: mockGet })
+  })
+
+  it('updates org and returns 200', async () => {
+    const res = await PUT(adminReq('PUT', { name: 'Lumen Updated' }), { params: Promise.resolve({ id: 'org-1' }) } as any)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.updated).toBe(true)
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ updatedAt: expect.anything() }))
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false })
+    const res = await PUT(adminReq('PUT', { name: 'X' }), { params: Promise.resolve({ id: 'ghost' }) } as any)
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('DELETE /api/v1/organizations/[id]', () => {
+  const mockDocGet = jest.fn()
+  const mockDoc = jest.fn()
+  const mockUpdate = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockUpdate.mockResolvedValue(undefined)
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockDoc.mockReturnValue({ get: mockDocGet, update: mockUpdate })
+    mockCollection.mockReturnValue({ doc: mockDoc })
+  })
+
+  it('soft-deletes org and returns 200', async () => {
+    const res = await DELETE(adminReq('DELETE'), { params: Promise.resolve({ id: 'org-1' }) } as any)
+    expect(res.status).toBe(200)
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ active: false }))
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false })
+    const res = await DELETE(adminReq('DELETE'), { params: Promise.resolve({ id: 'ghost' }) } as any)
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /api/v1/organizations/[id]/members', () => {
+  const mockDocGet = jest.fn()
+  const mockDoc = jest.fn()
+  const mockUpdate = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockUpdate.mockResolvedValue(undefined)
+    mockDoc.mockReturnValue({ get: mockDocGet, update: mockUpdate })
+    mockCollection.mockReturnValue({ doc: mockDoc })
+  })
+
+  it('adds a member and returns 201', async () => {
+    const res = await addMember(
+      adminReq('POST', { userId: 'new-user', role: 'member' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.data.added).toBe(true)
+    expect(body.data.userId).toBe('new-user')
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      members: expect.anything(),
+      updatedAt: expect.anything(),
+    }))
+  })
+
+  it('returns 409 when user is already a member', async () => {
+    const res = await addMember(
+      adminReq('POST', { userId: 'ai-agent', role: 'member' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(409)
+  })
+
+  it('returns 400 when userId is missing', async () => {
+    const res = await addMember(
+      adminReq('POST', {}),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false })
+    const res = await addMember(
+      adminReq('POST', { userId: 'new-user' }),
+      { params: Promise.resolve({ id: 'ghost' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('DELETE /api/v1/organizations/[id]/members/[userId]', () => {
+  const mockDocGet = jest.fn()
+  const mockDoc = jest.fn()
+  const mockUpdate = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [
+          { userId: 'ai-agent', role: 'owner' },
+          { userId: 'member-to-remove', role: 'member' },
+        ],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockUpdate.mockResolvedValue(undefined)
+    mockDoc.mockReturnValue({ get: mockDocGet, update: mockUpdate })
+    mockCollection.mockReturnValue({ doc: mockDoc })
+  })
+
+  it('removes a member and returns 200', async () => {
+    const res = await removeMember(
+      adminReq('DELETE'),
+      { params: Promise.resolve({ id: 'org-1', userId: 'member-to-remove' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.removed).toBe(true)
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      members: expect.anything(),
+      updatedAt: expect.anything(),
+    }))
+  })
+
+  it('returns 404 when user is not a member', async () => {
+    const res = await removeMember(
+      adminReq('DELETE'),
+      { params: Promise.resolve({ id: 'org-1', userId: 'non-member' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockDocGet.mockResolvedValue({ exists: false })
+    const res = await removeMember(
+      adminReq('DELETE'),
+      { params: Promise.resolve({ id: 'ghost', userId: 'anyone' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /api/v1/organizations/[id]/link-client', () => {
+  const mockOrgGet = jest.fn()
+  const mockClientGet = jest.fn()
+  const mockUpdate = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockClientGet.mockResolvedValue({ exists: true, id: 'client-1', data: () => ({ name: 'Acme' }) })
+    mockUpdate.mockResolvedValue(undefined)
+
+    mockCollection.mockImplementation((collName: string) => {
+      if (collName === 'organizations') return { doc: jest.fn().mockReturnValue({ get: mockOrgGet, update: mockUpdate }) }
+      if (collName === 'clients') return { doc: jest.fn().mockReturnValue({ get: mockClientGet }) }
+      throw new Error(`Unexpected collection: ${collName}`)
+    })
+  })
+
+  it('links a client and returns 200', async () => {
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'client-1' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.linked).toBe(true)
+    expect(body.data.clientId).toBe('client-1')
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ linkedClientId: 'client-1' }))
+  })
+
+  it('returns 400 when clientId is missing', async () => {
+    const res = await linkClient(
+      adminReq('POST', {}),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when client does not exist', async () => {
+    mockClientGet.mockResolvedValue({ exists: false })
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'ghost-client' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockOrgGet.mockResolvedValue({ exists: false })
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'client-1' }),
+      { params: Promise.resolve({ id: 'ghost' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 200 as no-op when same client is already linked', async () => {
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: 'client-1',
+      }),
+    })
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'client-1' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.linked).toBe(true)
+  })
+
+  it('returns 409 when org is already linked to a different client', async () => {
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: 'other-client',
+      }),
+    })
+    const res = await linkClient(
+      adminReq('POST', { clientId: 'client-1' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(409)
+  })
+})
+
+describe('GET /api/v1/organizations/[id]/accounts', () => {
+  const mockOrgGet = jest.fn()
+  const mockAccountsGet = jest.fn()
+  const mockAccountsWhere = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockAccountsGet.mockResolvedValue({
+      docs: [
+        {
+          id: 'acct-1',
+          data: () => ({
+            orgId: 'org-1', platform: 'twitter', displayName: 'Pip AI',
+            encryptedTokens: { accessToken: 'secret' }, status: 'active',
+          }),
+        },
+      ],
+    })
+    mockAccountsWhere.mockReturnValue({ get: mockAccountsGet })
+
+    mockCollection.mockImplementation((collName: string) => {
+      if (collName === 'organizations') return { doc: jest.fn().mockReturnValue({ get: mockOrgGet }) }
+      if (collName === 'social_accounts') return { where: mockAccountsWhere }
+      throw new Error(`Unexpected collection: ${collName}`)
+    })
+  })
+
+  it('returns social accounts for the org and strips encryptedTokens', async () => {
+    const res = await getOrgAccounts(
+      adminReq('GET'),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data).toHaveLength(1)
+    expect(body.data[0].id).toBe('acct-1')
+    expect(body.data[0].encryptedTokens).toBeUndefined()
+    expect(body.meta.total).toBe(1)
+  })
+
+  it('returns 404 when org does not exist', async () => {
+    mockOrgGet.mockResolvedValue({ exists: false })
+    const res = await getOrgAccounts(
+      adminReq('GET'),
+      { params: Promise.resolve({ id: 'ghost' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('returns empty array when org has no social accounts', async () => {
+    mockAccountsGet.mockResolvedValue({ docs: [] })
+    const res = await getOrgAccounts(
+      adminReq('GET'),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data).toHaveLength(0)
+    expect(body.meta.total).toBe(0)
+  })
+
+  it('preserves platform and displayName fields while stripping encryptedTokens', async () => {
+    const res = await getOrgAccounts(
+      adminReq('GET'),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    const body = await res.json()
+    expect(body.data[0].platform).toBe('twitter')
+    expect(body.data[0].displayName).toBe('Pip AI')
+    expect(body.data[0].encryptedTokens).toBeUndefined()
+  })
+})

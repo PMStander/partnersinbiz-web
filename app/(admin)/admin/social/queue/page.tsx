@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
 type SocialPlatform = 'twitter' | 'x' | 'linkedin' | 'facebook' | 'instagram' | 'reddit' | 'tiktok' | 'pinterest' | 'bluesky' | 'threads'
 type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
@@ -129,6 +130,7 @@ interface EditPanelProps {
 }
 
 function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
+  const { orgId } = useOrg()
   const [content, setContent] = useState(getPostText(post))
   const [scheduledFor, setScheduledFor] = useState(() => {
     const d = tsToDate(post.scheduledFor)
@@ -162,7 +164,7 @@ function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
         tags,
       }
       if (scheduledFor) body.scheduledFor = new Date(scheduledFor).toISOString()
-      const res = await fetch(`/api/v1/social/posts/${post.id}`, {
+      const res = await fetch(`/api/v1/social/posts/${post.id}${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -285,6 +287,7 @@ function EditPanel({ post, onClose, onSaved }: EditPanelProps) {
 }
 
 export default function QueuePage() {
+  const { orgId } = useOrg()
   const [posts, setPosts] = useState<SocialPost[]>([])
   const [loading, setLoading] = useState(true)
   const [platformFilter, setPlatformFilter] = useState<string>('all')
@@ -296,7 +299,7 @@ export default function QueuePage() {
   const fetchPosts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/v1/social/posts?limit=200')
+      const res = await fetch(`/api/v1/social/posts?limit=200${orgId ? `&orgId=${orgId}` : ''}`)
       const body = await res.json()
       setPosts(body.data ?? [])
     } catch {
@@ -304,7 +307,7 @@ export default function QueuePage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [orgId])
 
   useEffect(() => {
     fetchPosts()
@@ -331,7 +334,7 @@ export default function QueuePage() {
     // Optimistic update
     setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, status: 'published' } : p))
     try {
-      await fetch(`/api/v1/social/posts/${post.id}/publish`, { method: 'POST' })
+      await fetch(`/api/v1/social/posts/${post.id}/publish${orgId ? `?orgId=${orgId}` : ''}`, { method: 'POST' })
     } catch {
       // revert on error
     } finally {
@@ -345,7 +348,7 @@ export default function QueuePage() {
     // Optimistic update
     setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, status: 'cancelled' } : p))
     try {
-      await fetch(`/api/v1/social/posts/${post.id}`, { method: 'DELETE' })
+      await fetch(`/api/v1/social/posts/${post.id}${orgId ? `?orgId=${orgId}` : ''}`, { method: 'DELETE' })
     } catch {
       // revert on error
     } finally {
