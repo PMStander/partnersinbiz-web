@@ -80,7 +80,7 @@ export default function PortalSocialDashboard() {
     <div className="space-y-8">
       <div>
         <h1 className="font-headline text-2xl font-bold tracking-tighter">Social Media</h1>
-        {orgName && <p className="text-xs text-white/40 mt-0.5">{orgName}</p>}
+        {orgName && <p className="text-xs text-on-surface-variant/60 mt-0.5">{orgName}</p>}
         <p className="text-sm text-white/40 mt-1">Manage your social media presence</p>
       </div>
 
