@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useOrg } from '@/lib/contexts/OrgContext'
+import PlatformPreview from '@/components/social/PlatformPreview'
 
 type SocialPostMode = 'single' | 'thread'
 type SocialPostCategory = 'work' | 'personal' | 'ai' | 'sport' | 'sa' | 'other'
@@ -82,12 +83,18 @@ export default function ComposePage() {
   const [submitting, setSubmitting] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
 
+  // Preview state
+  const [showPreview, setShowPreview] = useState(false)
+
   // AI state
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiCaptions, setAiCaptions] = useState<Array<{ text: string; hashtags: string[] }>>([])
   const [aiHashtags, setAiHashtags] = useState<Array<{ tag: string; relevance: number }>>([])
   const [showAi, setShowAi] = useState(false)
+
+  // Best time state
+  const [bestTimeLoading, setBestTimeLoading] = useState(false)
 
   // AI Image state
   const [showImageModal, setShowImageModal] = useState(false)
@@ -314,6 +321,44 @@ export default function ComposePage() {
     }
   }
 
+  const handleBestTime = async () => {
+    setBestTimeLoading(true)
+    try {
+      // Use the first selected platform or default to twitter
+      const platform = selectedPlatforms.length > 0 ? selectedPlatforms[0] : 'twitter'
+      const res = await fetch(`/api/v1/social/ai/best-time?platform=${encodeURIComponent(platform)}`)
+      const data = await res.json()
+
+      if (res.ok && data.data?.slots && data.data.slots.length > 0) {
+        const bestSlot = data.data.slots[0]
+        // slots have format: { dayOfWeek: number, hour: number, ... }
+        // Create a datetime for next occurrence of this day/hour
+        const now = new Date()
+        const targetDate = new Date(now)
+
+        // Calculate days until target day of week
+        const dayDiff = (bestSlot.dayOfWeek - now.getDay() + 7) % 7
+        if (dayDiff === 0 && now.getHours() >= bestSlot.hour) {
+          targetDate.setDate(targetDate.getDate() + 7)
+        } else if (dayDiff > 0) {
+          targetDate.setDate(targetDate.getDate() + dayDiff)
+        }
+
+        targetDate.setHours(bestSlot.hour, 0, 0, 0)
+
+        // Convert to datetime-local format (YYYY-MM-DDTHH:mm)
+        const local = new Date(targetDate.getTime() - targetDate.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 16)
+        setScheduledFor(local)
+      }
+    } catch {
+      // silent fail — user can still pick manually
+    } finally {
+      setBestTimeLoading(false)
+    }
+  }
+
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return
     setAiLoading(true)
@@ -514,27 +559,44 @@ export default function ComposePage() {
         </div>
       )}
 
-      {/* Mode Toggle (thread-capable platforms only) */}
-      {showThreadToggle && (
-        <div>
-          <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Mode</label>
-          <div className="flex gap-2">
-            {(['single', 'thread'] as SocialPostMode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`px-4 py-2 rounded-lg font-label text-sm font-medium transition-colors capitalize ${
-                  mode === m
-                    ? 'bg-white text-black'
-                    : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
-                }`}
-              >
-                {m === 'single' ? 'Single Post' : 'Thread'}
-              </button>
-            ))}
+      {/* Mode Toggle and Preview Toggle */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        {showThreadToggle && (
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Mode</label>
+            <div className="flex gap-2">
+              {(['single', 'thread'] as SocialPostMode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`px-4 py-2 rounded-lg font-label text-sm font-medium transition-colors capitalize ${
+                    mode === m
+                      ? 'bg-white text-black'
+                      : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
+                  }`}
+                >
+                  {m === 'single' ? 'Single Post' : 'Thread'}
+                </button>
+              ))}
+            </div>
           </div>
+        )}
+
+        {/* Preview Toggle */}
+        <div className={showThreadToggle ? 'flex-1' : 'w-full'}>
+          <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Preview</label>
+          <button
+            onClick={() => setShowPreview(p => !p)}
+            className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              showPreview
+                ? 'bg-amber-500 text-black font-label'
+                : 'bg-surface-container text-on-surface hover:bg-surface-container-high font-label'
+            }`}
+          >
+            {showPreview ? 'Hide Preview' : 'Show Preview'}
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Content */}
       {mode === 'thread' && showThreadToggle ? (
@@ -595,6 +657,30 @@ export default function ComposePage() {
             </div>
           </div>
           {errors.content && <p className="text-xs text-red-400 mt-1">{errors.content}</p>}
+        </div>
+      )}
+
+      {/* Preview Panel */}
+      {showPreview && selectedPlatforms.length > 0 && (
+        <div className="rounded-xl bg-surface-container p-6">
+          <h3 className="text-sm font-semibold text-on-surface mb-4">Platform Preview</h3>
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {selectedPlatforms.map(platformId => {
+              const platform = PLATFORMS.find(p => p.id === platformId)
+              return (
+                <div key={platformId} className="flex-shrink-0">
+                  <PlatformPreview
+                    platform={platformId}
+                    content={mode === 'thread' ? threadParts.join('\n\n') : content}
+                    mediaItems={mediaItems}
+                    charLimit={CHAR_LIMITS[platformId] ?? 5000}
+                    userName="Your Name"
+                    userHandle="@yourhandle"
+                  />
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -843,15 +929,36 @@ export default function ComposePage() {
 
       {/* Schedule */}
       <div>
-        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Schedule For</label>
-        <input
-          type="datetime-local"
-          value={scheduledFor}
-          min={minDateTime}
-          onChange={(e) => setScheduledFor(e.target.value)}
-          className="rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface outline-none border border-transparent focus:border-outline-variant transition-colors"
-        />
-        <p className="text-xs text-on-surface-variant mt-1">Leave empty to save as draft.</p>
+        <div className="flex items-end gap-2 mb-2">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Schedule For</label>
+            <input
+              type="datetime-local"
+              value={scheduledFor}
+              min={minDateTime}
+              onChange={(e) => setScheduledFor(e.target.value)}
+              className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface outline-none border border-transparent focus:border-outline-variant transition-colors"
+            />
+          </div>
+          <button
+            onClick={handleBestTime}
+            disabled={bestTimeLoading}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            {bestTimeLoading ? (
+              <span className="inline-block w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <span>✨</span>
+            )}
+            {bestTimeLoading ? 'Finding…' : 'Best time'}
+          </button>
+        </div>
+        {scheduledFor && (
+          <p className="text-xs text-on-surface-variant mb-2">
+            {new Date(scheduledFor).toLocaleString()}
+          </p>
+        )}
+        <p className="text-xs text-on-surface-variant">Leave empty to save as draft.</p>
       </div>
 
       {/* Category */}

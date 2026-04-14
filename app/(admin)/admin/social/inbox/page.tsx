@@ -108,6 +108,8 @@ function TypeBadge({ type }: { type: EngagementType }) {
 export default function InboxPage() {
   const [items, setItems] = useState<InboxItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [polling, setPolling] = useState(false)
+  const [pollMessage, setPollMessage] = useState('')
   const [selectedStatus, setSelectedStatus] = useState<EngagementStatus | null>(null)
   const [selectedType, setSelectedType] = useState<EngagementType | null>(null)
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
@@ -133,6 +135,32 @@ export default function InboxPage() {
       setLoading(false)
     }
   }, [selectedStatus, selectedType, selectedPlatform])
+
+  const handleRefresh = async () => {
+    setPollMessage('')
+    setPolling(true)
+    try {
+      const res = await fetch('/api/v1/social/inbox/poll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const body = await res.json()
+      if (body.success) {
+        setPollMessage(`Fetched ${body.data.newItems} new items from ${body.data.polled} accounts`)
+        // Refresh the inbox list
+        setTimeout(() => fetchInbox(), 500)
+      } else {
+        setPollMessage(`Error: ${body.error}`)
+      }
+    } catch (error) {
+      console.error('Error triggering poll:', error)
+      setPollMessage(`Error: ${String(error)}`)
+    } finally {
+      setPolling(false)
+      // Clear message after 5 seconds
+      setTimeout(() => setPollMessage(''), 5000)
+    }
+  }
 
   useEffect(() => {
     fetchInbox()
@@ -223,10 +251,35 @@ export default function InboxPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-on-surface">Social Inbox</h1>
-        <p className="text-sm text-on-surface-variant mt-1">Manage engagement and replies</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-on-surface">Social Inbox</h1>
+          <p className="text-sm text-on-surface-variant mt-1">Manage engagement and replies</p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={polling}
+          className="px-4 py-2 rounded-lg bg-primary text-on-primary font-medium text-sm hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {polling ? (
+            <>
+              <span className="inline-block animate-spin">↻</span>
+              Refreshing...
+            </>
+          ) : (
+            <>
+              ↻ Refresh
+            </>
+          )}
+        </button>
       </div>
+
+      {/* Poll Status Message */}
+      {pollMessage && (
+        <div className={`p-3 rounded-lg text-sm ${pollMessage.startsWith('Error') ? 'bg-error-container text-on-error-container' : 'bg-success-container text-on-success-container'}`}>
+          {pollMessage}
+        </div>
+      )}
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
