@@ -76,6 +76,14 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Create login form state
+  const [creatingLogin, setCreatingLogin] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createEmail, setCreateEmail] = useState('')
+  const [createRole, setCreateRole] = useState('member')
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [setupLink, setSetupLink] = useState<string | null>(null)
+
   // Add member form state
   const [addingMember, setAddingMember] = useState(false)
   const [addEmail, setAddEmail] = useState('')
@@ -120,6 +128,32 @@ export default function TeamPage() {
       fetchOrgAndMembers()
     }
   }, [slug])
+
+  const handleCreateLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!org || !createEmail || !createName) return
+    setCreatingLogin(true)
+    setCreateError(null)
+    setSetupLink(null)
+    try {
+      const res = await fetch(`/api/v1/organizations/${org.id}/create-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: createEmail, name: createName, role: createRole }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error || 'Failed to create login')
+      setMembers([...members, { userId: body.data.uid, role: body.data.role, email: body.data.email, displayName: body.data.displayName }])
+      setSetupLink(body.data.setupLink)
+      setCreateName('')
+      setCreateEmail('')
+      setCreateRole('member')
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : 'An error occurred')
+    } finally {
+      setCreatingLogin(false)
+    }
+  }
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -223,11 +257,81 @@ export default function TeamPage() {
         </div>
       )}
 
+      {/* Create Client Login */}
+      {!loading && org && (
+        <div className="pib-card">
+          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">
+            Create Client Login
+          </p>
+          <p className="text-xs text-on-surface-variant mb-3">
+            Creates a new account and adds the client to this organisation. A setup link is generated for the client to set their password.
+          </p>
+          <form onSubmit={handleCreateLogin} className="flex gap-2 flex-wrap">
+            <input
+              type="text"
+              placeholder="Full name"
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              className="flex-1 min-w-[160px] px-3 py-2 rounded-md text-sm"
+              style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}
+              disabled={creatingLogin}
+              required
+            />
+            <input
+              type="email"
+              placeholder="client@example.com"
+              value={createEmail}
+              onChange={(e) => setCreateEmail(e.target.value)}
+              className="flex-1 min-w-[200px] px-3 py-2 rounded-md text-sm"
+              style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}
+              disabled={creatingLogin}
+              required
+            />
+            <select
+              value={createRole}
+              onChange={(e) => setCreateRole(e.target.value)}
+              className="px-3 py-2 rounded-md text-sm"
+              style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}
+              disabled={creatingLogin}
+            >
+              <option value="member">Member</option>
+              <option value="viewer">Viewer</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button
+              type="submit"
+              className="pib-btn-primary text-sm font-label"
+              disabled={creatingLogin || !createEmail || !createName}
+            >
+              {creatingLogin ? 'Creating...' : 'Create Login'}
+            </button>
+          </form>
+          {createError && <p className="text-xs text-[#ef4444] mt-2">{createError}</p>}
+          {setupLink && (
+            <div className="mt-3 p-3 rounded-md" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}>
+              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">
+                Setup Link — send this to the client
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="text-xs text-on-surface break-all flex-1">{setupLink}</code>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(setupLink); }}
+                  className="pib-btn-secondary text-xs font-label shrink-0"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Add Member Form */}
       {!loading && org && (
         <div className="pib-card">
           <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-3">
-            Add Team Member
+            Add Existing Member
           </p>
           <form onSubmit={handleAddMember} className="flex gap-2 flex-wrap">
             <input

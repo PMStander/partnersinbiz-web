@@ -204,12 +204,17 @@ export default function HomePage() {
           <h2 className="font-headline font-bold leading-[0.85] tracking-tighter uppercase text-mega max-w-5xl">
             Let&apos;s build / <br /> the future
           </h2>
-          <Link href="/start-a-project" className="mt-20 group flex items-center gap-6 bg-white text-black px-12 py-6 rounded-md font-bold text-lg uppercase tracking-widest hover:pr-16 transition-all">
-            Get in touch
-            <span className="material-symbols-outlined text-3xl group-hover:translate-x-2 transition-transform">
-              arrow_outward
-            </span>
-          </Link>
+          <div className="mt-20 flex flex-wrap items-center justify-center gap-4">
+            <Link href="/start-a-project" className="group flex items-center gap-6 bg-white text-black px-12 py-6 rounded-md font-bold text-lg uppercase tracking-widest hover:pr-16 transition-all">
+              Get in touch
+              <span className="material-symbols-outlined text-3xl group-hover:translate-x-2 transition-transform">
+                arrow_outward
+              </span>
+            </Link>
+            <Link href="/login" className="flex items-center gap-3 border border-white/30 text-white px-10 py-6 rounded-md font-bold text-lg uppercase tracking-widest hover:border-white hover:bg-white/5 transition-all">
+              Client Login
+            </Link>
+          </div>
         </section>
       </main>
     </>
