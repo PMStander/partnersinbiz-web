@@ -19,6 +19,7 @@ const OPERATOR_NAV: NavItem[] = [
   { label: 'Pipeline',   href: '/admin/crm/contacts',   icon: '⟳' },
   { label: 'Clients',    href: '/admin/clients',         icon: '◎' },
   { label: 'Invoicing',  href: '/admin/invoicing',       icon: '◷' },
+  { label: 'Quotes',     href: '/admin/quotes',          icon: '◈' },
   { label: 'Settings',   href: '/admin/settings',        icon: '◆' },
 ]
 
