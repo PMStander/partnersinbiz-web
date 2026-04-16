@@ -111,8 +111,8 @@ export default function TermsOfServicePage() {
             <h2 className="font-headline text-2xl font-bold text-white mb-4">10. Contact</h2>
             <p>
               For any questions regarding these terms, contact Partners in Biz at{' '}
-              <a href="mailto:hello@partnersinbiz.co" className="text-white hover:text-white/70 transition-opacity underline underline-offset-4">
-                hello@partnersinbiz.co
+              <a href="mailto:peet.stander@partnersinbiz.online" className="text-white hover:text-white/70 transition-opacity underline underline-offset-4">
+                peet.stander@partnersinbiz.online
               </a>.
             </p>
           </div>

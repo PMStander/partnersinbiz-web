@@ -69,7 +69,7 @@ export default function PrivacyPolicyPage() {
               Depending on your jurisdiction, you may have the right to access, correct, or delete your personal data. You may also have the right to object to or restrict certain processing activities.
             </p>
             <p>
-              To exercise these rights, contact us at <a href="mailto:hello@partnersinbiz.co" className="text-white hover:text-white/70 transition-opacity underline underline-offset-4">hello@partnersinbiz.co</a>.
+              To exercise these rights, contact us at <a href="mailto:peet.stander@partnersinbiz.online" className="text-white hover:text-white/70 transition-opacity underline underline-offset-4">peet.stander@partnersinbiz.online</a>.
             </p>
           </div>
 
@@ -98,8 +98,8 @@ export default function PrivacyPolicyPage() {
             <h2 className="font-headline text-2xl font-bold text-white mb-4">9. Contact</h2>
             <p>
               For any privacy-related questions, please contact Partners in Biz at{' '}
-              <a href="mailto:hello@partnersinbiz.co" className="text-white hover:text-white/70 transition-opacity underline underline-offset-4">
-                hello@partnersinbiz.co
+              <a href="mailto:peet.stander@partnersinbiz.online" className="text-white hover:text-white/70 transition-opacity underline underline-offset-4">
+                peet.stander@partnersinbiz.online
               </a>.
             </p>
           </div>
