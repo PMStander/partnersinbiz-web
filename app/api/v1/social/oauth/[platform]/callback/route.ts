@@ -156,10 +156,10 @@ export async function GET(req: NextRequest) {
     )
 
     // Check if account already exists for this platform + platformAccountId
+    // Uses top-level social_accounts collection (matching GET/POST /accounts endpoints)
     const existingQuery = await adminDb
-      .collection('clients')
-      .doc(orgId)
       .collection('social_accounts')
+      .where('orgId', '==', orgId)
       .where('platform', '==', platform)
       .where('platformAccountId', '==', profile.platformAccountId)
       .limit(1)
@@ -195,16 +195,12 @@ export async function GET(req: NextRequest) {
       // Update existing account
       accountId = existingQuery.docs[0].id
       await adminDb
-        .collection('clients')
-        .doc(orgId)
         .collection('social_accounts')
         .doc(accountId)
         .update(accountData)
     } else {
       // Create new account
       const docRef = await adminDb
-        .collection('clients')
-        .doc(orgId)
         .collection('social_accounts')
         .add({
           ...accountData,
