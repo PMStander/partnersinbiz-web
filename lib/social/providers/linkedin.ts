@@ -15,8 +15,8 @@ export class LinkedInProvider extends SocialProvider {
     super('linkedin', credentials)
     if (!credentials.accessToken) throw new Error('LinkedInProvider requires accessToken')
     if (!credentials.personUrn) throw new Error('LinkedInProvider requires personUrn')
-    if (!credentials.personUrn.startsWith('urn:li:')) {
-      throw new Error('personUrn must start with urn:li: (e.g. urn:li:person:XXXXXXXX)')
+    if (!credentials.personUrn.startsWith('urn:li:person:') && !credentials.personUrn.startsWith('urn:li:organization:')) {
+      throw new Error('personUrn must be urn:li:person:XXXX or urn:li:organization:XXXX')
     }
   }
 
@@ -32,16 +32,15 @@ export class LinkedInProvider extends SocialProvider {
   async publishPost(options: PublishOptions): Promise<PublishResult> {
     const body = JSON.stringify({
       author: this.credentials.personUrn,
+      commentary: options.text,
+      visibility: 'PUBLIC',
+      distribution: {
+        feedDistribution: 'MAIN_FEED',
+        targetEntities: [],
+        thirdPartyDistributionChannels: [],
+      },
       lifecycleState: 'PUBLISHED',
-      specificContent: {
-        'com.linkedin.ugc.ShareContent': {
-          shareCommentary: { text: options.text },
-          shareMediaCategory: 'NONE',
-        },
-      },
-      visibility: {
-        'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
-      },
+      isReshareDisabledByAuthor: false,
     })
 
     const response = await fetch(LINKEDIN_POSTS_URL, {
@@ -86,10 +85,38 @@ export class LinkedInProvider extends SocialProvider {
   }
 
   async getProfile(): Promise<ProfileInfo> {
+    const headers = {
+      Authorization: `Bearer ${this.credentials.accessToken}`,
+      'X-Restli-Protocol-Version': '2.0.0',
+      'LinkedIn-Version': '202502',
+    }
+
+    // For org URNs, fetch org details from the organizations API
+    if (this.credentials.personUrn?.startsWith('urn:li:organization:')) {
+      const orgId = this.credentials.personUrn.split(':').pop()!
+      const response = await fetch(
+        `https://api.linkedin.com/v2/organizations/${orgId}?projection=(id,localizedName,vanityName,logoV2(original~:playableStreams))`,
+        { headers },
+      )
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`LinkedIn API error ${response.status}: ${text}`)
+      }
+      const org = await response.json() as { id: number; localizedName: string; vanityName?: string }
+      const vanity = org.vanityName ?? String(org.id)
+      return {
+        platformAccountId: this.credentials.personUrn,
+        displayName: org.localizedName,
+        username: vanity,
+        avatarUrl: '',
+        profileUrl: `https://www.linkedin.com/company/${vanity}`,
+        accountType: 'page',
+      }
+    }
+
+    // Personal account
     const response = await fetch(LINKEDIN_USERINFO_URL, {
-      headers: {
-        Authorization: `Bearer ${this.credentials.accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${this.credentials.accessToken}` },
     })
 
     if (!response.ok) {
@@ -106,8 +133,9 @@ export class LinkedInProvider extends SocialProvider {
       email?: string
     }
 
+    const personUrn = `urn:li:person:${data.sub}`
     return {
-      platformAccountId: data.sub,
+      platformAccountId: personUrn,
       displayName: data.name,
       username: data.email ?? data.sub,
       avatarUrl: data.picture ?? '',

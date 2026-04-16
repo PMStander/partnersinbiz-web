@@ -29,8 +29,10 @@ export async function POST(request: NextRequest) {
         createdAt: FieldValue.serverTimestamp(),
       })
     } else if (isAdmin && userDoc.data()?.role !== 'admin') {
+      // Promote to admin based on ADMIN_EMAIL match
       await userRef.update({ role: 'admin' })
     }
+    // If doc exists and user already has admin role (manually assigned), no action needed — preserve it
 
     const response = NextResponse.json({ status: 'ok' })
     response.cookies.set(COOKIE_NAME, sessionCookie, {

@@ -140,7 +140,7 @@ const TEMPLATES: Record<string, Template[]> = {
           content: 'Add your product description and key features here.',
           fontSize: 28,
           fontFamily: 'Inter',
-          fontWeight: '400',
+          fontWeight: 'normal',
           color: '#6B7280',
           alignment: 'left',
         },
@@ -285,7 +285,7 @@ const TEMPLATES: Record<string, Template[]> = {
           content: 'March 13, 2026',
           fontSize: 20,
           fontFamily: 'Inter',
-          fontWeight: '500',
+          fontWeight: 'normal',
           color: '#F59E0B',
           alignment: 'left',
         },
@@ -491,7 +491,7 @@ export default function DesignPage() {
     const newLayers = layers.map(l =>
       l.id === selectedLayerId ? { ...l, ...updates } : l
     )
-    updateLayers(newLayers)
+    updateLayers(newLayers as Layer[])
   }, [layers, selectedLayerId])
 
   // Canvas rendering

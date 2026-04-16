@@ -11,12 +11,16 @@ import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { validatePostContent } from '@/lib/social/validation'
 import { logAudit } from '@/lib/social/audit'
-import type { SocialPostStatus, SocialPostCategory } from '@/lib/social/types'
-import type { SocialPlatformType } from '@/lib/social/providers'
+import type { SocialPostCategory } from '@/lib/social/types'
+import type { SocialPlatformType, PostStatus } from '@/lib/social/providers'
 
 export const dynamic = 'force-dynamic'
 
-const VALID_STATUSES: SocialPostStatus[] = ['draft', 'scheduled', 'published', 'failed', 'cancelled']
+// Use the canonical PostStatus type — includes pending_approval, approved, publishing, partially_published
+const VALID_STATUSES: PostStatus[] = [
+  'draft', 'pending_approval', 'approved', 'scheduled',
+  'publishing', 'published', 'partially_published', 'failed', 'cancelled',
+]
 const VALID_CATEGORIES: SocialPostCategory[] = ['work', 'personal', 'ai', 'sport', 'sa', 'other']
 
 type Params = { params: Promise<{ id: string }> }
@@ -77,10 +81,10 @@ export const PUT = withAuth('admin', withTenant(async (req, user, orgId, context
   }
 
   if ('status' in body) {
-    if (!VALID_STATUSES.includes(body.status as SocialPostStatus)) {
+    if (!VALID_STATUSES.includes(body.status as PostStatus)) {
       return apiError('Invalid status', 400)
     }
-    updates.status = body.status as SocialPostStatus
+    updates.status = body.status as PostStatus
   }
 
   if ('category' in body) {

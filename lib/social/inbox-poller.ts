@@ -92,7 +92,7 @@ async function pollTwitter(account: PollAccount): Promise<InboxPollResult[]> {
     if (!data.data) return []
 
     // Build a map of user IDs to user info
-    const userMap: Record<string, (typeof data.includes.users)[0]> = {}
+    const userMap: Record<string, { id: string; name: string; username: string; profile_image_url?: string }> = {}
     if (data.includes?.users) {
       for (const u of data.includes.users) {
         userMap[u.id] = u

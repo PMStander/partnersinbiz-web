@@ -9,13 +9,14 @@ type RouteHandler = (req: NextRequest, user: ApiUser, context?: Record<string, u
  * Wraps an API route handler with authentication and role enforcement.
  *
  * Auth methods accepted (in order):
- *  1. Authorization: Bearer <AI_API_KEY>  — long-lived key for agent/Claude access
- *  2. Authorization: Bearer <firebaseIdToken> — client SDK token
+ *  1. Authorization: Bearer ***  — long-lived key for agent/Claude access
+ *  2. Authorization: Bearer *** — client SDK token
  *  3. Session cookie __session — set after browser login
  *
  * Role hierarchy: ai/admin satisfy any role; client only satisfies "client"
  */
-export function withAuth(requiredRole: 'admin' | 'client', handler: RouteHandler) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withAuth(requiredRole: 'admin' | 'client', handler: RouteHandler): any {
   return async (req: NextRequest, context?: Record<string, unknown>): Promise<NextResponse> => {
     try {
       const user = await resolveUser(req)

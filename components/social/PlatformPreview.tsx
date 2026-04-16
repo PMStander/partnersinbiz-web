@@ -109,7 +109,7 @@ const TwitterPreview = ({ content, mediaItems, charLimit, userName = 'Your Name'
           )}
           {mediaItems.length === 2 && (
             <div className="flex gap-0.5">
-              {mediaItems.map(m => (
+              {mediaItems.map((m: { id: string; url: string }) => (
                 <img key={m.id} src={m.url} alt="media" className="flex-1 h-24 object-cover" />
               ))}
             </div>
@@ -126,7 +126,7 @@ const TwitterPreview = ({ content, mediaItems, charLimit, userName = 'Your Name'
           )}
           {mediaItems.length >= 4 && (
             <div className="grid grid-cols-2 gap-0.5">
-              {mediaItems.slice(0, 4).map(m => (
+              {mediaItems.slice(0, 4).map((m: { id: string; url: string }) => (
                 <img key={m.id} src={m.url} alt="media" className="w-full h-24 object-cover" />
               ))}
             </div>

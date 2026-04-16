@@ -3,7 +3,7 @@
  * and stores new items in Firestore with deduplication.
  */
 
-import { FieldValue, Timestamp } from 'firebase-admin/firestore'
+import { FieldValue, Timestamp, Query } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { decryptTokenBlock } from './encryption'
 import { pollPlatform, type InboxPollResult } from './inbox-poller'
@@ -27,7 +27,8 @@ export async function runInboxPoll(orgId?: string): Promise<InboxPollStats> {
 
   try {
     // Query social_accounts
-    let query = adminDb.collection('social_accounts')
+    const base = adminDb.collection('social_accounts')
+    let query: FirebaseFirestore.Query = base
 
     if (orgId) {
       query = query.where('orgId', '==', orgId)

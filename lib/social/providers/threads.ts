@@ -256,12 +256,9 @@ export class ThreadsProvider extends SocialProvider {
   }
 
   async refreshToken(): Promise<ProviderCredentials | null> {
-    // Long-lived token exchange requires app secret
-    if (!this.credentials.apiKeySecret) {
-      return null
-    }
-
-    const url = `${THREADS_API_BASE}/oauth/access_token?grant_type=th_exchange_token&client_secret=${this.credentials.apiKeySecret}&access_token=${this.credentials.accessToken}`
+    // Threads long-lived tokens (60 days) are refreshed with th_refresh_token grant
+    // Must be called before the token expires
+    const url = `https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=${this.credentials.accessToken}`
     const response = await fetch(url)
 
     if (!response.ok) {

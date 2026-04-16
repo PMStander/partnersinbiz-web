@@ -20,12 +20,12 @@ export async function loginWithEmail(email: string, password: string) {
 
 export async function registerWithEmail(email: string, password: string, name: string) {
   const credential = await createUserWithEmailAndPassword(auth, email, password)
+  // Use merge:true and omit role — the server-side session endpoint owns role assignment
   await setDoc(doc(db, 'users', credential.user.uid), {
     name,
     email,
-    role: 'client',
     createdAt: new Date(),
-  })
+  }, { merge: true })
   const idToken = await credential.user.getIdToken()
   await fetch('/api/auth/session', {
     method: 'POST',

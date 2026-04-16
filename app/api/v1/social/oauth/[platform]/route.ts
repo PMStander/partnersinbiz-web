@@ -56,8 +56,10 @@ export const GET = withAuth('client', withTenant(async (req: NextRequest, _user,
 
   // Build authorization URL
   const callbackUrl = getCallbackUrl(platform)
+  // TikTok uses 'client_key' in the auth URL, all other platforms use 'client_id'
+  const clientIdParam = platform === 'tiktok' ? 'client_key' : 'client_id'
   const authParams = new URLSearchParams({
-    client_id: creds.clientId,
+    [clientIdParam]: creds.clientId,
     redirect_uri: callbackUrl,
     response_type: 'code',
     scope: config.scopes.join(' '),

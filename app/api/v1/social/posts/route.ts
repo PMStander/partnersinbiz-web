@@ -8,7 +8,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import type { SocialPlatform, SocialPostStatus } from '@/lib/social/types'
+import type { SocialPlatform } from '@/lib/social/types'
 import type { SocialPlatformType, PostStatus } from '@/lib/social/providers'
 import { ACTIVE_PLATFORMS } from '@/lib/social/providers'
 import { validatePostContent } from '@/lib/social/validation'
@@ -18,7 +18,11 @@ import { notifyApprovalNeeded } from '@/lib/notifications/notify'
 export const dynamic = 'force-dynamic'
 
 const VALID_LEGACY_PLATFORMS: SocialPlatform[] = ['x', 'linkedin']
-const VALID_STATUSES: SocialPostStatus[] = ['draft', 'scheduled', 'published', 'failed', 'cancelled']
+// Use the canonical PostStatus type — includes pending_approval, approved, publishing, partially_published
+const VALID_STATUSES: PostStatus[] = [
+  'draft', 'pending_approval', 'approved', 'scheduled',
+  'publishing', 'published', 'partially_published', 'failed', 'cancelled',
+]
 
 function toLegacyPlatform(platform: string): SocialPlatform | null {
   if (platform === 'x' || platform === 'twitter') return 'x'
@@ -35,7 +39,7 @@ function toProviderPlatform(platform: string): SocialPlatformType | null {
 export const GET = withAuth('client', withTenant(async (req, _user, orgId) => {
   const { searchParams } = new URL(req.url)
   const platform = searchParams.get('platform') as SocialPlatform | null
-  const status = searchParams.get('status') as SocialPostStatus | null
+  const status = searchParams.get('status') as PostStatus | null
   const from = searchParams.get('from')
   const to = searchParams.get('to')
 

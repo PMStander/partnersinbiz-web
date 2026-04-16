@@ -15,9 +15,9 @@ export interface OAuthConfig {
 }
 
 function getAppUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return 'http://localhost:3000'
 }
 
 export function getCallbackUrl(platform: SocialPlatformType): string {
@@ -36,16 +36,16 @@ export function getOAuthConfig(platform: SocialPlatformType): OAuthConfig | null
     case 'instagram':
       return {
         platform: 'instagram',
-        authUrl: 'https://www.facebook.com/v19.0/dialog/oauth',
-        tokenUrl: 'https://graph.facebook.com/v19.0/oauth/access_token',
-        scopes: ['instagram_basic', 'instagram_content_publish', 'pages_show_list'],
+        authUrl: 'https://www.instagram.com/oauth/authorize',
+        tokenUrl: 'https://api.instagram.com/oauth/access_token',
+        scopes: ['instagram_business_basic', 'instagram_business_content_publish', 'instagram_business_manage_comments'],
       }
     case 'linkedin':
       return {
         platform: 'linkedin',
         authUrl: 'https://www.linkedin.com/oauth/v2/authorization',
         tokenUrl: 'https://www.linkedin.com/oauth/v2/accessToken',
-        scopes: ['w_member_social', 'r_liteprofile', 'openid', 'profile'],
+        scopes: ['w_member_social', 'w_organization_social', 'r_liteprofile', 'openid', 'profile'],
       }
     case 'reddit':
       return {
@@ -122,6 +122,13 @@ export function getOAuthConfig(platform: SocialPlatformType): OAuthConfig | null
  * Get the client credentials (client_id, client_secret) for a platform from env.
  */
 export function getClientCredentials(platform: SocialPlatformType): { clientId: string; clientSecret: string } | null {
+  // TikTok uses CLIENT_KEY naming convention instead of CLIENT_ID
+  if (platform === 'tiktok') {
+    const clientId = process.env.TIKTOK_CLIENT_KEY
+    const clientSecret = process.env.TIKTOK_CLIENT_SECRET
+    if (!clientId || !clientSecret) return null
+    return { clientId, clientSecret }
+  }
   const prefix = platform.toUpperCase()
   const clientId = process.env[`${prefix}_CLIENT_ID`]
   const clientSecret = process.env[`${prefix}_CLIENT_SECRET`]

@@ -7,8 +7,10 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import { getDefaultProvider } from '@/lib/social/providers'
+import { getDefaultProvider, getProvider } from '@/lib/social/providers'
 import type { SocialPlatformType } from '@/lib/social/providers'
+import type { ProviderCredentials } from '@/lib/social/providers/base'
+import { decryptTokenBlock } from '@/lib/social/encryption'
 import { logAudit } from '@/lib/social/audit'
 
 export const dynamic = 'force-dynamic'
@@ -48,7 +50,35 @@ export const POST = withAuth('admin', withTenant(async (_req, user, orgId, conte
   let externalId: string
 
   try {
-    const provider = getDefaultProvider(platformType)
+    // Resolve provider: prefer per-account credentials from Firestore, fall back to env vars
+    const accountIds: string[] | undefined = post.accountIds
+    const accountId = Array.isArray(accountIds) && accountIds.length > 0 ? accountIds[0] : null
+
+    let provider
+    if (accountId) {
+      const accountDoc = await adminDb.collection('social_accounts').doc(accountId).get()
+      if (accountDoc.exists && accountDoc.data()?.orgId === orgId) {
+        const account = accountDoc.data()!
+        const { accessToken, refreshToken } = decryptTokenBlock(account.encryptedTokens, orgId)
+        const credentials: ProviderCredentials = {
+          accessToken,
+          // Twitter OAuth 1.0a stores accessTokenSecret in the refreshToken slot
+          accessTokenSecret: refreshToken ?? undefined,
+          // App-level OAuth keys remain in env (shared across all accounts for one app)
+          apiKey: process.env[`${platformType.toUpperCase()}_API_KEY`] ?? process.env.X_API_KEY,
+          apiKeySecret: process.env[`${platformType.toUpperCase()}_API_KEY_SECRET`] ?? process.env.X_API_KEY_SECRET,
+          // LinkedIn personUrn / Facebook pageId stored in platformMeta or platformAccountId
+          personUrn: (account.platformMeta?.personUrn as string | undefined) ?? account.platformAccountId ?? undefined,
+          instanceUrl: account.platformMeta?.instanceUrl as string | undefined,
+        }
+        provider = getProvider(platformType, credentials)
+      } else {
+        provider = getDefaultProvider(platformType)
+      }
+    } else {
+      provider = getDefaultProvider(platformType)
+    }
+
     const threadParts: string[] | undefined = post.threadParts
 
     if (Array.isArray(threadParts) && threadParts.length > 0) {

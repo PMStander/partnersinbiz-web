@@ -74,11 +74,35 @@ export async function GET(req: NextRequest) {
     const tokenResponse = await exchangeCode(config, clientCreds, code, callbackUrl)
 
     // Build provider credentials to fetch profile
-    const providerCreds = {
+    const providerCreds: {
+      accessToken: string
+      refreshToken?: string
+      apiKey: string
+      apiKeySecret: string
+      personUrn?: string
+    } = {
       accessToken: tokenResponse.accessToken,
       refreshToken: tokenResponse.refreshToken ?? undefined,
       apiKey: clientCreds.clientId,
       apiKeySecret: clientCreds.clientSecret,
+    }
+
+    // Instagram Business Login: exchange short-lived token (1h) for long-lived token (60 days)
+    if (platform === 'instagram') {
+      const longLived = await exchangeInstagramLongLivedToken(
+        tokenResponse.accessToken,
+        clientCreds.clientSecret,
+      )
+      providerCreds.accessToken = longLived.accessToken
+    }
+
+    // Threads: exchange short-lived token (1h) for long-lived token (60 days)
+    if (platform === 'threads') {
+      const longLived = await exchangeThreadsLongLivedToken(
+        tokenResponse.accessToken,
+        clientCreds.clientSecret,
+      )
+      providerCreds.accessToken = longLived.accessToken
     }
 
     // Fetch profile from platform
@@ -89,7 +113,11 @@ export async function GET(req: NextRequest) {
         profile = await fetchFacebookPageProfile(tokenResponse.accessToken)
         providerCreds.accessToken = profile.pageAccessToken ?? tokenResponse.accessToken
       } else if (platform === 'instagram') {
-        profile = await fetchInstagramProfile(tokenResponse.accessToken)
+        profile = await fetchInstagramProfile(providerCreds.accessToken)
+      } else if (platform === 'linkedin') {
+        const linkedInProfile = await fetchLinkedInProfile(tokenResponse.accessToken)
+        providerCreds.personUrn = linkedInProfile.personUrn
+        profile = linkedInProfile
       } else {
         const provider = getProvider(platform, {
           ...providerCreds,
@@ -304,29 +332,124 @@ async function fetchFacebookPageProfile(userAccessToken: string) {
   }
 }
 
-async function fetchInstagramProfile(userAccessToken: string) {
-  // Get pages, then find Instagram business account
-  const pagesRes = await fetch(
-    `https://graph.facebook.com/v19.0/me/accounts?fields=instagram_business_account{id,username,name,profile_picture_url,followers_count}&access_token=${userAccessToken}`,
+async function fetchInstagramProfile(accessToken: string) {
+  // Instagram Business Login — profile fetched directly from Instagram Graph API
+  const res = await fetch(
+    `https://graph.instagram.com/v21.0/me?fields=id,username,name,profile_picture_url,followers_count&access_token=${accessToken}`,
   )
-  if (!pagesRes.ok) throw new Error('Failed to fetch Instagram account')
-  const pagesData = await pagesRes.json()
-
-  const page = pagesData.data?.find(
-    (p: Record<string, unknown>) => p.instagram_business_account,
-  )
-  if (!page?.instagram_business_account) {
-    throw new Error('No Instagram business account found. Ensure your account is a business or creator account connected to a Facebook page.')
+  if (!res.ok) throw new Error(`Failed to fetch Instagram profile: ${await res.text()}`)
+  const data = await res.json() as {
+    id: string
+    username: string
+    name?: string
+    profile_picture_url?: string
+    followers_count?: number
   }
 
-  const ig = page.instagram_business_account
   return {
-    platformAccountId: ig.id,
-    displayName: ig.name ?? ig.username,
-    username: ig.username,
-    avatarUrl: ig.profile_picture_url ?? '',
-    profileUrl: `https://www.instagram.com/${ig.username}/`,
+    platformAccountId: data.id,
+    displayName: data.name ?? data.username,
+    username: data.username,
+    avatarUrl: data.profile_picture_url ?? '',
+    profileUrl: `https://www.instagram.com/${data.username}/`,
     accountType: 'business' as const,
-    meta: { facebookPageId: page.id, followersCount: ig.followers_count },
+    meta: { followersCount: data.followers_count },
   }
+}
+
+async function fetchLinkedInProfile(accessToken: string): Promise<{
+  platformAccountId: string
+  displayName: string
+  username: string
+  avatarUrl: string
+  profileUrl: string
+  accountType: 'personal' | 'page'
+  personUrn: string
+  meta: Record<string, unknown>
+}> {
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    'X-Restli-Protocol-Version': '2.0.0',
+    'LinkedIn-Version': '202502',
+  }
+
+  // Get user info first
+  const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!userRes.ok) throw new Error(`Failed to fetch LinkedIn user info: ${await userRes.text()}`)
+  const user = await userRes.json() as { sub: string; name: string; picture?: string; email?: string }
+
+  // Try to find an administered org page with w_organization_social scope
+  try {
+    const orgAclsRes = await fetch(
+      'https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&count=10',
+      { headers },
+    )
+    if (orgAclsRes.ok) {
+      const orgAcls = await orgAclsRes.json() as {
+        elements?: Array<{ organization: string; role: string; state: string }>
+      }
+      const approvedOrg = orgAcls.elements?.find(e => e.state === 'APPROVED')
+      if (approvedOrg) {
+        const orgUrn = approvedOrg.organization
+        const orgId = orgUrn.split(':').pop()!
+        const orgRes = await fetch(
+          `https://api.linkedin.com/v2/organizations/${orgId}?projection=(id,localizedName,vanityName)`,
+          { headers },
+        )
+        if (orgRes.ok) {
+          const org = await orgRes.json() as { id: number; localizedName: string; vanityName?: string }
+          const vanity = org.vanityName ?? String(org.id)
+          return {
+            platformAccountId: orgUrn,
+            displayName: org.localizedName,
+            username: vanity,
+            avatarUrl: '',
+            profileUrl: `https://www.linkedin.com/company/${vanity}`,
+            accountType: 'page',
+            personUrn: orgUrn,
+            meta: { adminUrn: `urn:li:person:${user.sub}`, adminName: user.name },
+          }
+        }
+      }
+    }
+  } catch {
+    // Org fetch failed — fall through to personal account
+  }
+
+  // Personal account
+  const personUrn = `urn:li:person:${user.sub}`
+  return {
+    platformAccountId: personUrn,
+    displayName: user.name,
+    username: user.email ?? user.sub,
+    avatarUrl: user.picture ?? '',
+    profileUrl: `https://www.linkedin.com/in/${user.sub}`,
+    accountType: 'personal',
+    personUrn,
+    meta: {},
+  }
+}
+
+async function exchangeInstagramLongLivedToken(
+  shortLivedToken: string,
+  clientSecret: string,
+): Promise<{ accessToken: string; expiresIn: number }> {
+  const url = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${clientSecret}&access_token=${shortLivedToken}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Instagram long-lived token exchange failed: ${await res.text()}`)
+  const data = await res.json() as { access_token: string; token_type: string; expires_in: number }
+  return { accessToken: data.access_token, expiresIn: data.expires_in }
+}
+
+async function exchangeThreadsLongLivedToken(
+  shortLivedToken: string,
+  clientSecret: string,
+): Promise<{ accessToken: string; expiresIn: number }> {
+  const url = `https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret=${clientSecret}&access_token=${shortLivedToken}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Threads long-lived token exchange failed: ${await res.text()}`)
+  const data = await res.json() as { access_token: string; token_type: string; expires_in: number }
+  return { accessToken: data.access_token, expiresIn: data.expires_in }
 }

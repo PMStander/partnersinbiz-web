@@ -12,7 +12,6 @@ export const dynamic = 'force-dynamic'
 
 export const PATCH = withAuth('client', withTenant(async (req, _user, orgId) => {
   try {
-    const { id } = await req.json().catch(() => ({}))
     const pathname = new URL(req.url).pathname
     const itemId = pathname.split('/').pop()
 

@@ -1,13 +1,14 @@
 /**
- * Instagram Provider — OAuth 2.0 Bearer token implementation via Facebook Graph API.
+ * Instagram Provider — Instagram Business Login API.
  *
- * Uses the Instagram Graph API (v19.0) for publishing, profile retrieval, and analytics.
- * Publishing uses a 2-step container API: create container, then publish container.
+ * Uses the Instagram Graph API (graph.instagram.com v21.0) for publishing,
+ * profile retrieval, and analytics. Publishing uses a 2-step container API:
+ * create container, then publish container.
  */
 import { SocialProvider, type ProviderCredentials, type PublishOptions } from './base'
 import type { PublishResult, ProfileInfo, AnalyticsData } from './types'
 
-const GRAPH_API_BASE = 'https://graph.facebook.com/v19.0'
+const GRAPH_API_BASE = 'https://graph.instagram.com/v21.0'
 
 export class InstagramProvider extends SocialProvider {
   private igUserId: string
@@ -218,12 +219,9 @@ export class InstagramProvider extends SocialProvider {
   }
 
   async refreshToken(): Promise<ProviderCredentials | null> {
-    // Long-lived token exchange requires app credentials
-    if (!this.credentials.apiKey || !this.credentials.apiKeySecret) {
-      return null
-    }
-
-    const url = `${GRAPH_API_BASE}/oauth/access_token?grant_type=fb_exchange_token&client_id=${this.credentials.apiKey}&client_secret=${this.credentials.apiKeySecret}&fb_exchange_token=${this.credentials.accessToken}`
+    // Instagram Business Login long-lived tokens are refreshed directly (no app secret needed)
+    // Tokens must be refreshed within 60 days of last refresh
+    const url = `${GRAPH_API_BASE}/refresh_access_token?grant_type=ig_refresh_token&access_token=${this.credentials.accessToken}`
     const response = await fetch(url)
 
     if (!response.ok) {
