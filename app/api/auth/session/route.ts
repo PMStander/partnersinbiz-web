@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
     })
     return response
   } catch (err: any) {
+    console.error('[session]', err?.message ?? err)
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
   }
 }
