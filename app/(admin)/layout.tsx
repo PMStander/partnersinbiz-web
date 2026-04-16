@@ -1,8 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { adminAuth, adminDb } from '@/lib/firebase/admin'
-import { AdminSidebar } from '@/components/admin/AdminSidebar'
-import { AdminTopbar } from '@/components/admin/AdminTopbar'
+import { AdminShell } from '@/components/admin/AdminShell'
 import { OrgProvider } from '@/lib/contexts/OrgContext'
 import { ToastProvider } from '@/components/ui/Toast'
 
@@ -34,15 +33,7 @@ export default async function AdminLayout({
   return (
     <ToastProvider>
       <OrgProvider>
-        <div className="flex h-screen overflow-hidden bg-black">
-          <AdminSidebar />
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <AdminTopbar userEmail={email} />
-            <main className="flex-1 overflow-y-auto p-6">
-              {children}
-            </main>
-          </div>
-        </div>
+        <AdminShell userEmail={email}>{children}</AdminShell>
       </OrgProvider>
     </ToastProvider>
   )
