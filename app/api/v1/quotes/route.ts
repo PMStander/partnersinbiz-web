@@ -61,11 +61,21 @@ export const POST = withAuth('admin', async (req, user) => {
   }
 
   // Generate quote number: Q-CLI-001
+  // Uses an atomic transaction on a counter document to prevent duplicates under concurrent requests.
   const alphaOnly = clientOrg.name.replace(/[^a-zA-Z]/g, '')
   const prefix = (alphaOnly.length >= 3 ? alphaOnly.slice(0, 3) : alphaOnly.padEnd(3, 'X')).toUpperCase()
-  const countSnap = await adminDb.collection('quotes').where('orgId', '==', body.orgId).get()
-  const count = countSnap.size + 1
-  const quoteNumber = `Q-${prefix}-${String(count).padStart(3, '0')}`
+  const quoteCounterRef = adminDb
+    .collection('organizations')
+    .doc(body.orgId)
+    .collection('counters')
+    .doc('quotes')
+  const quoteCount = await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(quoteCounterRef)
+    const next = snap.exists ? (snap.data()!.count as number) + 1 : 1
+    tx.set(quoteCounterRef, { count: next }, { merge: true })
+    return next
+  })
+  const quoteNumber = `Q-${prefix}-${String(quoteCount).padStart(3, '0')}`
 
   // Calculate totals
   const lineItems = body.lineItems.map((item: any) => ({
