@@ -62,6 +62,7 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
 
   useEffect(() => {
     fetch(`/api/v1/invoices/${id}`)
@@ -80,6 +81,17 @@ export default function InvoiceDetailPage() {
     })
     if (res.ok) setInvoice(prev => prev ? { ...prev, status } : prev)
     setUpdating(false)
+  }
+
+  async function handleDuplicate() {
+    setDuplicating(true)
+    const res = await fetch(`/api/v1/invoices/${id}/duplicate`, { method: 'POST' })
+    if (res.ok) {
+      const body = await res.json()
+      router.push(`/admin/invoicing/${body.data.id}`)
+    } else {
+      setDuplicating(false)
+    }
   }
 
   function handlePrint() {
@@ -111,6 +123,13 @@ export default function InvoiceDetailPage() {
           >
             📄 Download PDF
           </a>
+          <button
+            onClick={handleDuplicate}
+            disabled={duplicating}
+            className="pib-btn-secondary text-sm font-label"
+          >
+            {duplicating ? 'Duplicating…' : 'Duplicate'}
+          </button>
           <button onClick={handlePrint} className="pib-btn-secondary text-sm font-label">Print</button>
         </div>
       </div>
