@@ -1,35 +1,39 @@
 /**
- * Temporary debug endpoint — checks which social platform env vars are set.
+ * Temporary debug endpoint — checks env var injection.
  * DELETE THIS after debugging.
  */
 import { NextResponse } from 'next/server'
 
 export async function GET() {
   const vars = [
+    'ENV_DEBUG_TEST',
     'LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET',
-    'TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET', 'TIKTOK_CLIENT_ID',
+    'TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET',
     'FACEBOOK_CLIENT_ID', 'FACEBOOK_CLIENT_SECRET',
-    'INSTAGRAM_CLIENT_ID', 'INSTAGRAM_CLIENT_SECRET',
-    'PINTEREST_CLIENT_ID', 'PINTEREST_CLIENT_SECRET',
-    'THREADS_CLIENT_ID', 'THREADS_CLIENT_SECRET',
-    'YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET',
-    'REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET',
-    'MASTODON_CLIENT_ID', 'MASTODON_CLIENT_SECRET',
-    'DRIBBBLE_CLIENT_ID', 'DRIBBBLE_CLIENT_SECRET',
-    'NEXT_PUBLIC_APP_URL', 'VERCEL_URL', 'NODE_ENV',
+    'NEXT_PUBLIC_APP_URL', 'NEXT_PUBLIC_FIREBASE_API_KEY',
+    'VERCEL_URL', 'NODE_ENV', 'VERCEL',
+    'FIREBASE_ADMIN_PROJECT_ID', 'ADMIN_EMAIL',
   ]
 
   const result: Record<string, string> = {}
   for (const v of vars) {
     const val = process.env[v]
     if (!val) {
-      result[v] = '❌ MISSING'
-    } else if (val.startsWith('eyJ')) {
-      result[v] = `⚠️ ENCRYPTED BLOB (${val.length} chars)`
+      result[v] = 'MISSING'
     } else {
-      result[v] = `✅ SET (${val.length} chars, starts: ${val.slice(0, 4)}...)`
+      result[v] = `SET:${val.length}:${val.slice(0, 6)}`
     }
   }
+
+  // Count total env vars available
+  result._totalEnvVars = String(Object.keys(process.env).length)
+  // List first 20 env var NAMES (not values) that start with common prefixes
+  const allKeys = Object.keys(process.env).sort()
+  result._sampleKeys = allKeys.filter(k =>
+    k.startsWith('NEXT_') || k.startsWith('FIREBASE') || k.startsWith('LINKEDIN') ||
+    k.startsWith('TIKTOK') || k.startsWith('VERCEL') || k.startsWith('ENV_') ||
+    k.startsWith('ADMIN') || k.startsWith('NODE')
+  ).join(',')
 
   return NextResponse.json(result)
 }
