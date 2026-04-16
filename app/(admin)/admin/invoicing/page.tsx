@@ -46,12 +46,20 @@ export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<InvoiceStatus | 'all'>('all')
+  const [orgMap, setOrgMap] = useState<Record<string, string>>({})
 
   useEffect(() => {
     fetch('/api/v1/invoices')
       .then(r => r.json())
       .then(body => { setInvoices(body.data ?? []); setLoading(false) })
       .catch(() => setLoading(false))
+    fetch('/api/v1/organizations')
+      .then(r => r.json())
+      .then(body => {
+        const map: Record<string, string> = {}
+        for (const org of body.data ?? []) map[org.id] = org.name
+        setOrgMap(map)
+      })
   }, [])
 
   const filtered = filter === 'all' ? invoices : invoices.filter(i => i.status === filter)
@@ -79,12 +87,12 @@ export default function InvoicingPage() {
           <div className="pib-card">
             <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Revenue Collected</p>
             <p className="text-2xl font-headline font-bold" style={{ color: 'var(--color-accent-v2)' }}>
-              ${totalRevenue.toLocaleString()}
+              {formatCurrency(totalRevenue, 'ZAR')}
             </p>
           </div>
           <div className="pib-card">
             <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Outstanding</p>
-            <p className="text-2xl font-headline font-bold text-on-surface">${outstanding.toLocaleString()}</p>
+            <p className="text-2xl font-headline font-bold text-on-surface">{formatCurrency(outstanding, 'ZAR')}</p>
           </div>
           <div className="pib-card">
             <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Overdue</p>
@@ -144,7 +152,7 @@ export default function InvoicingPage() {
                     <p className="text-sm font-mono text-on-surface">{inv.invoiceNumber}</p>
                   </div>
                   <div className="col-span-3 min-w-0">
-                    <p className="text-sm text-on-surface truncate">{inv.orgId}</p>
+                    <p className="text-sm text-on-surface truncate">{orgMap[inv.orgId] ?? inv.orgId}</p>
                   </div>
                   <div className="col-span-2">
                     <span className="text-[10px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ background: `${status.color}20`, color: status.color }}>
