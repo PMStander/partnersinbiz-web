@@ -1,14 +1,65 @@
 // app/(admin)/admin/settings/page.tsx
+'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
 export default function SettingsPage() {
+  const { selectedOrgId, orgName } = useOrg()
+  const [copied, setCopied] = useState(false)
+
+  function copyOrgId() {
+    if (!selectedOrgId) return
+    navigator.clipboard.writeText(selectedOrgId).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       <div>
         <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Settings</p>
         <h1 className="text-2xl font-headline font-bold text-on-surface">Platform Settings</h1>
       </div>
+
+      {/* Organisation */}
+      {selectedOrgId && (
+        <div className="pib-card-section">
+          <div className="pib-card-section-header">
+            <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+              Organisation
+            </span>
+          </div>
+          {orgName && (
+            <div className="pib-card-section-row">
+              <span className="text-sm text-on-surface-variant">Name</span>
+              <span className="text-sm text-on-surface font-medium">{orgName}</span>
+            </div>
+          )}
+          <div className="pib-card-section-row">
+            <span className="text-sm text-on-surface-variant">Org ID</span>
+            <span className="flex items-center gap-2">
+              <code className="font-mono text-xs text-on-surface bg-[var(--color-surface-container)] px-2 py-1 rounded select-all">
+                {selectedOrgId}
+              </code>
+              <button
+                onClick={copyOrgId}
+                className="text-xs text-on-surface-variant hover:text-on-surface transition-colors px-2 py-1 rounded hover:bg-[var(--color-surface-container)]"
+                title="Copy Org ID"
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </span>
+          </div>
+          <div className="px-4 pb-3">
+            <p className="text-[11px] text-on-surface-variant/60">
+              Use this ID when configuring AI agents or API integrations for this organisation.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Platform */}
       <div className="pib-card space-y-2">
