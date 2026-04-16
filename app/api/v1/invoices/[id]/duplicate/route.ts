@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { FieldValue } from 'firebase-admin/firestore'
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
@@ -18,12 +18,23 @@ export const POST = withAuth('admin', async (_req: NextRequest, user, ctx) => {
 
   const invoiceNumber = await generateInvoiceNumber(source.orgId, source.clientDetails?.name ?? source.orgId)
 
+  // Compute relative dueDate preserving payment terms offset
+  let dueDate: any = null
+  if (source.dueDate && source.issueDate) {
+    const issueSec = source.issueDate._seconds ?? (source.issueDate.toDate ? source.issueDate.toDate().getTime() / 1000 : null)
+    const dueSec = source.dueDate._seconds ?? (source.dueDate.toDate ? source.dueDate.toDate().getTime() / 1000 : null)
+    if (issueSec && dueSec) {
+      const offsetMs = (dueSec - issueSec) * 1000
+      dueDate = Timestamp.fromDate(new Date(Date.now() + offsetMs))
+    }
+  }
+
   const doc = {
     orgId: source.orgId,
     invoiceNumber,
     status: 'draft' as const,
     issueDate: FieldValue.serverTimestamp(),
-    dueDate: source.dueDate ?? null,
+    dueDate,
     lineItems: source.lineItems,
     subtotal: source.subtotal,
     taxRate: source.taxRate,
