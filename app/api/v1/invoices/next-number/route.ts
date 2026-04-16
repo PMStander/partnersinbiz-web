@@ -1,0 +1,21 @@
+// app/api/v1/invoices/next-number/route.ts
+import { adminDb } from '@/lib/firebase/admin'
+import { withAuth } from '@/lib/api/auth'
+import { apiSuccess, apiError } from '@/lib/api/response'
+import { previewNextInvoiceNumber } from '@/lib/invoices/invoice-number'
+
+export const dynamic = 'force-dynamic'
+
+export const GET = withAuth('admin', async (req) => {
+  const { searchParams } = new URL(req.url)
+  const orgId = searchParams.get('orgId')
+  if (!orgId) return apiError('orgId is required', 400)
+
+  // Look up org name
+  const orgDoc = await adminDb.collection('organizations').doc(orgId).get()
+  if (!orgDoc.exists) return apiError('Organisation not found', 404)
+  const orgName = orgDoc.data()?.name ?? 'Unknown'
+
+  const invoiceNumber = await previewNextInvoiceNumber(orgId, orgName)
+  return apiSuccess({ invoiceNumber })
+})
