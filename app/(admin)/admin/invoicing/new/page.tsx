@@ -173,7 +173,7 @@ function NewInvoiceForm() {
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="pib-card space-y-4">
           <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Invoice Details</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="pib-label">Client Organisation *</label>
               <select value={orgId} onChange={e => setOrgId(e.target.value)} className="pib-select">
@@ -204,19 +204,33 @@ function NewInvoiceForm() {
 
         <div className="pib-card space-y-3">
           <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Line Items</p>
-          <div className="grid grid-cols-12 gap-2 text-[9px] font-label uppercase tracking-widest text-on-surface-variant">
+          <div className="hidden sm:grid grid-cols-12 gap-2 text-[9px] font-label uppercase tracking-widest text-on-surface-variant">
             <span className="col-span-6">Description</span>
             <span className="col-span-2">Qty</span>
             <span className="col-span-2">Unit Price</span>
             <span className="col-span-2">Amount</span>
           </div>
           {lineItems.map((item, idx) => (
-            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-              <input value={item.description} onChange={e => updateLineItem(idx, 'description', e.target.value)} className={`col-span-6 ${inputClass}`} placeholder="Description" />
-              <input type="number" min="1" value={item.quantity} onChange={e => updateLineItem(idx, 'quantity', e.target.value)} className={`col-span-2 ${inputClass}`} />
-              <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => updateLineItem(idx, 'unitPrice', e.target.value)} className={`col-span-2 ${inputClass}`} />
-              <div className="col-span-1 text-sm text-on-surface">{fmtCurrency(Number(item.quantity) * Number(item.unitPrice), currency)}</div>
-              <button type="button" onClick={() => removeLineItem(idx)} className="col-span-1 text-on-surface-variant hover:text-red-400 transition-colors text-lg leading-none">×</button>
+            <div key={idx} className="grid grid-cols-2 sm:grid-cols-12 gap-2 sm:items-center pb-3 sm:pb-0 border-b border-[var(--color-card-border)] sm:border-0 last:border-b-0">
+              <div className="col-span-2 sm:col-span-6">
+                <label className="pib-label sm:hidden">Description</label>
+                <input value={item.description} onChange={e => updateLineItem(idx, 'description', e.target.value)} className={inputClass} placeholder="Description" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="pib-label sm:hidden">Qty</label>
+                <input type="number" min="1" value={item.quantity} onChange={e => updateLineItem(idx, 'quantity', e.target.value)} className={inputClass} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="pib-label sm:hidden">Unit Price</label>
+                <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={e => updateLineItem(idx, 'unitPrice', e.target.value)} className={inputClass} />
+              </div>
+              <div className="col-span-2 sm:col-span-2 flex items-center justify-between sm:justify-start gap-2">
+                <div className="text-sm text-on-surface">
+                  <span className="sm:hidden text-xs text-on-surface-variant mr-2 uppercase tracking-widest">Amount:</span>
+                  {fmtCurrency(Number(item.quantity) * Number(item.unitPrice), currency)}
+                </div>
+                <button type="button" onClick={() => removeLineItem(idx)} className="text-on-surface-variant hover:text-red-400 transition-colors text-lg leading-none sm:ml-auto" aria-label="Remove line">×</button>
+              </div>
             </div>
           ))}
           <button type="button" onClick={addLineItem} className="pib-btn-secondary text-xs font-label">+ Add Line</button>
@@ -235,14 +249,14 @@ function NewInvoiceForm() {
 
         {error && <p className="text-sm text-red-400">{error}</p>}
 
-        <div className="flex gap-3">
-          <button type="submit" disabled={saving} className="pib-btn-primary font-label">
+        <div className="flex flex-wrap gap-3">
+          <button type="submit" disabled={saving} className="pib-btn-primary font-label flex-1 sm:flex-none justify-center">
             {saving ? 'Creating…' : 'Create Invoice'}
           </button>
-          <button type="button" onClick={handlePreview} className="pib-btn-secondary font-label">
+          <button type="button" onClick={handlePreview} className="pib-btn-secondary font-label flex-1 sm:flex-none justify-center">
             Preview Invoice
           </button>
-          <button type="button" onClick={() => router.back()} className="pib-btn-secondary font-label">Cancel</button>
+          <button type="button" onClick={() => router.back()} className="pib-btn-secondary font-label flex-1 sm:flex-none justify-center">Cancel</button>
         </div>
       </form>
 

@@ -99,24 +99,24 @@ export default function QuoteDetailPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <Link href="/admin/quotes" className="text-xs text-on-surface-variant hover:text-on-surface transition-colors">← Quotes</Link>
           <h1 className="text-2xl font-headline font-bold text-on-surface mt-1">{quote.quoteNumber}</h1>
         </div>
-        <span className="text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded-full" style={{ background: `${status.color}20`, color: status.color }}>
+        <span className="text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded-full self-start sm:self-auto" style={{ background: `${status.color}20`, color: status.color }}>
           {status.label}
         </span>
       </div>
 
       {/* Quote card */}
       <div className="pib-card space-y-6">
-        <div className="flex justify-between">
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-3">
           <div>
             <p className="text-lg font-headline font-bold text-on-surface">Partners in Biz</p>
             <p className="text-sm text-on-surface-variant">partnersinbiz.online</p>
           </div>
-          <div className="text-right">
+          <div className="sm:text-right">
             <p className="text-2xl font-headline font-bold" style={{ color: 'var(--color-accent-v2)' }}>{quote.quoteNumber}</p>
             <p className="text-xs text-on-surface-variant mt-1">Issued: {formatDate(quote.issueDate)}</p>
             <p className="text-xs text-on-surface-variant">Valid Until: {formatDate(quote.validUntil)}</p>
@@ -130,18 +130,20 @@ export default function QuoteDetailPage() {
 
         {/* Line items */}
         <div>
-          <div className="grid grid-cols-12 gap-2 pb-2 border-b border-[var(--color-card-border)]">
+          <div className="hidden sm:grid grid-cols-12 gap-2 pb-2 border-b border-[var(--color-card-border)]">
             <p className="col-span-6 text-[9px] font-label uppercase tracking-widest text-on-surface-variant">Description</p>
             <p className="col-span-2 text-right text-[9px] font-label uppercase tracking-widest text-on-surface-variant">Qty</p>
             <p className="col-span-2 text-right text-[9px] font-label uppercase tracking-widest text-on-surface-variant">Unit</p>
             <p className="col-span-2 text-right text-[9px] font-label uppercase tracking-widest text-on-surface-variant">Amount</p>
           </div>
           {quote.lineItems.map((item, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 py-2 border-b border-[var(--color-card-border)]/50">
-              <p className="col-span-6 text-sm text-on-surface">{item.description}</p>
-              <p className="col-span-2 text-right text-sm text-on-surface-variant">{item.quantity}</p>
-              <p className="col-span-2 text-right text-sm text-on-surface-variant">{fmtCurrency(item.unitPrice, quote.currency)}</p>
-              <p className="col-span-2 text-right text-sm font-medium text-on-surface">{fmtCurrency(item.amount, quote.currency)}</p>
+            <div key={i} className="py-3 border-b border-[var(--color-card-border)]/50 sm:grid sm:grid-cols-12 sm:gap-2 sm:py-2">
+              <p className="text-sm text-on-surface sm:col-span-6 mb-2 sm:mb-0">{item.description}</p>
+              <div className="flex justify-between sm:contents text-sm text-on-surface-variant">
+                <span className="sm:col-span-2 sm:text-right"><span className="sm:hidden text-[9px] font-label uppercase tracking-widest mr-1">Qty</span>{item.quantity}</span>
+                <span className="sm:col-span-2 sm:text-right"><span className="sm:hidden text-[9px] font-label uppercase tracking-widest mr-1">Unit</span>{fmtCurrency(item.unitPrice, quote.currency)}</span>
+                <span className="sm:col-span-2 sm:text-right text-on-surface font-medium"><span className="sm:hidden text-[9px] font-label uppercase tracking-widest mr-1 text-on-surface-variant">Amount</span>{fmtCurrency(item.amount, quote.currency)}</span>
+              </div>
             </div>
           ))}
         </div>
