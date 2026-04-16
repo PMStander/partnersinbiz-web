@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { INTERVAL_LABELS, RecurrenceInterval } from '@/lib/invoices/recurring'
 
 type InvoiceStatus = 'draft' | 'sent' | 'viewed' | 'paid' | 'overdue' | 'cancelled'
 
@@ -63,12 +64,23 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
+  const [schedule, setSchedule] = useState<{ id: string; status: string; interval: string; nextDueAt: any } | null>(null)
+  const [showRecurringForm, setShowRecurringForm] = useState(false)
+  const [recurringInterval, setRecurringInterval] = useState<RecurrenceInterval>('monthly')
+  const [recurringStartDate, setRecurringStartDate] = useState('')
+  const [recurringEndDate, setRecurringEndDate] = useState('')
+  const [savingRecurring, setSavingRecurring] = useState(false)
 
   useEffect(() => {
-    fetch(`/api/v1/invoices/${id}`)
-      .then(r => r.json())
-      .then(body => { setInvoice(body.data); setLoading(false) })
-      .catch(() => setLoading(false))
+    Promise.all([
+      fetch(`/api/v1/invoices/${id}`).then(r => r.json()),
+      fetch(`/api/v1/recurring-schedules?status=all`).then(r => r.json()),
+    ]).then(([invoiceBody, schedulesBody]) => {
+      setInvoice(invoiceBody.data)
+      const match = (schedulesBody.data ?? []).find((s: any) => s.invoiceId === id && s.status !== 'cancelled')
+      if (match) setSchedule(match)
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [id])
 
   async function updateStatus(status: InvoiceStatus) {
@@ -96,6 +108,34 @@ export default function InvoiceDetailPage() {
 
   function handlePrint() {
     window.print()
+  }
+
+  async function handleCreateRecurring() {
+    if (!recurringStartDate) return
+    setSavingRecurring(true)
+    const res = await fetch(`/api/v1/invoices/${id}/recurring`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        interval: recurringInterval,
+        startDate: recurringStartDate,
+        endDate: recurringEndDate || undefined,
+      }),
+    })
+    if (res.ok) {
+      const body = await res.json()
+      setSchedule({ id: body.data.id, status: 'active', interval: recurringInterval, nextDueAt: null })
+      setShowRecurringForm(false)
+    }
+    setSavingRecurring(false)
+  }
+
+  async function handleCancelRecurring() {
+    if (!schedule) return
+    setSavingRecurring(true)
+    const res = await fetch(`/api/v1/invoices/${id}/recurring`, { method: 'DELETE' })
+    if (res.ok) setSchedule(null)
+    setSavingRecurring(false)
   }
 
   if (loading) return <div className="space-y-4"><Skeleton className="h-12 w-64" /><Skeleton className="h-96" /></div>
@@ -216,6 +256,82 @@ export default function InvoiceDetailPage() {
           </button>
         </div>
       )}
+
+      {/* Recurring */}
+      <div className="pib-card space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-on-surface">Recurring Invoice</p>
+            {schedule ? (
+              <p className="text-xs text-on-surface-variant mt-0.5">
+                {INTERVAL_LABELS[schedule.interval as RecurrenceInterval] ?? schedule.interval} · Status: {schedule.status}
+              </p>
+            ) : (
+              <p className="text-xs text-on-surface-variant mt-0.5">Not set up</p>
+            )}
+          </div>
+          {schedule ? (
+            <button
+              onClick={handleCancelRecurring}
+              disabled={savingRecurring}
+              className="pib-btn-secondary text-sm font-label"
+            >
+              Cancel Recurring
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowRecurringForm(v => !v)}
+              className="pib-btn-secondary text-sm font-label"
+            >
+              Set Up Recurring
+            </button>
+          )}
+        </div>
+
+        {showRecurringForm && !schedule && (
+          <div className="space-y-3 border-t border-[var(--color-card-border)] pt-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant block mb-1">Interval</label>
+                <select
+                  value={recurringInterval}
+                  onChange={e => setRecurringInterval(e.target.value as RecurrenceInterval)}
+                  className="pib-input w-full text-sm"
+                >
+                  {(Object.keys(INTERVAL_LABELS) as RecurrenceInterval[]).map(k => (
+                    <option key={k} value={k}>{INTERVAL_LABELS[k]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant block mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={recurringStartDate}
+                  onChange={e => setRecurringStartDate(e.target.value)}
+                  className="pib-input w-full text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant block mb-1">End Date (optional)</label>
+                <input
+                  type="date"
+                  value={recurringEndDate}
+                  onChange={e => setRecurringEndDate(e.target.value)}
+                  className="pib-input w-full text-sm"
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleCreateRecurring}
+              disabled={savingRecurring || !recurringStartDate}
+              className="pib-btn-primary font-label text-sm"
+            >
+              {savingRecurring ? 'Saving…' : 'Save Recurring Schedule'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
