@@ -565,7 +565,7 @@ export default function ComposePage() {
                         onChange={() => toggleAccount(acc.id)}
                         className="accent-white"
                       />
-                      <span className="text-sm text-on-surface">{acc.name || acc.username || acc.id}</span>
+                      <span className="text-sm text-on-surface">{acc.displayName || acc.username || acc.id}</span>
                     </label>
                   ))}
                 </div>

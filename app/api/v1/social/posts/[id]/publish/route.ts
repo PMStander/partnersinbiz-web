@@ -60,17 +60,26 @@ export const POST = withAuth('admin', withTenant(async (_req, user, orgId, conte
       if (accountDoc.exists && accountDoc.data()?.orgId === orgId) {
         const account = accountDoc.data()!
         const { accessToken, refreshToken } = decryptTokenBlock(account.encryptedTokens, orgId)
+
+        // Build credentials based on account type
         const credentials: ProviderCredentials = {
           accessToken,
-          // Twitter OAuth 1.0a stores accessTokenSecret in the refreshToken slot
-          accessTokenSecret: refreshToken ?? undefined,
-          // App-level OAuth keys remain in env (shared across all accounts for one app)
-          apiKey: process.env[`${platformType.toUpperCase()}_API_KEY`] ?? process.env.X_API_KEY,
-          apiKeySecret: process.env[`${platformType.toUpperCase()}_API_KEY_SECRET`] ?? process.env.X_API_KEY_SECRET,
-          // LinkedIn personUrn / Facebook pageId stored in platformMeta or platformAccountId
-          personUrn: (account.platformMeta?.personUrn as string | undefined) ?? account.platformAccountId ?? undefined,
-          instanceUrl: account.platformMeta?.instanceUrl as string | undefined,
+          refreshToken: refreshToken ?? undefined,
+          // LinkedIn: use the stored personUrn (could be org URN or personal URN)
+          personUrn: account.platformAccountId ?? undefined,
+          // Mastodon: instance URL
+          instanceUrl: (account.platformMeta?.instanceUrl as string | undefined) ?? undefined,
         }
+
+        // For Twitter OAuth 1.0a legacy accounts (env-based), add API keys
+        // OAuth 2.0 accounts only need the Bearer accessToken
+        if (platformType === 'twitter' && account.accountType !== 'personal') {
+          // Legacy env-based: needs OAuth 1.0a signing keys
+          credentials.apiKey = process.env.X_API_KEY
+          credentials.apiKeySecret = process.env.X_API_KEY_SECRET
+          credentials.accessTokenSecret = refreshToken ?? undefined
+        }
+
         provider = getProvider(platformType, credentials)
       } else {
         provider = getDefaultProvider(platformType)

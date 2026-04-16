@@ -316,26 +316,57 @@ async function exchangeCode(
 async function fetchFacebookPageProfile(userAccessToken: string) {
   // Get user's pages
   const pagesRes = await fetch(
-    `https://graph.facebook.com/v19.0/me/accounts?access_token=${userAccessToken}`,
+    `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,category,access_token,picture&access_token=${userAccessToken}`,
   )
   if (!pagesRes.ok) throw new Error('Failed to fetch Facebook pages')
   const pagesData = await pagesRes.json()
 
-  if (!pagesData.data?.length) {
-    throw new Error('No Facebook pages found for this account')
+  // Also get the user's personal profile
+  const meRes = await fetch(
+    `https://graph.facebook.com/v19.0/me?fields=id,name,picture&access_token=${userAccessToken}`,
+  )
+  const meData = meRes.ok ? await meRes.json() as { id: string; name: string; picture?: { data?: { url?: string } } } : null
+
+  // Return ALL pages + the user's personal profile info for multi-account support
+  const pages = (pagesData.data ?? []) as Array<{
+    id: string; name: string; category?: string; access_token: string;
+    picture?: { data?: { url?: string } }
+  }>
+
+  if (pages.length === 0 && !meData) {
+    throw new Error('No Facebook pages found and unable to fetch profile')
   }
 
-  // Use the first page
-  const page = pagesData.data[0]
+  // Use the first page if available, otherwise store as personal account
+  if (pages.length > 0) {
+    const page = pages[0]
+    return {
+      platformAccountId: page.id,
+      displayName: page.name,
+      username: page.name,
+      avatarUrl: page.picture?.data?.url ?? '',
+      profileUrl: `https://www.facebook.com/${page.id}`,
+      accountType: 'page' as const,
+      pageAccessToken: page.access_token,
+      meta: {
+        pageCategory: page.category,
+        // Store all available pages so the user can switch later
+        availablePages: pages.map(p => ({ id: p.id, name: p.name, category: p.category })),
+        userAccessToken: userAccessToken, // Needed to fetch other page tokens later
+      },
+    }
+  }
+
+  // No pages — store as personal account (user can still manage pages later)
   return {
-    platformAccountId: page.id,
-    displayName: page.name,
-    username: page.name,
-    avatarUrl: '',
-    profileUrl: `https://www.facebook.com/${page.id}`,
-    accountType: 'page' as const,
-    pageAccessToken: page.access_token,
-    meta: { pageCategory: page.category },
+    platformAccountId: meData!.id,
+    displayName: meData!.name,
+    username: meData!.name,
+    avatarUrl: meData!.picture?.data?.url ?? '',
+    profileUrl: `https://www.facebook.com/${meData!.id}`,
+    accountType: 'personal' as const,
+    pageAccessToken: null,
+    meta: { availablePages: [] },
   }
 }
 
@@ -386,8 +417,10 @@ async function fetchLinkedInProfile(accessToken: string): Promise<{
   })
   if (!userRes.ok) throw new Error(`Failed to fetch LinkedIn user info: ${await userRes.text()}`)
   const user = await userRes.json() as { sub: string; name: string; picture?: string; email?: string }
+  const personalUrn = `urn:li:person:${user.sub}`
 
-  // Try to find an administered org page with w_organization_social scope
+  // Try to find administered org pages with w_organization_social scope
+  const administeredOrgs: Array<{ orgUrn: string; orgId: string; name: string; vanityName: string }> = []
   try {
     const orgAclsRes = await fetch(
       'https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&count=10',
@@ -397,45 +430,69 @@ async function fetchLinkedInProfile(accessToken: string): Promise<{
       const orgAcls = await orgAclsRes.json() as {
         elements?: Array<{ organization: string; role: string; state: string }>
       }
-      const approvedOrg = orgAcls.elements?.find(e => e.state === 'APPROVED')
-      if (approvedOrg) {
-        const orgUrn = approvedOrg.organization
-        const orgId = orgUrn.split(':').pop()!
-        const orgRes = await fetch(
-          `https://api.linkedin.com/v2/organizations/${orgId}?projection=(id,localizedName,vanityName)`,
-          { headers },
-        )
-        if (orgRes.ok) {
-          const org = await orgRes.json() as { id: number; localizedName: string; vanityName?: string }
-          const vanity = org.vanityName ?? String(org.id)
-          return {
-            platformAccountId: orgUrn,
-            displayName: org.localizedName,
-            username: vanity,
-            avatarUrl: '',
-            profileUrl: `https://www.linkedin.com/company/${vanity}`,
-            accountType: 'page',
-            personUrn: orgUrn,
-            meta: { adminUrn: `urn:li:person:${user.sub}`, adminName: user.name },
+      const approvedOrgs = orgAcls.elements?.filter(e => e.state === 'APPROVED') ?? []
+      for (const org of approvedOrgs) {
+        const orgUrn = org.organization
+        const orgNumId = orgUrn.split(':').pop()!
+        try {
+          const orgRes = await fetch(
+            `https://api.linkedin.com/v2/organizations/${orgNumId}?projection=(id,localizedName,vanityName)`,
+            { headers },
+          )
+          if (orgRes.ok) {
+            const orgData = await orgRes.json() as { id: number; localizedName: string; vanityName?: string }
+            administeredOrgs.push({
+              orgUrn,
+              orgId: orgNumId,
+              name: orgData.localizedName,
+              vanityName: orgData.vanityName ?? String(orgData.id),
+            })
           }
-        }
+        } catch { /* skip this org */ }
       }
     }
   } catch {
-    // Org fetch failed — fall through to personal account
+    // Org fetch failed — will fall through to personal account
   }
 
-  // Personal account
-  const personUrn = `urn:li:person:${user.sub}`
+  // If org pages found, use the first one as the primary linked account
+  // Store ALL orgs in meta so the user can switch later
+  if (administeredOrgs.length > 0) {
+    const primary = administeredOrgs[0]
+    return {
+      platformAccountId: primary.orgUrn,
+      displayName: primary.name,
+      username: primary.vanityName,
+      avatarUrl: '',
+      profileUrl: `https://www.linkedin.com/company/${primary.vanityName}`,
+      accountType: 'page',
+      // personUrn is the ORG URN for posting as the org
+      personUrn: primary.orgUrn,
+      meta: {
+        // Store the personal URN — needed for auth and to post as personal later
+        personalUrn,
+        personalName: user.name,
+        personalEmail: user.email,
+        // All administered org pages for future switching
+        administeredOrgs,
+      },
+    }
+  }
+
+  // Personal account only
   return {
-    platformAccountId: personUrn,
+    platformAccountId: personalUrn,
     displayName: user.name,
     username: user.email ?? user.sub,
     avatarUrl: user.picture ?? '',
     profileUrl: `https://www.linkedin.com/in/${user.sub}`,
     accountType: 'personal',
-    personUrn,
-    meta: {},
+    personUrn: personalUrn,
+    meta: {
+      personalUrn,
+      personalEmail: user.email,
+      administeredOrgs: [],
+    },
   }
 }
 
