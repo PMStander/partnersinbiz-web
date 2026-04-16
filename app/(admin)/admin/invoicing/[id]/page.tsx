@@ -24,6 +24,17 @@ interface Invoice {
   sentAt?: any
 }
 
+const CURRENCY_LOCALES: Record<string, string> = { USD: 'en-US', EUR: 'de-DE', ZAR: 'en-ZA' }
+
+function formatCurrencyValue(amount: number, currency: string): string {
+  return new Intl.NumberFormat(CURRENCY_LOCALES[currency] || 'en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)
+}
+
 const STATUS_MAP: Record<InvoiceStatus, { label: string; color: string }> = {
   draft:     { label: 'Draft',     color: 'var(--color-outline)' },
   sent:      { label: 'Sent',      color: '#60a5fa' },
@@ -121,7 +132,7 @@ export default function InvoiceDetailPage() {
 
         <div className="border-t border-[var(--color-card-border)] pt-4">
           <p className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Bill To</p>
-          <p className="text-sm font-medium text-on-surface">{invoice.orgId}</p>
+          <p className="text-sm font-medium text-on-surface">{(invoice as any).clientDetails?.name ?? invoice.orgId}</p>
         </div>
 
         {/* Line items */}
@@ -136,8 +147,8 @@ export default function InvoiceDetailPage() {
             <div key={i} className="grid grid-cols-12 gap-2 py-2 border-b border-[var(--color-card-border)]/50">
               <p className="col-span-6 text-sm text-on-surface">{item.description}</p>
               <p className="col-span-2 text-right text-sm text-on-surface-variant">{item.quantity}</p>
-              <p className="col-span-2 text-right text-sm text-on-surface-variant">${item.unitPrice.toFixed(2)}</p>
-              <p className="col-span-2 text-right text-sm font-medium text-on-surface">${item.amount.toFixed(2)}</p>
+              <p className="col-span-2 text-right text-sm text-on-surface-variant">{formatCurrencyValue(item.unitPrice, invoice.currency)}</p>
+              <p className="col-span-2 text-right text-sm font-medium text-on-surface">{formatCurrencyValue(item.amount, invoice.currency)}</p>
             </div>
           ))}
         </div>
@@ -146,16 +157,16 @@ export default function InvoiceDetailPage() {
         <div className="flex justify-end">
           <div className="space-y-1 min-w-48">
             <div className="flex justify-between text-sm text-on-surface-variant">
-              <span>Subtotal</span><span>${invoice.subtotal?.toFixed(2)}</span>
+              <span>Subtotal</span><span>{formatCurrencyValue(invoice.subtotal ?? 0, invoice.currency)}</span>
             </div>
             {invoice.taxRate > 0 && (
               <div className="flex justify-between text-sm text-on-surface-variant">
-                <span>Tax ({invoice.taxRate}%)</span><span>${invoice.taxAmount?.toFixed(2)}</span>
+                <span>Tax ({invoice.taxRate}%)</span><span>{formatCurrencyValue(invoice.taxAmount ?? 0, invoice.currency)}</span>
               </div>
             )}
             <div className="flex justify-between text-base font-bold text-on-surface pt-1 border-t border-[var(--color-card-border)]">
               <span>Total</span>
-              <span style={{ color: 'var(--color-accent-v2)' }}>${invoice.total?.toFixed(2)} {invoice.currency}</span>
+              <span style={{ color: 'var(--color-accent-v2)' }}>{formatCurrencyValue(invoice.total ?? 0, invoice.currency)}</span>
             </div>
           </div>
         </div>
