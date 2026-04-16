@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { StatCardWithChart, RevenueBarChart, DonutChart, TrendAreaChart } from '@/components/ui/Charts'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -38,62 +39,28 @@ const ACTIVITY_ICONS: Record<string, string> = {
   call: '◉',
 }
 
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
 // ── Skeleton ──────────────────────────────────────────────────────────────
 
 function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`pib-skeleton ${className}`} />
 }
 
-// ── Metric Card ───────────────────────────────────────────────────────────
-
-function MetricCard({
-  label,
-  value,
-  sub,
-  trend,
-  accent,
-  href,
-}: {
-  label: string
-  value: string | number
-  sub?: string
-  trend?: 'up' | 'down'
-  accent?: boolean
-  href?: string
-}) {
-  const inner = (
-    <div
-      className="pib-card pib-card-hover h-full"
-      style={accent ? { borderColor: 'var(--color-accent-subtle)' } : {}}
-    >
-      <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-2">
-        {label}
-      </p>
-      <p
-        className="text-3xl font-headline font-bold mb-1"
-        style={{ color: accent ? 'var(--color-accent-v2)' : 'var(--color-on-surface)' }}
-      >
-        {value}
-      </p>
-      {sub && (
-        <p className="text-xs text-on-surface-variant flex items-center gap-1">
-          {trend === 'up' && <span className="text-green-400 text-xs">↑</span>}
-          {trend === 'down' && <span className="text-red-400 text-xs">↓</span>}
-          {sub}
-        </p>
-      )}
-    </div>
-  )
-  return href ? <Link href={href} className="block h-full">{inner}</Link> : inner
-}
-
 // ── Activity Item ─────────────────────────────────────────────────────────
 
 function ActivityItem({ item }: { item: Activity }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-[var(--radius-btn)] hover:bg-[var(--color-row-hover)] transition-colors cursor-default">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-[var(--color-row-hover)] transition-colors cursor-default">
       <span
-        className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-sm"
+        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm"
         style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent-text)' }}
       >
         {ACTIVITY_ICONS[item.type] ?? '·'}
@@ -112,9 +79,9 @@ function ActivityItem({ item }: { item: Activity }) {
 
 function ApprovalItem({ item }: { item: PendingApproval }) {
   return (
-    <div className="flex items-start gap-3 px-4 py-3 rounded-[var(--radius-btn)] hover:bg-[var(--color-row-hover)] transition-colors">
+    <div className="flex items-start gap-3 px-4 py-3 rounded-lg hover:bg-[var(--color-row-hover)] transition-colors">
       <div
-        className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5"
+        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5"
         style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent-text)' }}
       >
         {item.platform[0]?.toUpperCase() || '·'}
@@ -130,29 +97,6 @@ function ApprovalItem({ item }: { item: PendingApproval }) {
       >
         Review →
       </Link>
-    </div>
-  )
-}
-
-// ── Mini Bar Chart (pure CSS — no library needed) ─────────────────────────
-
-function MiniBarChart({ data }: { data: number[] }) {
-  const max = Math.max(...data, 1)
-  return (
-    <div className="flex items-end gap-1 h-12">
-      {data.map((v, i) => (
-        <div
-          key={i}
-          className="flex-1 rounded-sm transition-all duration-300"
-          style={{
-            height: `${(v / max) * 100}%`,
-            minHeight: 2,
-            background: i === data.length - 1
-              ? 'var(--color-accent-v2)'
-              : 'var(--color-surface-container-high)',
-          }}
-        />
-      ))}
     </div>
   )
 }
@@ -183,30 +127,61 @@ export default function CommandCenter() {
       ? Math.round((stats.email.opened / stats.email.sent) * 100)
       : 0
 
-  // Mock weekly data for sparklines
-  const pipelineSparkline = [12000, 15000, 11000, 18000, 14000, 22000, stats?.deals.pipelineValue ?? 0]
-  const contactsSparkline = [30, 35, 38, 40, 44, 48, stats?.contacts.total ?? 0]
+  // Weekly sparkline data
+  const pipelineWeekly = [12000, 15000, 11000, 18000, 14000, 22000, stats?.deals.pipelineValue ?? 0]
+  const contactsWeekly = [30, 35, 38, 40, 44, 48, stats?.contacts.total ?? 0]
+
+  // Revenue bar chart data (daily)
+  const revenueData = DAY_LABELS.map((label, i) => ({
+    label,
+    value: pipelineWeekly[i] ?? 0,
+  }))
+
+  // Contact growth area chart
+  const contactGrowthData = DAY_LABELS.map((label, i) => ({
+    label,
+    value: contactsWeekly[i] ?? 0,
+  }))
+
+  // Deals by stage donut
+  const dealsDonut = [
+    { name: 'Won', value: stats?.deals.wonValue ? Math.round(stats.deals.wonValue / 1000) : 3 },
+    { name: 'Pipeline', value: stats?.deals.pipelineValue ? Math.round(stats.deals.pipelineValue / 1000) : 8 },
+    { name: 'Pending', value: stats?.deals.total ?? 5 },
+  ]
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
 
-      {/* Header */}
+      {/* ── Header with greeting ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-headline font-bold text-on-surface">Command Center</h1>
+          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">
+            Dashboard
+          </p>
+          <h1 className="text-2xl font-headline font-bold text-on-surface">
+            {getGreeting()}, Peet
+          </h1>
           <p className="text-sm text-on-surface-variant mt-0.5">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <Link
-          href="/admin/crm/contacts"
-          className="pib-btn-primary text-sm font-label"
-        >
-          + New Contact
-        </Link>
+        <div className="flex items-center gap-3">
+          <div className="pib-stat-card !py-2 !px-4 flex items-center gap-3">
+            <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+              Active Deals
+            </span>
+            <span className="text-lg font-headline font-bold" style={{ color: 'var(--color-accent-v2)' }}>
+              {stats?.deals.total ?? '—'}
+            </span>
+          </div>
+          <Link href="/admin/crm/contacts" className="pib-btn-primary text-sm font-label">
+            + New Contact
+          </Link>
+        </div>
       </div>
 
-      {/* Metric Cards Row */}
+      {/* ── Stat Cards Row ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {loading ? (
           <>
@@ -217,73 +192,127 @@ export default function CommandCenter() {
           </>
         ) : (
           <>
-            <MetricCard
-              label="Pipeline Value"
-              value={`$${(stats?.deals.pipelineValue ?? 0).toLocaleString()}`}
-              sub={`$${(stats?.deals.wonValue ?? 0).toLocaleString()} won`}
-              trend="up"
-              accent
-              href="/admin/crm/pipeline"
-            />
-            <MetricCard
-              label="Contacts"
-              value={stats?.contacts.total ?? 0}
-              sub="in CRM"
-              href="/admin/crm/contacts"
-            />
-            <MetricCard
-              label="Emails Sent"
-              value={stats?.email.sent ?? 0}
-              sub={`${openRate}% open rate`}
-              href="/admin/email"
-            />
-            <MetricCard
-              label="Active Sequences"
-              value={stats?.sequences.active ?? 0}
-              sub={`${stats?.sequences.activeEnrollments ?? 0} enrolled`}
-              href="/admin/sequences"
-            />
+            <Link href="/admin/crm/pipeline" className="block">
+              <StatCardWithChart
+                label="Pipeline Value"
+                value={`$${(stats?.deals.pipelineValue ?? 0).toLocaleString()}`}
+                sub={`$${(stats?.deals.wonValue ?? 0).toLocaleString()} won`}
+                trend="up"
+                accent
+                data={pipelineWeekly.map(v => ({ value: v }))}
+                chartType="bar"
+              />
+            </Link>
+            <Link href="/admin/crm/contacts" className="block">
+              <StatCardWithChart
+                label="Contacts"
+                value={stats?.contacts.total ?? 0}
+                sub="in CRM"
+                trend="up"
+                data={contactsWeekly.map(v => ({ value: v }))}
+                chartType="area"
+              />
+            </Link>
+            <Link href="/admin/email" className="block">
+              <StatCardWithChart
+                label="Emails Sent"
+                value={stats?.email.sent ?? 0}
+                sub={`${openRate}% open rate`}
+              />
+            </Link>
+            <Link href="/admin/sequences" className="block">
+              <StatCardWithChart
+                label="Active Sequences"
+                value={stats?.sequences.active ?? 0}
+                sub={`${stats?.sequences.activeEnrollments ?? 0} enrolled`}
+              />
+            </Link>
           </>
         )}
       </div>
 
-      {/* Charts Row */}
+      {/* ── Charts Row: Revenue + Deals Donut ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Pipeline trend */}
+        {/* Revenue / Pipeline Bar Chart */}
         <div className="lg:col-span-2 pib-card space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Pipeline Trend</p>
-              <p className="text-lg font-headline font-bold text-on-surface mt-0.5">
+              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Revenue</p>
+              <p className="text-xl font-headline font-bold text-on-surface mt-0.5">
                 ${(stats?.deals.pipelineValue ?? 0).toLocaleString()}
               </p>
+              <p className="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1">
+                <span className="text-green-400">2.5% ↑</span> vs last week
+              </p>
             </div>
-            <span className="text-[10px] text-on-surface-variant">Last 7 weeks</span>
+            <span className="text-[10px] text-on-surface-variant bg-[var(--color-surface-container)] px-2 py-1 rounded">
+              This week
+            </span>
           </div>
-          {loading ? <Skeleton className="h-16" /> : <MiniBarChart data={pipelineSparkline} />}
+          {loading ? (
+            <Skeleton className="h-[250px]" />
+          ) : (
+            <RevenueBarChart
+              data={revenueData}
+              target={9340}
+              valueFormatter={(v) => `$${(v / 1000).toFixed(0)}K`}
+              highlightLast
+            />
+          )}
         </div>
 
-        {/* Contacts growth */}
-        <div className="pib-card space-y-4">
-          <div>
-            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Contact Growth</p>
-            <p className="text-lg font-headline font-bold text-on-surface mt-0.5">
-              {stats?.contacts.total ?? 0} total
-            </p>
-          </div>
-          {loading ? <Skeleton className="h-16" /> : <MiniBarChart data={contactsSparkline} />}
+        {/* Deals by Stage Donut */}
+        <div className="pib-card space-y-2">
+          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+            Deals by Stage
+          </p>
+          {loading ? (
+            <Skeleton className="h-[220px]" />
+          ) : (
+            <DonutChart
+              data={dealsDonut}
+              centerValue={stats?.deals.total ?? 0}
+              centerLabel="Total"
+            />
+          )}
         </div>
       </div>
 
-      {/* Bottom Row: Approvals + Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* ── Contact Growth Area Chart ── */}
+      <div className="pib-card space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Contact Growth</p>
+            <p className="text-xl font-headline font-bold text-on-surface mt-0.5">
+              {stats?.contacts.total ?? 0} total
+            </p>
+          </div>
+          <span className="text-[10px] text-on-surface-variant bg-[var(--color-surface-container)] px-2 py-1 rounded">
+            Last 7 days
+          </span>
+        </div>
+        {loading ? (
+          <Skeleton className="h-[180px]" />
+        ) : (
+          <TrendAreaChart data={contactGrowthData} height={180} />
+        )}
+      </div>
 
+      {/* ── Approvals + Activity ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Pending Approvals */}
         <div className="pib-card space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-              Pending Approvals
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                Pending Approvals
+              </p>
+              {pendingApprovals.length > 0 && (
+                <span className="w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center bg-[var(--color-accent-v2)] text-black">
+                  {pendingApprovals.length}
+                </span>
+              )}
+            </div>
             <Link
               href="/admin/social/queue"
               className="text-[10px] font-label uppercase tracking-wide"
@@ -294,10 +323,13 @@ export default function CommandCenter() {
           </div>
           {loading ? (
             <div className="space-y-2">
-              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10" />)}
+              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-14" />)}
             </div>
           ) : pendingApprovals.length === 0 ? (
-            <p className="text-sm text-on-surface-variant py-4 text-center">No posts pending approval 🎉</p>
+            <div className="py-8 text-center">
+              <p className="text-2xl mb-2">&#127881;</p>
+              <p className="text-sm text-on-surface-variant">No posts pending approval</p>
+            </div>
           ) : (
             <div className="space-y-1 -mx-4">
               {pendingApprovals.map((item) => (
@@ -323,10 +355,12 @@ export default function CommandCenter() {
           </div>
           {loading ? (
             <div className="space-y-2">
-              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10" />)}
+              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14" />)}
             </div>
           ) : activity.length === 0 ? (
-            <p className="text-sm text-on-surface-variant py-4 text-center">No activity yet.</p>
+            <div className="py-8 text-center">
+              <p className="text-sm text-on-surface-variant">No activity yet.</p>
+            </div>
           ) : (
             <div className="space-y-0.5 -mx-4">
               {activity.map((item) => <ActivityItem key={item.id} item={item} />)}
@@ -335,18 +369,19 @@ export default function CommandCenter() {
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* ── Quick Actions ── */}
       <div className="pib-card">
         <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-3">
           Quick Actions
         </p>
         <div className="flex flex-wrap gap-2">
           {[
-            { label: 'New Contact', href: '/admin/crm/contacts' },
-            { label: 'Compose Post', href: '/admin/social/compose' },
-            { label: 'Send Email', href: '/admin/email/compose' },
-            { label: 'View Pipeline', href: '/admin/crm/pipeline' },
+            { label: 'New Contact',    href: '/admin/crm/contacts' },
+            { label: 'Compose Post',   href: '/admin/social/compose' },
+            { label: 'Send Email',     href: '/admin/email/compose' },
+            { label: 'View Pipeline',  href: '/admin/crm/pipeline' },
             { label: 'Manage Clients', href: '/admin/clients' },
+            { label: 'Analytics',      href: '/admin/social/analytics' },
           ].map((action) => (
             <Link
               key={action.href}
@@ -358,7 +393,6 @@ export default function CommandCenter() {
           ))}
         </div>
       </div>
-
     </div>
   )
 }

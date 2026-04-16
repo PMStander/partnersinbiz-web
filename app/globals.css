@@ -183,6 +183,117 @@
     100% { background-position: -200% 0; }
   }
 
+  /* Stat card with subtle glow */
+  .pib-stat-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-card);
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow-card);
+    position: relative;
+    overflow: hidden;
+  }
+  .pib-stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 120px;
+    height: 120px;
+    background: radial-gradient(circle at top right, rgba(245, 158, 11, 0.06), transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Card section — grouped settings/info block */
+  .pib-card-section {
+    background: var(--color-card);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+  }
+  .pib-card-section-header {
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--color-card-border);
+  }
+  .pib-card-section-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--color-card-border);
+  }
+  .pib-card-section-row:last-child {
+    border-bottom: none;
+  }
+
+  /* Form inputs */
+  .pib-input {
+    width: 100%;
+    background: var(--color-surface-container-low);
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-btn);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-on-surface);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .pib-input::placeholder {
+    color: var(--color-on-surface-variant);
+    opacity: 0.5;
+  }
+  .pib-input:focus {
+    outline: none;
+    border-color: var(--color-accent-v2);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+  }
+
+  .pib-select {
+    width: 100%;
+    background: var(--color-surface-container-low);
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-btn);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-on-surface);
+    transition: border-color 150ms ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2rem;
+  }
+  .pib-select:focus {
+    outline: none;
+    border-color: var(--color-accent-v2);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+  }
+
+  .pib-label {
+    display: block;
+    font-size: 0.75rem;
+    font-family: var(--font-label);
+    color: var(--color-on-surface-variant);
+    margin-bottom: 0.375rem;
+  }
+
+  .pib-textarea {
+    width: 100%;
+    background: var(--color-surface-container-low);
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-btn);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-on-surface);
+    resize: vertical;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .pib-textarea:focus {
+    outline: none;
+    border-color: var(--color-accent-v2);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+  }
+
   /* Active nav indicator */
   .pib-nav-active {
     background: var(--color-accent-subtle);

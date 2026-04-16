@@ -60,7 +60,7 @@ export default function NewInvoicePage() {
     }
   }
 
-  const inputClass = "w-full px-3 py-2 text-sm bg-[var(--color-card)] border border-[var(--color-card-border)] rounded-[var(--radius-btn)] text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-[var(--color-accent-v2)] transition-colors"
+  const inputClass = "pib-input"
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -75,23 +75,23 @@ export default function NewInvoicePage() {
           <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Invoice Details</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-on-surface-variant block mb-1.5">Client Org ID *</label>
+              <label className="pib-label">Client Org ID *</label>
               <input value={orgId} onChange={e => setOrgId(e.target.value)} className={inputClass} placeholder="org-id or slug" />
             </div>
             <div>
-              <label className="text-xs text-on-surface-variant block mb-1.5">Currency</label>
-              <select value={currency} onChange={e => setCurrency(e.target.value)} className={inputClass}>
+              <label className="pib-label">Currency</label>
+              <select value={currency} onChange={e => setCurrency(e.target.value)} className="pib-select">
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
                 <option value="ZAR">ZAR</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-on-surface-variant block mb-1.5">Due Date</label>
+              <label className="pib-label">Due Date</label>
               <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputClass} />
             </div>
             <div>
-              <label className="text-xs text-on-surface-variant block mb-1.5">Tax Rate (%)</label>
+              <label className="pib-label">Tax Rate (%)</label>
               <input type="number" min="0" max="100" value={taxRate} onChange={e => setTaxRate(Number(e.target.value))} className={inputClass} />
             </div>
           </div>
@@ -128,7 +128,7 @@ export default function NewInvoicePage() {
         {/* Notes */}
         <div className="pib-card">
           <label className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant block mb-2">Notes / Terms</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} className={`${inputClass} resize-none`} rows={3} placeholder="Payment terms, thank you note, etc." />
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} className="pib-textarea" rows={3} placeholder="Payment terms, thank you note, etc." />
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

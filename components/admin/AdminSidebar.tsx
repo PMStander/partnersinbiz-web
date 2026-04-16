@@ -14,48 +14,62 @@ interface NavItem {
   icon: string
 }
 
-// Operator view — when no org is selected (platform_owner top-level)
 const OPERATOR_NAV: NavItem[] = [
-  { label: 'Command Center', href: '/admin/dashboard', icon: '◈' },
-  { label: 'Pipeline',       href: '/admin/crm/contacts', icon: '⟳' },
-  { label: 'Clients',        href: '/admin/clients', icon: '◻' },
-  { label: 'Invoicing',      href: '/admin/invoicing', icon: '◷' },
-  { label: 'Settings',       href: '/admin/settings', icon: '◎' },
+  { label: 'Dashboard',  href: '/admin/dashboard',      icon: '⊞' },
+  { label: 'Pipeline',   href: '/admin/crm/contacts',   icon: '⟳' },
+  { label: 'Clients',    href: '/admin/clients',         icon: '◎' },
+  { label: 'Invoicing',  href: '/admin/invoicing',       icon: '◷' },
+  { label: 'Settings',   href: '/admin/settings',        icon: '◆' },
 ]
 
-// Workspace view — when an org is selected (viewing a client workspace)
 function workspaceNav(slug: string): NavItem[] {
   return [
-    { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: '◈' },
-    { label: 'Projects',  href: `/admin/org/${slug}/projects`, icon: '⊞' },
-    { label: 'Social',    href: `/admin/org/${slug}/social`, icon: '◉' },
-    { label: 'Brand',     href: `/admin/org/${slug}/brand`, icon: '◆' },
-    { label: 'Team',      href: `/admin/org/${slug}/team`, icon: '◎' },
-    { label: 'Billing',   href: `/admin/org/${slug}/billing`, icon: '◷' },
-    { label: 'Activity',  href: `/admin/org/${slug}/activity`, icon: '◷' },
-    { label: 'Settings',  href: `/admin/org/${slug}/settings`, icon: '◎' },
+    { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: '⊞' },
+    { label: 'Projects',  href: `/admin/org/${slug}/projects`,  icon: '◈' },
+    { label: 'Social',    href: `/admin/org/${slug}/social`,    icon: '◉' },
+    { label: 'Brand',     href: `/admin/org/${slug}/brand`,     icon: '◆' },
+    { label: 'Team',      href: `/admin/org/${slug}/team`,      icon: '◎' },
+    { label: 'Billing',   href: `/admin/org/${slug}/billing`,   icon: '◷' },
+    { label: 'Activity',  href: `/admin/org/${slug}/activity`,  icon: '⟳' },
+    { label: 'Settings',  href: `/admin/org/${slug}/settings`,  icon: '◆' },
   ]
 }
 
 // ── Sidebar nav item ───────────────────────────────────────────────────────
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const isActive =
-    pathname === item.href || pathname.startsWith(item.href + '/')
+  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
 
   return (
     <Link
       href={item.href}
       className={[
-        'flex items-center gap-3 px-3 py-2.5 text-sm font-label pib-nav-item',
+        'flex items-center gap-3 px-4 py-2.5 text-[13px] font-label rounded-lg transition-all duration-150',
         isActive
-          ? 'pib-nav-active'
-          : 'text-on-surface-variant hover:text-on-surface',
+          ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]'
+          : 'text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-surface-container)]',
       ].join(' ')}
     >
-      <span className={['text-base shrink-0', isActive ? 'text-[var(--color-accent-v2)]' : 'text-on-surface-variant'].join(' ')}>
+      <span className={['text-sm shrink-0', isActive ? 'text-[var(--color-accent-v2)]' : 'opacity-50'].join(' ')}>
         {item.icon}
       </span>
+      {item.label}
+    </Link>
+  )
+}
+
+function SectionLink({ item, pathname }: { item: { label: string; href: string }; pathname: string }) {
+  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+  return (
+    <Link
+      href={item.href}
+      className={[
+        'flex items-center px-4 py-2 text-[13px] font-label rounded-lg transition-all duration-150',
+        isActive
+          ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]'
+          : 'text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-surface-container)]',
+      ].join(' ')}
+    >
       {item.label}
     </Link>
   )
@@ -67,7 +81,6 @@ export function AdminSidebar() {
   const pathname = usePathname()
   const { selectedOrgId, orgs } = useOrg()
 
-  // Find the selected org to get its slug
   const selectedOrg = orgs.find((o) => o.id === selectedOrgId)
   const isWorkspaceMode = !!selectedOrgId && !!selectedOrg
 
@@ -75,112 +88,106 @@ export function AdminSidebar() {
     ? workspaceNav(selectedOrg.slug)
     : OPERATOR_NAV
 
-  const modeLabel = isWorkspaceMode ? selectedOrg.name : 'Operator'
+  // Recent orgs for favorites (up to 4)
+  const favoriteOrgs = orgs.slice(0, 4)
 
   return (
     <aside
-      className="w-56 shrink-0 flex flex-col border-r border-outline-variant h-screen sticky top-0 overflow-y-auto"
+      className="w-60 shrink-0 flex flex-col border-r border-[var(--color-card-border)] h-screen sticky top-0 overflow-y-auto"
       style={{ background: 'var(--color-sidebar)' }}
     >
       {/* Logo */}
-      <div className="px-5 py-4 border-b border-outline-variant flex items-center gap-2">
-        <span className="font-headline text-sm font-bold tracking-widest uppercase text-on-surface">
+      <div className="px-5 py-4 flex items-center gap-2.5">
+        <div className="w-7 h-7 rounded-lg bg-[var(--color-accent-v2)] flex items-center justify-center">
+          <span className="font-headline text-[11px] font-black text-black tracking-tight">P</span>
+        </div>
+        <span className="font-headline text-sm font-bold tracking-wide text-on-surface">
           PiB
         </span>
         <span
-          className="text-[9px] font-label uppercase tracking-widest px-1.5 py-0.5 rounded"
-          style={{
-            background: 'var(--color-accent-subtle)',
-            color: 'var(--color-accent-text)',
-          }}
+          className="text-[9px] font-label uppercase tracking-widest px-1.5 py-0.5 rounded ml-auto"
+          style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent-text)' }}
         >
           {isWorkspaceMode ? 'Client' : 'Admin'}
         </span>
       </div>
 
-      {/* Global Search */}
-      <div className="border-b border-outline-variant px-5 py-3">
+      {/* Search */}
+      <div className="px-3 pb-3">
         <GlobalSearch />
       </div>
 
       {/* Org Switcher */}
-      <div className="border-b border-outline-variant py-2">
+      <div className="border-t border-[var(--color-card-border)] py-2">
         <p className="px-5 pt-1 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/50">
           Context
         </p>
         <OrgSwitcher />
       </div>
 
-      {/* Mode indicator */}
-      <div className="px-5 py-2 border-b border-outline-variant/50">
-        <p className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
-          {isWorkspaceMode ? 'Workspace' : 'Platform'}
-        </p>
-        <p className="text-xs font-label text-on-surface-variant truncate mt-0.5">
-          {modeLabel}
+      {/* Navigation */}
+      <div className="px-3 pt-2 pb-1">
+        <p className="px-2 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40 mb-2">
+          Navigation
         </p>
       </div>
-
-      {/* Nav */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5">
+      <nav className="flex-1 px-3 space-y-0.5">
         {navItems.map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} />
         ))}
       </nav>
 
-      {/* Bottom: social quick links when in workspace mode */}
+      {/* Bottom section links */}
       {isWorkspaceMode && (
-        <div className="border-t border-outline-variant px-2 py-3 space-y-0.5">
-          <p className="px-3 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
+        <div className="border-t border-[var(--color-card-border)] px-3 py-3 space-y-0.5">
+          <p className="px-2 pb-1.5 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
             Social
           </p>
           {[
             { label: 'Accounts', href: '/admin/social/accounts' },
-            { label: 'Compose', href: '/admin/social/compose' },
-            { label: 'Inbox', href: '/admin/social/inbox' },
-            { label: 'Queue', href: '/admin/social/queue' },
+            { label: 'Compose',  href: '/admin/social/compose' },
+            { label: 'Inbox',    href: '/admin/social/inbox' },
+            { label: 'Queue',    href: '/admin/social/queue' },
             { label: 'Calendar', href: '/admin/social/calendar' },
-            { label: 'Design', href: '/admin/social/design' },
-            { label: 'Links', href: '/admin/social/links' },
+            { label: 'Design',   href: '/admin/social/design' },
+            { label: 'Links',    href: '/admin/social/links' },
           ].map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={[
-                'flex items-center px-3 py-2 text-sm font-label pib-nav-item',
-                pathname === item.href
-                  ? 'pib-nav-active'
-                  : 'text-on-surface-variant hover:text-on-surface',
-              ].join(' ')}
-            >
-              {item.label}
-            </Link>
+            <SectionLink key={item.href} item={item} pathname={pathname} />
           ))}
         </div>
       )}
 
-      {/* Bottom: platform tools when in operator mode */}
       {!isWorkspaceMode && (
-        <div className="border-t border-outline-variant px-2 py-3 space-y-0.5">
-          <p className="px-3 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
+        <div className="border-t border-[var(--color-card-border)] px-3 py-3 space-y-0.5">
+          <p className="px-2 pb-1.5 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
             Tools
           </p>
           {[
-            { label: 'Social', href: '/admin/social' },
-            { label: 'Email', href: '/admin/email' },
+            { label: 'Social',    href: '/admin/social' },
+            { label: 'Email',     href: '/admin/email' },
             { label: 'Sequences', href: '/admin/sequences' },
           ].map((item) => (
+            <SectionLink key={item.href} item={item} pathname={pathname} />
+          ))}
+        </div>
+      )}
+
+      {/* Favorites — recent orgs */}
+      {!isWorkspaceMode && favoriteOrgs.length > 0 && (
+        <div className="border-t border-[var(--color-card-border)] px-3 py-3 space-y-1">
+          <p className="px-2 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
+            Favorites
+          </p>
+          {favoriteOrgs.map((org) => (
             <Link
-              key={item.href}
-              href={item.href}
-              className={[
-                'flex items-center px-3 py-2 text-sm font-label pib-nav-item',
-                pathname.startsWith(item.href)
-                  ? 'pib-nav-active'
-                  : 'text-on-surface-variant hover:text-on-surface',
-              ].join(' ')}
+              key={org.id}
+              href={`/admin/org/${org.slug}/dashboard`}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-label text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-surface-container)] transition-colors"
             >
-              {item.label}
+              <span className="w-5 h-5 rounded bg-[var(--color-surface-container-high)] flex items-center justify-center text-[10px] font-bold text-on-surface-variant shrink-0">
+                {org.name?.[0]?.toUpperCase() ?? '?'}
+              </span>
+              <span className="truncate">{org.name}</span>
             </Link>
           ))}
         </div>

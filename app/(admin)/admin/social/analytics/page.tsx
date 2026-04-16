@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useOrg } from '@/lib/contexts/OrgContext'
+import { HorizontalBarChart, DonutChart, TrendAreaChart } from '@/components/ui/Charts'
 
 /* ------------------------------------------------------------------ */
 /*  Types & constants                                                  */
@@ -112,23 +113,10 @@ function PlatformBadge({ platform }: { platform: string }) {
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="p-5 rounded-xl bg-surface-container">
-      <p className="text-[10px] font-medium text-on-surface-variant uppercase tracking-wide">{label}</p>
-      <p className="text-3xl font-bold text-on-surface mt-1">{value}</p>
-      {sub && <p className="text-[10px] text-on-surface-variant mt-0.5">{sub}</p>}
-    </div>
-  )
-}
-
-function MetricBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-on-surface-variant w-20 text-right shrink-0">{label}</span>
-      <div className="flex-1 h-5 bg-surface rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
-      </div>
-      <span className="text-xs font-medium text-on-surface w-14 text-right">{fmtNum(value)}</span>
+    <div className="pib-stat-card">
+      <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-2">{label}</p>
+      <p className="text-3xl font-headline font-bold text-on-surface">{value}</p>
+      {sub && <p className="text-xs text-on-surface-variant mt-1">{sub}</p>}
     </div>
   )
 }
@@ -243,10 +231,11 @@ export default function AnalyticsPage() {
   }, [analytics, filtered])
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-on-surface">Analytics</h1>
-        <p className="text-sm text-on-surface-variant mt-1">Engagement data and performance insights</p>
+        <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Social</p>
+        <h1 className="text-2xl font-headline font-bold text-on-surface">Analytics</h1>
+        <p className="text-sm text-on-surface-variant mt-0.5">Engagement data and performance insights</p>
       </div>
 
       {/* Tabs */}
@@ -298,6 +287,7 @@ export default function AnalyticsPage() {
           {/* ── Overview tab ── */}
           {tab === 'overview' && (
             <div className="space-y-6">
+              {/* Stat Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard label="Published" value={stats.totalPublished} />
                 <StatCard label="Impressions" value={fmtNum(stats.totalImpressions)} />
@@ -305,52 +295,71 @@ export default function AnalyticsPage() {
                 <StatCard label="Engagement Rate" value={stats.avgEngagementRate} />
               </div>
 
-              <div className="rounded-xl bg-surface-container p-5 space-y-3">
-                <h3 className="text-sm font-semibold text-on-surface">Engagement Breakdown</h3>
-                {(() => {
-                  const max = Math.max(stats.totalLikes, stats.totalComments, stats.totalShares, stats.totalClicks, 1)
-                  return (
-                    <div className="space-y-2">
-                      <MetricBar label="Likes" value={stats.totalLikes} max={max} color="#4ade80" />
-                      <MetricBar label="Comments" value={stats.totalComments} max={max} color="#60a5fa" />
-                      <MetricBar label="Shares" value={stats.totalShares} max={max} color="#f472b6" />
-                      <MetricBar label="Clicks" value={stats.totalClicks} max={max} color="#fbbf24" />
-                    </div>
-                  )
-                })()}
+              {/* Engagement Breakdown — Horizontal Bar Chart */}
+              <div className="pib-card space-y-3">
+                <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                  Engagement Breakdown
+                </p>
+                <HorizontalBarChart
+                  data={[
+                    { label: 'Likes', value: stats.totalLikes, color: '#4ade80' },
+                    { label: 'Comments', value: stats.totalComments, color: '#60a5fa' },
+                    { label: 'Shares', value: stats.totalShares, color: '#f472b6' },
+                    { label: 'Clicks', value: stats.totalClicks, color: '#fbbf24' },
+                  ]}
+                  valueFormatter={fmtNum}
+                />
               </div>
 
+              {/* Platform Breakdown — Donut + Detail Cards */}
               {Object.keys(platformBreakdown).length > 0 && (
-                <div className="rounded-xl bg-surface-container p-5 space-y-3">
-                  <h3 className="text-sm font-semibold text-on-surface">By Platform</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {Object.entries(platformBreakdown).map(([platform, data]) => (
-                      <div key={platform} className="rounded-lg bg-surface p-3 space-y-2">
-                        <div className="flex items-center gap-2">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Donut */}
+                  <div className="pib-card space-y-3">
+                    <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                      By Platform
+                    </p>
+                    <DonutChart
+                      data={Object.entries(platformBreakdown).map(([platform, data]) => ({
+                        name: platform.charAt(0).toUpperCase() + platform.slice(1),
+                        value: data.posts,
+                      }))}
+                      centerValue={stats.totalPublished}
+                      centerLabel="Posts"
+                    />
+                  </div>
+
+                  {/* Platform Detail Cards */}
+                  <div className="pib-card space-y-3">
+                    <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                      Platform Performance
+                    </p>
+                    <div className="space-y-2">
+                      {Object.entries(platformBreakdown).map(([platform, data]) => (
+                        <div key={platform} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-surface-container)]">
                           <PlatformBadge platform={platform} />
-                          <span className="text-xs text-on-surface-variant">{data.posts} posts</span>
+                          <span className="text-xs text-on-surface-variant flex-1">{data.posts} posts</span>
+                          <div className="flex gap-4 text-right">
+                            {[
+                              { label: 'Impr.', val: data.impressions },
+                              { label: 'Likes', val: data.likes },
+                              { label: 'Shares', val: data.shares },
+                            ].map(m => (
+                              <div key={m.label}>
+                                <p className="text-[10px] text-on-surface-variant">{m.label}</p>
+                                <p className="text-xs font-medium text-on-surface">{fmtNum(m.val)}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="grid grid-cols-4 gap-2 text-center">
-                          {[
-                            { label: 'Impr.', val: data.impressions },
-                            { label: 'Likes', val: data.likes },
-                            { label: 'Comments', val: data.comments },
-                            { label: 'Shares', val: data.shares },
-                          ].map(m => (
-                            <div key={m.label}>
-                              <p className="text-xs text-on-surface-variant">{m.label}</p>
-                              <p className="text-sm font-semibold text-on-surface">{fmtNum(m.val)}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
 
               {analytics.length === 0 && (
-                <div className="rounded-xl bg-surface-container px-4 py-3 text-xs text-on-surface-variant">
+                <div className="pib-card text-xs text-on-surface-variant">
                   No analytics data collected yet. Analytics are gathered automatically at 1h, 24h, 7d, and 30d after publishing.{' '}
                   <span className="font-medium text-on-surface">Published posts will start showing data after the first collection cycle.</span>
                 </div>
@@ -362,9 +371,9 @@ export default function AnalyticsPage() {
           {tab === 'posts' && (
             <div className="space-y-4">
               {filtered.length === 0 ? (
-                <div className="py-16 text-center text-on-surface-variant text-sm">No published posts found.</div>
+                <div className="pib-card py-16 text-center text-on-surface-variant text-sm">No published posts found.</div>
               ) : (
-                <div className="rounded-xl bg-surface-container overflow-hidden">
+                <div className="pib-card !p-0 overflow-hidden">
                   <div className="grid grid-cols-[90px_1fr_80px_80px_80px_80px_80px] gap-3 px-4 py-2.5 border-b border-outline-variant">
                     {['Platform', 'Content', 'Impr.', 'Likes', 'Comments', 'Shares', 'Clicks'].map((h) => (
                       <span key={h} className="text-[10px] font-medium text-on-surface-variant uppercase tracking-wide">{h}</span>
@@ -417,12 +426,12 @@ export default function AnalyticsPage() {
           {tab === 'best-times' && (
             <div className="space-y-4">
               {bestTimes.length === 0 ? (
-                <div className="rounded-xl bg-surface-container px-4 py-8 text-center text-on-surface-variant text-sm">
+                <div className="pib-card py-8 text-center text-on-surface-variant text-sm">
                   Not enough data to calculate best posting times. Keep publishing and analytics will be collected automatically.
                 </div>
               ) : (
                 <>
-                  <div className="rounded-xl bg-surface-container p-5 space-y-3">
+                  <div className="pib-card space-y-3">
                     <h3 className="text-sm font-semibold text-on-surface">Top Posting Times</h3>
                     <div className="space-y-2">
                       {bestTimes.slice(0, 5).map((slot, i) => (
@@ -438,7 +447,7 @@ export default function AnalyticsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl bg-surface-container p-5 space-y-3">
+                  <div className="pib-card space-y-3">
                     <h3 className="text-sm font-semibold text-on-surface">Engagement Heatmap</h3>
                     <div className="overflow-x-auto">
                       <div className="min-w-[600px]">
