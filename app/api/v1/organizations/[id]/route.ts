@@ -71,6 +71,17 @@ export const PUT = withAuth('admin', async (req, user, ctx) => {
     const existingSettings = data.settings ?? {}
     updates.settings = { ...existingSettings, ...body.settings }
   }
+  if (body.billingDetails && typeof body.billingDetails === 'object') {
+    const existingBilling = data.billingDetails ?? {}
+    updates.billingDetails = { ...existingBilling, ...body.billingDetails }
+    // Deep merge address and bankingDetails
+    if (body.billingDetails.address && typeof body.billingDetails.address === 'object') {
+      updates.billingDetails = { ...(updates.billingDetails as Record<string, unknown>), address: { ...(existingBilling.address ?? {}), ...body.billingDetails.address } }
+    }
+    if (body.billingDetails.bankingDetails && typeof body.billingDetails.bankingDetails === 'object') {
+      updates.billingDetails = { ...(updates.billingDetails as Record<string, unknown>), bankingDetails: { ...(existingBilling.bankingDetails ?? {}), ...body.billingDetails.bankingDetails } }
+    }
+  }
 
   await adminDb.collection('organizations').doc(id).update(updates)
   return apiSuccess({ id, updated: true })
