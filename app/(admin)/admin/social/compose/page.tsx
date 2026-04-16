@@ -65,7 +65,7 @@ export default function ComposePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['twitter'])
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
   const [mode, setMode] = useState<SocialPostMode>('single')
@@ -502,27 +502,43 @@ export default function ComposePage() {
         </div>
       )}
 
-      {/* Platform Multi-Select */}
+      {/* Platform Multi-Select — only platforms with connected accounts */}
       <div>
         <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Platforms</label>
-        <div className="flex flex-wrap gap-2">
-          {PLATFORMS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => togglePlatform(p.id)}
-              className={`px-4 py-2 rounded-lg font-label text-sm font-medium transition-colors ${
-                selectedPlatforms.includes(p.id)
-                  ? 'bg-white text-black'
-                  : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
-              }`}
-            >
-              <span className={`inline-block w-5 h-5 rounded text-[10px] font-bold leading-5 text-center text-white mr-1.5 align-middle ${p.color}`}>
-                {p.short}
-              </span>
-              {p.label}
-            </button>
-          ))}
-        </div>
+        {(() => {
+          const connectedPlatformIds = new Set(accounts.filter(a => a.status !== 'disconnected').map(a => a.platform))
+          const availablePlatforms = PLATFORMS.filter(p => connectedPlatformIds.has(p.id))
+          if (availablePlatforms.length === 0) {
+            return (
+              <div className="rounded-xl bg-surface-container p-4 text-center">
+                <p className="text-sm text-on-surface-variant">No social accounts connected.</p>
+                <a href="/admin/social/accounts" className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block">
+                  Connect accounts →
+                </a>
+              </div>
+            )
+          }
+          return (
+            <div className="flex flex-wrap gap-2">
+              {availablePlatforms.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => togglePlatform(p.id)}
+                  className={`px-4 py-2 rounded-lg font-label text-sm font-medium transition-colors ${
+                    selectedPlatforms.includes(p.id)
+                      ? 'bg-white text-black'
+                      : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
+                  }`}
+                >
+                  <span className={`inline-block w-5 h-5 rounded text-[10px] font-bold leading-5 text-center text-white mr-1.5 align-middle ${p.color}`}>
+                    {p.short}
+                  </span>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )
+        })()}
         {errors.platforms && <p className="text-xs text-red-400 mt-1">{errors.platforms}</p>}
       </div>
 

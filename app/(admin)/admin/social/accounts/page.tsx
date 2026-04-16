@@ -385,7 +385,7 @@ export default function AccountsPage() {
               {unconnectedOAuth.map((p) => (
                 <a
                   key={p.id}
-                  href={`/api/v1/social/oauth/${p.id}?redirectUrl=/admin/social/accounts`}
+                  href={`/api/v1/social/oauth/${p.id}?redirectUrl=/admin/social/accounts${orgId ? `&orgId=${orgId}` : ''}`}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-black font-label text-sm font-medium hover:bg-white/90 transition-colors"
                 >
                   <span className={`${p.color} text-white text-[10px] px-1.5 py-0.5 rounded font-bold`}>
