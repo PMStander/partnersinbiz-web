@@ -57,6 +57,12 @@ export default function Navbar() {
           >
             Start a Project
           </Link>
+          <Link
+            href="/login"
+            className="hidden md:inline-flex rounded-full border border-white/[0.2] hover:border-white/[0.4] hover:bg-white/[0.05] px-6 py-2 text-sm font-medium transition-all active:scale-95 text-white"
+          >
+            Client Login
+          </Link>
 
           {/* Burger — mobile only */}
           <button
@@ -99,6 +105,13 @@ export default function Navbar() {
             </Link>
           ))}
         </nav>
+
+        <Link
+          href="/login"
+          className="mb-6 rounded-full border border-white/[0.2] hover:border-white/[0.4] hover:bg-white/[0.05] px-6 py-3 text-center text-sm font-medium transition-all active:scale-95 text-white"
+        >
+          Client Login
+        </Link>
 
         <p className="font-body text-xs text-white/20 tracking-wide">
           © 2026 Partners in Biz
