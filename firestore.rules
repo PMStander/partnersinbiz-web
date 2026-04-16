@@ -91,6 +91,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /recurring_schedules/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // ── Marketing ────────────────────────────────────────────────────────────
     match /campaigns/{id} {
       allow read, write: if isAdmin();

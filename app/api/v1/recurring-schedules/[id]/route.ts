@@ -16,6 +16,11 @@ export const PATCH = withAuth('admin', async (req: NextRequest, _user, ctx) => {
   const doc = await adminDb.collection('recurring_schedules').doc(id).get()
   if (!doc.exists) return apiError('Schedule not found', 404)
 
+  const current = doc.data()!
+  if (current.status === 'cancelled') {
+    return apiError('Cannot update a cancelled schedule', 409)
+  }
+
   const allowed = ['active', 'paused', 'cancelled']
   if (body.status && !allowed.includes(body.status)) {
     return apiError('status must be active, paused, or cancelled', 400)

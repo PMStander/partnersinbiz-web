@@ -21,6 +21,15 @@ export const POST = withAuth('admin', async (req: NextRequest, user, ctx) => {
   }
   if (!body.startDate) return apiError('startDate is required', 400)
 
+  const startDate = new Date(body.startDate)
+  if (isNaN(startDate.getTime())) return apiError('startDate is not a valid date', 400)
+
+  let endDate: Date | null = null
+  if (body.endDate) {
+    endDate = new Date(body.endDate)
+    if (isNaN(endDate.getTime())) return apiError('endDate is not a valid date', 400)
+  }
+
   const invoiceDoc = await adminDb.collection('invoices').doc(id).get()
   if (!invoiceDoc.exists) return apiError('Invoice not found', 404)
   const invoice = invoiceDoc.data()!
@@ -32,9 +41,6 @@ export const POST = withAuth('admin', async (req: NextRequest, user, ctx) => {
     .limit(1)
     .get()
   if (!existing.empty) return apiError('A recurring schedule already exists for this invoice', 409)
-
-  const startDate = new Date(body.startDate)
-  const endDate = body.endDate ? new Date(body.endDate) : null
   const nextDueAt = calculateNextDueAt(body.interval, startDate)
 
   const doc = {
