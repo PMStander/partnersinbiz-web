@@ -41,7 +41,7 @@ export const GET = withAuth('admin', async (req, user, ctx) => {
     }
 
     // Generate HTML
-    const html = generateInvoiceHtml(invoice, orgName, orgLogo)
+    const html = generateInvoiceHtml(invoice)
 
     // Return as HTML with proper headers for PDF download
     return new NextResponse(html, {
