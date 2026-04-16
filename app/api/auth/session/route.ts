@@ -43,8 +43,9 @@ export async function POST(request: NextRequest) {
       sameSite: 'lax',
     })
     return response
-  } catch {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+  } catch (err: any) {
+    console.error('[session] Firebase Admin error:', err?.message ?? err)
+    return NextResponse.json({ error: 'Invalid token', detail: err?.message }, { status: 401 })
   }
 }
 
