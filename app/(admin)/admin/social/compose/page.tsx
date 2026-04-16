@@ -503,8 +503,8 @@ export default function ComposePage() {
       )}
 
       {/* Platform Multi-Select — only platforms with connected accounts */}
-      <div>
-        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Platforms</label>
+      <div className="pib-card space-y-3">
+        <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Platforms</h2>
         {(() => {
           const connectedPlatformIds = new Set(accounts.filter(a => a.status !== 'disconnected').map(a => a.platform))
           const availablePlatforms = PLATFORMS.filter(p => connectedPlatformIds.has(p.id))
@@ -544,9 +544,9 @@ export default function ComposePage() {
 
       {/* Account Selector */}
       {filteredAccounts.length > 0 && (
-        <div>
-          <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Accounts</label>
-          <div className="rounded-xl bg-surface-container p-3 space-y-2">
+        <div className="pib-card space-y-3">
+          <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Accounts</h2>
+          <div className="space-y-2">
             {selectedPlatforms.map(platformId => {
               const platformAccounts = filteredAccounts.filter(a => a.platform === platformId)
               if (platformAccounts.length === 0) return null
@@ -576,48 +576,50 @@ export default function ComposePage() {
       )}
 
       {/* Mode Toggle and Preview Toggle */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        {showThreadToggle && (
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Mode</label>
-            <div className="flex gap-2">
-              {(['single', 'thread'] as SocialPostMode[]).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={`px-4 py-2 rounded-lg font-label text-sm font-medium transition-colors capitalize ${
-                    mode === m
-                      ? 'bg-white text-black'
-                      : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
-                  }`}
-                >
-                  {m === 'single' ? 'Single Post' : 'Thread'}
-                </button>
-              ))}
+      <div className="pib-card space-y-3">
+        <div className="flex flex-col sm:flex-row gap-4">
+          {showThreadToggle && (
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Mode</label>
+              <div className="flex gap-2">
+                {(['single', 'thread'] as SocialPostMode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`px-4 py-2 rounded-lg font-label text-sm font-medium transition-colors capitalize ${
+                      mode === m
+                        ? 'bg-white text-black'
+                        : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
+                    }`}
+                  >
+                    {m === 'single' ? 'Single Post' : 'Thread'}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Preview Toggle */}
-        <div className={showThreadToggle ? 'flex-1' : 'w-full'}>
-          <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Preview</label>
-          <button
-            onClick={() => setShowPreview(p => !p)}
-            className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              showPreview
-                ? 'bg-amber-500 text-black font-label'
-                : 'bg-surface-container text-on-surface hover:bg-surface-container-high font-label'
-            }`}
-          >
-            {showPreview ? 'Hide Preview' : 'Show Preview'}
-          </button>
+          {/* Preview Toggle */}
+          <div className={showThreadToggle ? 'flex-1' : 'w-full'}>
+            <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Preview</label>
+            <button
+              onClick={() => setShowPreview(p => !p)}
+              className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                showPreview
+                  ? 'bg-amber-500 text-black font-label'
+                  : 'bg-surface-container text-on-surface hover:bg-surface-container-high font-label'
+              }`}
+            >
+              {showPreview ? 'Hide Preview' : 'Show Preview'}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Content */}
       {mode === 'thread' && showThreadToggle ? (
-        <div className="space-y-3">
-          <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide">Thread Parts</label>
+        <div className="pib-card space-y-3">
+          <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Thread Parts</h2>
           {threadParts.map((part, i) => (
             <div key={i} className="rounded-xl bg-surface-container p-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -656,21 +658,18 @@ export default function ComposePage() {
           </button>
         </div>
       ) : (
-        <div>
-          <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Content</label>
-          <div className="rounded-xl bg-surface-container p-3">
-            <textarea
-              rows={6}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your post..."
-              className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 resize-none outline-none"
-            />
-            <div className="flex justify-end mt-1">
-              <span className={`text-xs ${content.length > charLimit ? 'text-red-400' : 'text-on-surface-variant'}`}>
-                {content.length} / {charLimit}
-              </span>
-            </div>
+        <div className="pib-card">
+          <textarea
+            rows={6}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Write your post..."
+            className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 resize-none outline-none"
+          />
+          <div className="flex justify-end mt-1">
+            <span className={`text-xs ${content.length > charLimit ? 'text-red-400' : 'text-on-surface-variant'}`}>
+              {content.length} / {charLimit}
+            </span>
           </div>
           {errors.content && <p className="text-xs text-red-400 mt-1">{errors.content}</p>}
         </div>
@@ -678,7 +677,7 @@ export default function ComposePage() {
 
       {/* Preview Panel */}
       {showPreview && selectedPlatforms.length > 0 && (
-        <div className="rounded-xl bg-surface-container p-6">
+        <div className="pib-card p-6">
           <h3 className="text-sm font-semibold text-on-surface mb-4">Platform Preview</h3>
           <div className="flex gap-4 overflow-x-auto pb-4">
             {selectedPlatforms.map(platformId => {
@@ -701,9 +700,9 @@ export default function ComposePage() {
       )}
 
       {/* Media */}
-      <div>
-        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Media</label>
-        <div className="rounded-xl bg-surface-container p-3 space-y-2">
+      <div className="pib-card space-y-3">
+        <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Media</h2>
+        <div className="space-y-2">
           {mediaItems.length > 0 && (
             <div className="grid grid-cols-2 gap-2 mb-2">
               {mediaItems.map(media => (
@@ -853,7 +852,7 @@ export default function ComposePage() {
       )}
 
       {/* AI Assist */}
-      <div className="rounded-xl bg-surface-container p-4 space-y-3">
+      <div className="pib-card p-4 space-y-3">
         <button
           onClick={() => setShowAi(!showAi)}
           className="flex items-center gap-2 text-sm font-medium text-on-surface hover:text-white transition-colors"
@@ -944,8 +943,9 @@ export default function ComposePage() {
       </div>
 
       {/* Schedule */}
-      <div>
-        <div className="flex items-end gap-2 mb-2">
+      <div className="pib-card space-y-3">
+        <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Schedule</h2>
+        <div className="flex items-end gap-2">
           <div className="flex-1">
             <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Schedule For</label>
             <input
@@ -970,7 +970,7 @@ export default function ComposePage() {
           </button>
         </div>
         {scheduledFor && (
-          <p className="text-xs text-on-surface-variant mb-2">
+          <p className="text-xs text-on-surface-variant">
             {new Date(scheduledFor).toLocaleString()}
           </p>
         )}
@@ -978,8 +978,8 @@ export default function ComposePage() {
       </div>
 
       {/* Category */}
-      <div>
-        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Category</label>
+      <div className="pib-card space-y-3">
+        <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Category</h2>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value as SocialPostCategory)}
@@ -992,8 +992,8 @@ export default function ComposePage() {
       </div>
 
       {/* Hashtags */}
-      <div>
-        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Hashtags</label>
+      <div className="pib-card space-y-3">
+        <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Hashtags</h2>
         <input
           type="text"
           value={hashtagInput}
@@ -1003,7 +1003,7 @@ export default function ComposePage() {
           className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none border border-transparent focus:border-outline-variant transition-colors"
         />
         {hashtags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2">
             {hashtags.map((h) => (
               <span
                 key={h}
@@ -1018,8 +1018,8 @@ export default function ComposePage() {
       </div>
 
       {/* Labels */}
-      <div>
-        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Labels</label>
+      <div className="pib-card space-y-3">
+        <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Labels</h2>
         <input
           type="text"
           value={labelInput}
@@ -1029,7 +1029,7 @@ export default function ComposePage() {
           className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none border border-transparent focus:border-outline-variant transition-colors"
         />
         {labels.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2">
             {labels.map((l) => (
               <span
                 key={l}
@@ -1044,8 +1044,8 @@ export default function ComposePage() {
       </div>
 
       {/* Tags */}
-      <div>
-        <label className="block text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Tags</label>
+      <div className="pib-card space-y-3">
+        <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Tags</h2>
         <input
           type="text"
           value={tagInput}
@@ -1055,7 +1055,7 @@ export default function ComposePage() {
           className="w-full rounded-xl bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none border border-transparent focus:border-outline-variant transition-colors"
         />
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2">
             {tags.map((tag) => (
               <span
                 key={tag}
@@ -1070,28 +1070,30 @@ export default function ComposePage() {
       </div>
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-3 pt-2">
-        <button
-          onClick={handleSaveDraft}
-          disabled={submitting}
-          className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50"
-        >
-          Save Draft
-        </button>
-        <button
-          onClick={handleSchedule}
-          disabled={submitting || !scheduledFor}
-          className="px-4 py-2 rounded-lg bg-white text-black font-label text-sm font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
-        >
-          Schedule
-        </button>
-        <button
-          onClick={handlePublishNow}
-          disabled={submitting}
-          className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50"
-        >
-          Publish Now
-        </button>
+      <div className="pib-card">
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={handleSaveDraft}
+            disabled={submitting}
+            className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50"
+          >
+            Save Draft
+          </button>
+          <button
+            onClick={handleSchedule}
+            disabled={submitting || !scheduledFor}
+            className="px-4 py-2 rounded-lg bg-white text-black font-label text-sm font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
+          >
+            Schedule
+          </button>
+          <button
+            onClick={handlePublishNow}
+            disabled={submitting}
+            className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors disabled:opacity-50"
+          >
+            Publish Now
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 interface BrandProfile {
   logoUrl?: string
   logoMarkUrl?: string
+  bannerUrl?: string
   tagline?: string
   toneOfVoice?: string
   targetAudience?: string
@@ -44,6 +45,7 @@ export default function BrandPage() {
   const [formData, setFormData] = useState<BrandProfile>({
     logoUrl: '',
     logoMarkUrl: '',
+    bannerUrl: '',
     tagline: '',
     toneOfVoice: '',
     targetAudience: '',
@@ -65,6 +67,9 @@ export default function BrandPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoMarkUploading, setLogoMarkUploading] = useState(false)
+  const [bannerUploading, setBannerUploading] = useState(false)
 
   // Load organization
   useEffect(() => {
@@ -86,6 +91,7 @@ export default function BrandPage() {
         setFormData({
           logoUrl: brand.logoUrl || '',
           logoMarkUrl: brand.logoMarkUrl || '',
+          bannerUrl: brand.bannerUrl || '',
           tagline: brand.tagline || '',
           toneOfVoice: brand.toneOfVoice || '',
           targetAudience: brand.targetAudience || '',
@@ -126,6 +132,37 @@ export default function BrandPage() {
       ...prev,
       socialHandles: { ...prev.socialHandles, [platform]: value },
     }))
+  }
+
+  const uploadStates: Record<string, (v: boolean) => void> = {
+    logoUrl: setLogoUploading,
+    logoMarkUrl: setLogoMarkUploading,
+    bannerUrl: setBannerUploading,
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'logoMarkUrl' | 'bannerUrl', folder: string) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const setUploading = uploadStates[field]
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('folder', folder)
+      const res = await fetch('/api/v1/upload', { method: 'POST', body: fd })
+      const body = await res.json()
+      if (res.ok && body.data?.url) {
+        setFormData(prev => ({ ...prev, [field]: body.data.url }))
+      } else {
+        setSaveError(body.error ?? 'Upload failed')
+      }
+    } catch {
+      setSaveError('Upload failed')
+    } finally {
+      setUploading(false)
+      // reset input so same file can be re-uploaded
+      e.target.value = ''
+    }
   }
 
   const addDoWord = () => {
@@ -236,51 +273,93 @@ export default function BrandPage() {
         <form onSubmit={handleSave} className="space-y-6">
           {/* Logo Section */}
           <div className="pib-card space-y-4">
-            <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">
-              Logo
-            </h2>
+            <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Logo</h2>
 
-            {formData.logoUrl && (
-              <div className="flex gap-4">
-                <div
-                  className="w-20 h-20 rounded-lg bg-surface-variant flex items-center justify-center overflow-hidden"
-                  style={{ backgroundColor: 'var(--color-surface-variant)' }}
-                >
-                  <img src={formData.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            {/* Logo */}
+            <div>
+              <label className="block text-[9px] font-label uppercase tracking-widest text-on-surface-variant mb-2">Logo</label>
+              <div className="flex items-start gap-4">
+                {formData.logoUrl ? (
+                  <div className="w-20 h-20 rounded-lg overflow-hidden bg-[var(--color-surface-variant)] flex items-center justify-center flex-shrink-0">
+                    <img src={formData.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-lg bg-[var(--color-surface-variant)] flex items-center justify-center flex-shrink-0">
+                    <span className="text-on-surface-variant text-xs">No logo</span>
+                  </div>
+                )}
+                <div className="flex-1 space-y-2">
+                  <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-label cursor-pointer transition-colors ${logoUploading ? 'opacity-50 cursor-not-allowed' : 'pib-btn-secondary'}`}>
+                    {logoUploading ? 'Uploading…' : '↑ Upload Logo'}
+                    <input type="file" accept="image/*" className="hidden" disabled={logoUploading || saving} onChange={(e) => handleUpload(e, 'logoUrl', 'brands/logos')} />
+                  </label>
+                  <input
+                    type="url"
+                    name="logoUrl"
+                    value={formData.logoUrl}
+                    onChange={handleChange}
+                    placeholder="or paste a URL"
+                    className="pib-input w-full text-xs"
+                    disabled={saving}
+                  />
                 </div>
               </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-label uppercase tracking-widest text-on-surface-variant mb-2">
-                Logo URL
-              </label>
-              <input
-                type="url"
-                name="logoUrl"
-                value={formData.logoUrl}
-                onChange={handleChange}
-                placeholder="https://example.com/logo.png"
-                className="w-full px-3 py-2 rounded-md text-sm"
-                style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}
-                disabled={saving}
-              />
             </div>
 
+            {/* Logo Mark */}
             <div>
-              <label className="block text-xs font-label uppercase tracking-widest text-on-surface-variant mb-2">
-                Logo Mark URL (Icon/Symbol)
-              </label>
-              <input
-                type="url"
-                name="logoMarkUrl"
-                value={formData.logoMarkUrl}
-                onChange={handleChange}
-                placeholder="https://example.com/mark.png"
-                className="w-full px-3 py-2 rounded-md text-sm"
-                style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}
-                disabled={saving}
-              />
+              <label className="block text-[9px] font-label uppercase tracking-widest text-on-surface-variant mb-2">Logo Mark (Icon/Symbol)</label>
+              <div className="flex items-start gap-4">
+                {formData.logoMarkUrl ? (
+                  <div className="w-20 h-20 rounded-lg overflow-hidden bg-[var(--color-surface-variant)] flex items-center justify-center flex-shrink-0">
+                    <img src={formData.logoMarkUrl} alt="Logo Mark" className="w-full h-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-lg bg-[var(--color-surface-variant)] flex items-center justify-center flex-shrink-0">
+                    <span className="text-on-surface-variant text-xs">No mark</span>
+                  </div>
+                )}
+                <div className="flex-1 space-y-2">
+                  <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-label cursor-pointer transition-colors ${logoMarkUploading ? 'opacity-50 cursor-not-allowed' : 'pib-btn-secondary'}`}>
+                    {logoMarkUploading ? 'Uploading…' : '↑ Upload Logo Mark'}
+                    <input type="file" accept="image/*" className="hidden" disabled={logoMarkUploading || saving} onChange={(e) => handleUpload(e, 'logoMarkUrl', 'brands/logos')} />
+                  </label>
+                  <input
+                    type="url"
+                    name="logoMarkUrl"
+                    value={formData.logoMarkUrl}
+                    onChange={handleChange}
+                    placeholder="or paste a URL"
+                    className="pib-input w-full text-xs"
+                    disabled={saving}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Banner */}
+            <div>
+              <label className="block text-[9px] font-label uppercase tracking-widest text-on-surface-variant mb-2">Banner</label>
+              {formData.bannerUrl && (
+                <div className="w-full h-24 rounded-lg overflow-hidden bg-[var(--color-surface-variant)] mb-2">
+                  <img src={formData.bannerUrl} alt="Banner" className="w-full h-full object-cover" />
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-label cursor-pointer transition-colors flex-shrink-0 ${bannerUploading ? 'opacity-50 cursor-not-allowed' : 'pib-btn-secondary'}`}>
+                  {bannerUploading ? 'Uploading…' : '↑ Upload Banner'}
+                  <input type="file" accept="image/*" className="hidden" disabled={bannerUploading || saving} onChange={(e) => handleUpload(e, 'bannerUrl', 'brands/banners')} />
+                </label>
+                <input
+                  type="url"
+                  name="bannerUrl"
+                  value={formData.bannerUrl}
+                  onChange={handleChange}
+                  placeholder="or paste a URL"
+                  className="pib-input flex-1 text-xs"
+                  disabled={saving}
+                />
+              </div>
             </div>
           </div>
 
