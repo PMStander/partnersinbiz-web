@@ -47,7 +47,7 @@ export function ContactForm({ onSave, onCancel, initial = {} }: ContactFormProps
         type={type}
         value={form[key]}
         onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-        className="bg-transparent border border-outline-variant px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-on-surface"
+        className="pib-input"
       />
     </div>
   )
@@ -58,7 +58,7 @@ export function ContactForm({ onSave, onCancel, initial = {} }: ContactFormProps
       <select
         value={form[key]}
         onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-        className="bg-transparent border border-outline-variant px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-on-surface"
+        className="pib-input"
       >
         {options.map((o) => <option key={o} value={o} className="bg-black">{o}</option>)}
       </select>
@@ -81,7 +81,7 @@ export function ContactForm({ onSave, onCancel, initial = {} }: ContactFormProps
           value={form.notes}
           onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
           rows={3}
-          className="bg-transparent border border-outline-variant px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-on-surface resize-none"
+          className="pib-input resize-none"
         />
       </div>
       {error && <p className="text-[11px]" style={{ color: 'var(--color-accent)' }}>{error}</p>}
@@ -89,14 +89,14 @@ export function ContactForm({ onSave, onCancel, initial = {} }: ContactFormProps
         <button
           type="submit"
           disabled={saving}
-          className="flex-1 py-2 text-sm font-label text-black bg-on-surface hover:opacity-90 disabled:opacity-40 transition-opacity"
+          className="pib-btn-primary flex-1 justify-center text-sm font-label disabled:opacity-40"
         >
           {saving ? 'Saving…' : 'Save Contact'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 py-2 text-sm font-label text-on-surface-variant border border-outline-variant hover:text-on-surface transition-colors"
+          className="pib-btn-secondary flex-1 justify-center text-sm font-label"
         >
           Cancel
         </button>

@@ -19,6 +19,40 @@ interface Contact {
   tags: string[]
 }
 
+function StageBadge({ stage }: { stage: string }) {
+  const win = ['won', 'demo', 'replied']
+  const lost = ['lost']
+  const color = lost.includes(stage)
+    ? 'var(--color-error)'
+    : win.includes(stage)
+    ? '#4ade80'
+    : 'var(--color-accent-v2)'
+  return (
+    <span
+      className="text-[10px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full capitalize"
+      style={{ background: `${color}20`, color }}
+    >
+      {stage}
+    </span>
+  )
+}
+
+function TypeBadge({ type }: { type: string }) {
+  const color = type === 'client'
+    ? '#4ade80'
+    : type === 'churned'
+    ? 'var(--color-error)'
+    : 'var(--color-accent-v2)'
+  return (
+    <span
+      className="text-[10px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full capitalize"
+      style={{ background: `${color}20`, color }}
+    >
+      {type}
+    </span>
+  )
+}
+
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,11 +95,13 @@ export default function ContactsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-headline text-2xl font-bold tracking-tighter">Contacts</h1>
-          <p className="text-on-surface-variant text-sm mt-0.5">{contacts.length} total</p>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-accent-v2)' }}>
+            {contacts.length} total
+          </p>
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="px-4 py-2 text-sm font-label text-black bg-on-surface hover:opacity-90 transition-opacity"
+          className="pib-btn-primary text-sm font-label"
         >
           + New Contact
         </button>
@@ -77,12 +113,12 @@ export default function ContactsPage() {
           placeholder="Search name, email, company…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 bg-transparent border border-outline-variant px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-on-surface"
+          className="pib-input flex-1"
         />
         <select
           value={stageFilter}
           onChange={(e) => setStageFilter(e.target.value)}
-          className="bg-transparent border border-outline-variant px-3 py-1.5 text-sm text-on-surface focus:outline-none"
+          className="pib-input !w-auto"
         >
           <option value="">All stages</option>
           {STAGES.map((s) => <option key={s} value={s} className="bg-black">{s}</option>)}
@@ -90,7 +126,7 @@ export default function ContactsPage() {
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="bg-transparent border border-outline-variant px-3 py-1.5 text-sm text-on-surface focus:outline-none"
+          className="pib-input !w-auto"
         >
           <option value="">All types</option>
           {TYPES.map((t) => <option key={t} value={t} className="bg-black">{t}</option>)}
@@ -101,13 +137,13 @@ export default function ContactsPage() {
       {loading ? (
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-10 bg-surface-container animate-pulse" />
+            <div key={i} className="h-10 pib-skeleton" />
           ))}
         </div>
       ) : contacts.length === 0 ? (
-        <div className="border border-outline-variant p-12 text-center">
-          <p className="text-on-surface-variant mb-3">No contacts yet.</p>
-          <button onClick={() => setShowNew(true)} className="text-sm text-on-surface underline">
+        <div className="border border-outline-variant rounded-lg p-12 text-center">
+          <p className="text-on-surface-variant mb-4">No contacts yet.</p>
+          <button onClick={() => setShowNew(true)} className="pib-btn-primary text-sm font-label">
             Add your first lead →
           </button>
         </div>
@@ -126,22 +162,14 @@ export default function ContactsPage() {
             {contacts.map((c) => (
               <tr key={c.id} className="border-b border-outline-variant hover:bg-surface-container transition-colors">
                 <td className="py-2.5 px-3">
-                  <Link href={`/admin/crm/contacts/${c.id}`} className="text-on-surface hover:underline font-medium">
+                  <Link href={`/admin/crm/contacts/${c.id}`} className="font-medium hover:underline" style={{ color: 'var(--color-accent-v2)' }}>
                     {c.name}
                   </Link>
                 </td>
                 <td className="py-2.5 px-3 text-on-surface-variant">{c.email}</td>
                 <td className="py-2.5 px-3 text-on-surface-variant">{c.company || '—'}</td>
-                <td className="py-2.5 px-3">
-                  <span className="border border-outline-variant text-[10px] font-label uppercase tracking-widest px-2 py-0.5 text-on-surface-variant">
-                    {c.type}
-                  </span>
-                </td>
-                <td className="py-2.5 px-3">
-                  <span className="border border-outline-variant text-[10px] font-label uppercase tracking-widest px-2 py-0.5 text-on-surface-variant">
-                    {c.stage}
-                  </span>
-                </td>
+                <td className="py-2.5 px-3"><TypeBadge type={c.type} /></td>
+                <td className="py-2.5 px-3"><StageBadge stage={c.stage} /></td>
                 <td className="py-2.5 px-3 text-on-surface-variant text-xs">
                   {c.tags?.join(', ') || '—'}
                 </td>
@@ -156,8 +184,9 @@ export default function ContactsPage() {
         <div className="fixed inset-0 z-50 flex">
           <div className="flex-1 bg-black/50" onClick={() => setShowNew(false)} />
           <div className="w-96 bg-surface-container border-l border-outline-variant overflow-y-auto">
-            <div className="px-6 py-4 border-b border-outline-variant">
+            <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
               <h2 className="font-headline text-base font-bold tracking-tight">New Contact</h2>
+              <button onClick={() => setShowNew(false)} className="text-on-surface-variant hover:text-on-surface text-lg leading-none">✕</button>
             </div>
             <ContactForm onSave={createContact} onCancel={() => setShowNew(false)} />
           </div>

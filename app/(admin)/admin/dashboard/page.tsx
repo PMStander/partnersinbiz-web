@@ -175,8 +175,9 @@ export default function CommandCenter() {
               {stats?.deals.total ?? '—'}
             </span>
           </div>
-          <Link href="/admin/crm/contacts" className="pib-btn-primary text-sm font-label">
-            + New Contact
+          <Link href="/admin/crm/contacts" className="pib-btn-primary text-sm font-label whitespace-nowrap !px-2 !py-1 sm:!px-4 sm:!py-2">
+            <span className="sm:hidden whitespace-nowrap">+ Contact</span>
+            <span className="hidden sm:inline whitespace-nowrap">+ New Contact</span>
           </Link>
         </div>
       </div>

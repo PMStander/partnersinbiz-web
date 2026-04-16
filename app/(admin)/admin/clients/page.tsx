@@ -89,7 +89,7 @@ export default function ClientsPage() {
         <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-[var(--color-card-border)]">
           <p className="col-span-5 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Name</p>
           <p className="col-span-2 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Status</p>
-          <p className="col-span-2 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Members</p>
+          <p className="col-span-2 text-[10px] font-label uppercase tracking-widest text-on-surface-variant text-center sm:text-left">Members</p>
           <p className="col-span-3 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Actions</p>
         </div>
 
@@ -125,22 +125,29 @@ export default function ClientsPage() {
                   <StatusBadge status={org.status} />
                 </div>
                 {/* Members */}
-                <div className="col-span-2">
-                  <p className="text-sm text-on-surface-variant">{org.memberCount} member{org.memberCount !== 1 ? 's' : ''}</p>
+                <div className="col-span-2 flex justify-center sm:justify-start">
+                  <p className="text-sm text-on-surface-variant text-center sm:text-left">
+                    <span className="sm:hidden">{org.memberCount}</span>
+                    <span className="hidden sm:inline">{org.memberCount} member{org.memberCount !== 1 ? 's' : ''}</span>
+                  </p>
                 </div>
                 {/* Actions */}
                 <div className="col-span-3 flex gap-2">
                   <Link
                     href={`/admin/org/${org.slug}/dashboard`}
-                    className="pib-btn-secondary text-xs font-label"
+                    className="pib-btn-secondary text-xs font-label !px-2 sm:!px-4"
+                    title="Open"
                   >
-                    Open
+                    <span className="sm:hidden">↗</span>
+                    <span className="hidden sm:inline">Open</span>
                   </Link>
                   <Link
                     href={`/admin/organizations/${org.id}`}
-                    className="pib-btn-secondary text-xs font-label"
+                    className="pib-btn-secondary text-xs font-label !px-2 sm:!px-4"
+                    title="Edit"
                   >
-                    Edit
+                    <span className="sm:hidden">✎</span>
+                    <span className="hidden sm:inline">Edit</span>
                   </Link>
                 </div>
               </div>
