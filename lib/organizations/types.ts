@@ -31,6 +31,37 @@ export interface BrandProfile {
   guidelines?: string       // Free-form markdown for additional brand notes
 }
 
+// ── Address ──────────────────────────────────────────────────────────────
+
+export interface Address {
+  line1: string           // Street address line 1
+  line2?: string          // Street address line 2
+  city: string
+  state?: string          // State/province/region
+  postalCode: string
+  country: string         // e.g. "South Africa", "United States"
+}
+
+// ── Billing Details ──────────────────────────────────────────────────────
+
+export interface BankingDetails {
+  bankName: string
+  accountHolder: string
+  accountNumber: string
+  branchCode?: string     // Used in ZA
+  routingNumber?: string  // Used in US
+  swiftCode?: string      // For international payments
+  iban?: string           // For EU payments
+}
+
+export interface BillingDetails {
+  address?: Address
+  vatNumber?: string          // e.g. "4000000000"
+  registrationNumber?: string // Company registration
+  phone?: string
+  bankingDetails?: BankingDetails
+}
+
 // ── Org Settings ──────────────────────────────────────────────────────────
 
 export interface OrgSettings {
@@ -70,6 +101,7 @@ export interface Organization {
   industry?: string
   plan?: string
   billingEmail?: string
+  billingDetails?: BillingDetails
   createdBy: string
   members: OrgMember[]
   settings?: OrgSettings
