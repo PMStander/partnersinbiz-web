@@ -135,6 +135,7 @@ export function AdminSidebar() {
             Social
           </p>
           {[
+            { label: 'Accounts', href: '/admin/social/accounts' },
             { label: 'Compose', href: '/admin/social/compose' },
             { label: 'Inbox', href: '/admin/social/inbox' },
             { label: 'Queue', href: '/admin/social/queue' },
