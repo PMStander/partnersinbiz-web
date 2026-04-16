@@ -10,6 +10,46 @@ export interface LineItem {
   amount: number
 }
 
+export interface InvoiceAddress {
+  line1: string
+  line2?: string
+  city: string
+  state?: string
+  postalCode: string
+  country: string
+}
+
+export interface InvoiceBankingDetails {
+  bankName: string
+  accountHolder: string
+  accountNumber: string
+  branchCode?: string
+  swiftCode?: string
+  iban?: string
+}
+
+/** Snapshot of the sender's details at invoice creation time */
+export interface InvoiceFromDetails {
+  companyName: string
+  address?: InvoiceAddress
+  email?: string
+  phone?: string
+  vatNumber?: string
+  registrationNumber?: string
+  website?: string
+  logoUrl?: string
+  bankingDetails?: InvoiceBankingDetails
+}
+
+/** Snapshot of the client's details at invoice creation time */
+export interface InvoiceClientDetails {
+  name: string
+  address?: InvoiceAddress
+  email?: string
+  phone?: string
+  vatNumber?: string
+}
+
 export interface Invoice {
   id?: string
   orgId: string
@@ -27,6 +67,10 @@ export interface Invoice {
   paidAt: Timestamp | null
   sentAt: Timestamp | null
   createdBy: string
+  /** Snapshot of sender details — frozen at creation */
+  fromDetails?: InvoiceFromDetails
+  /** Snapshot of client details — frozen at creation */
+  clientDetails?: InvoiceClientDetails
   createdAt?: unknown
   updatedAt?: unknown
 }
