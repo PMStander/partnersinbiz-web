@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect } from 'react'
 import { OrgSwitcher } from './OrgSwitcher'
 import GlobalSearch from './GlobalSearch'
 import { useOrg } from '@/lib/contexts/OrgContext'
@@ -79,7 +80,12 @@ function SectionLink({ item, pathname }: { item: { label: string; href: string }
 
 // ── Main sidebar ───────────────────────────────────────────────────────────
 
-export function AdminSidebar() {
+interface AdminSidebarProps {
+  open?: boolean
+  onClose?: () => void
+}
+
+export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
   const pathname = usePathname()
   const { selectedOrgId, orgs } = useOrg()
 
@@ -93,11 +99,46 @@ export function AdminSidebar() {
   // Recent orgs for favorites (up to 4)
   const favoriteOrgs = orgs.slice(0, 4)
 
+  // Auto-close drawer on navigation
+  useEffect(() => {
+    onClose?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
+
+  // Prevent body scroll while drawer is open on mobile
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const isMobile = window.matchMedia('(max-width: 767px)').matches
+    if (open && isMobile) {
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.body.style.overflow = ''
+      }
+    }
+  }, [open])
+
   return (
-    <aside
-      className="w-60 shrink-0 flex flex-col border-r border-[var(--color-card-border)] h-screen sticky top-0 overflow-y-auto"
-      style={{ background: 'var(--color-sidebar)' }}
-    >
+    <>
+      {/* Mobile backdrop */}
+      <div
+        onClick={onClose}
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
+          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden="true"
+      />
+
+      <aside
+        className={[
+          'w-60 shrink-0 flex flex-col border-r border-[var(--color-card-border)] overflow-y-auto',
+          // Desktop: sticky sidebar
+          'md:h-screen md:sticky md:top-0 md:translate-x-0 md:z-auto',
+          // Mobile: fixed drawer
+          'fixed top-0 left-0 h-full z-50 transition-transform duration-300 ease-in-out',
+          open ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        ].join(' ')}
+        style={{ background: 'var(--color-sidebar)' }}
+      >
       {/* Logo */}
       <div className="px-5 py-4 flex items-center gap-2.5">
         <div className="w-7 h-7 rounded-lg bg-[var(--color-accent-v2)] flex items-center justify-center">
@@ -194,6 +235,7 @@ export function AdminSidebar() {
           ))}
         </div>
       )}
-    </aside>
+      </aside>
+    </>
   )
 }

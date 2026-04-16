@@ -12,6 +12,8 @@ const links = [
   { href: '/start-a-project', label: 'Contact' },
 ]
 
+const mobileLinks = [...links, { href: '/login', label: 'Client Login' }]
+
 export default function Navbar() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
@@ -93,7 +95,7 @@ export default function Navbar() {
         }`}
       >
         <nav className="flex flex-col gap-1 flex-1">
-          {links.map(({ href, label }) => (
+          {mobileLinks.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
@@ -105,13 +107,6 @@ export default function Navbar() {
             </Link>
           ))}
         </nav>
-
-        <Link
-          href="/login"
-          className="mb-6 rounded-full border border-white/[0.2] hover:border-white/[0.4] hover:bg-white/[0.05] px-6 py-3 text-center text-sm font-medium transition-all active:scale-95 text-white"
-        >
-          Client Login
-        </Link>
 
         <p className="font-body text-xs text-white/20 tracking-wide">
           © 2026 Partners in Biz
