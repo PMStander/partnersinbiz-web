@@ -25,9 +25,6 @@ export const GET = withAuth('client', withTenant(async (req: NextRequest, _user,
   if (platform === 'bluesky') {
     return apiError('Bluesky uses app passwords, not OAuth. Use the account creation endpoint directly.', 400)
   }
-  if (platform === 'twitter') {
-    return apiError('Twitter OAuth 1.0a flow is not yet implemented. Use env-based credentials.', 400)
-  }
 
   const config = getOAuthConfig(platform)
   if (!config) {
@@ -44,12 +41,19 @@ export const GET = withAuth('client', withTenant(async (req: NextRequest, _user,
   const stateData = { orgId, platform, nonce, redirectUrl }
   const stateToken = Buffer.from(JSON.stringify(stateData)).toString('base64url')
 
+  // Generate PKCE code_verifier if platform requires it
+  let codeVerifier: string | null = null
+  if (config.usePKCE) {
+    codeVerifier = crypto.randomBytes(32).toString('base64url')
+  }
+
   // Store state in Firestore with 10-minute TTL
   await adminDb.collection('social_oauth_states').doc(nonce).set({
     orgId,
     platform,
     nonce,
     redirectUrl,
+    ...(codeVerifier ? { codeVerifier } : {}),
     expiresAt: Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)),
     createdAt: Timestamp.now(),
   })
@@ -66,6 +70,16 @@ export const GET = withAuth('client', withTenant(async (req: NextRequest, _user,
     state: stateToken,
     ...config.extraAuthParams,
   })
+
+  // Add PKCE challenge if required
+  if (codeVerifier) {
+    const codeChallenge = crypto
+      .createHash('sha256')
+      .update(codeVerifier)
+      .digest('base64url')
+    authParams.set('code_challenge', codeChallenge)
+    authParams.set('code_challenge_method', 'S256')
+  }
 
   const authUrl = `${config.authUrl}?${authParams.toString()}`
   return NextResponse.redirect(authUrl)

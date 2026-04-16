@@ -8,8 +8,10 @@ export interface OAuthConfig {
   authUrl: string
   tokenUrl: string
   scopes: string[]
-  /** Whether to use Basic auth for token exchange (Reddit, Pinterest) */
+  /** Whether to use Basic auth for token exchange (Reddit, Pinterest, Twitter OAuth 2.0) */
   useBasicAuth?: boolean
+  /** Whether to use PKCE (Twitter OAuth 2.0) */
+  usePKCE?: boolean
   /** Extra params for the auth URL */
   extraAuthParams?: Record<string, string>
 }
@@ -45,7 +47,7 @@ export function getOAuthConfig(platform: SocialPlatformType): OAuthConfig | null
         platform: 'linkedin',
         authUrl: 'https://www.linkedin.com/oauth/v2/authorization',
         tokenUrl: 'https://www.linkedin.com/oauth/v2/accessToken',
-        scopes: ['w_member_social', 'w_organization_social', 'r_liteprofile', 'openid', 'profile'],
+        scopes: ['w_member_social', 'w_organization_social', 'openid', 'profile'],
       }
     case 'reddit':
       return {
@@ -91,8 +93,14 @@ export function getOAuthConfig(platform: SocialPlatformType): OAuthConfig | null
         extraAuthParams: { access_type: 'offline', prompt: 'consent' },
       }
     case 'twitter':
-      // Twitter uses OAuth 1.0a — handled separately
-      return null
+      return {
+        platform: 'twitter',
+        authUrl: 'https://twitter.com/i/oauth2/authorize',
+        tokenUrl: 'https://api.x.com/2/oauth2/token',
+        scopes: ['tweet.read', 'tweet.write', 'users.read', 'offline.access'],
+        useBasicAuth: true,
+        usePKCE: true,
+      }
     case 'bluesky':
       // Bluesky uses app passwords — no OAuth
       return null
@@ -122,6 +130,13 @@ export function getOAuthConfig(platform: SocialPlatformType): OAuthConfig | null
  * Get the client credentials (client_id, client_secret) for a platform from env.
  */
 export function getClientCredentials(platform: SocialPlatformType): { clientId: string; clientSecret: string } | null {
+  // Twitter OAuth 2.0 uses TWITTER_CLIENT_ID / TWITTER_CLIENT_SECRET
+  if (platform === 'twitter') {
+    const clientId = process.env.TWITTER_CLIENT_ID
+    const clientSecret = process.env.TWITTER_CLIENT_SECRET
+    if (!clientId || !clientSecret) return null
+    return { clientId, clientSecret }
+  }
   // TikTok uses CLIENT_KEY naming convention instead of CLIENT_ID
   if (platform === 'tiktok') {
     const clientId = process.env.TIKTOK_CLIENT_KEY

@@ -60,6 +60,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL(`${redirectUrl}?status=error&message=OAuth+state+expired`, url.origin))
     }
 
+    // Retrieve PKCE code_verifier if stored
+    const codeVerifier: string | null = stateRecord.codeVerifier ?? null
+
     // Delete state token (one-time use)
     await adminDb.collection('social_oauth_states').doc(nonce).delete()
 
@@ -71,7 +74,7 @@ export async function GET(req: NextRequest) {
     }
 
     const callbackUrl = getCallbackUrl(platform)
-    const tokenResponse = await exchangeCode(config, clientCreds, code, callbackUrl)
+    const tokenResponse = await exchangeCode(config, clientCreds, code, callbackUrl, codeVerifier)
 
     // Build provider credentials to fetch profile
     const providerCreds: {
@@ -118,6 +121,8 @@ export async function GET(req: NextRequest) {
         const linkedInProfile = await fetchLinkedInProfile(tokenResponse.accessToken)
         providerCreds.personUrn = linkedInProfile.personUrn
         profile = linkedInProfile
+      } else if (platform === 'twitter') {
+        profile = await fetchTwitterProfile(tokenResponse.accessToken)
       } else {
         const provider = getProvider(platform, {
           ...providerCreds,
@@ -248,12 +253,18 @@ async function exchangeCode(
   clientCreds: { clientId: string; clientSecret: string },
   code: string,
   redirectUri: string,
+  codeVerifier?: string | null,
 ): Promise<TokenResponse> {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
     redirect_uri: redirectUri,
   })
+
+  // Add PKCE code_verifier if present
+  if (codeVerifier) {
+    body.set('code_verifier', codeVerifier)
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/x-www-form-urlencoded',
@@ -429,6 +440,36 @@ async function fetchLinkedInProfile(accessToken: string): Promise<{
     accountType: 'personal',
     personUrn,
     meta: {},
+  }
+}
+
+async function fetchTwitterProfile(accessToken: string) {
+  const res = await fetch(
+    'https://api.x.com/2/users/me?user.fields=profile_image_url,public_metrics,description',
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!res.ok) throw new Error(`Failed to fetch Twitter profile: ${await res.text()}`)
+  const json = await res.json() as {
+    data: {
+      id: string
+      name: string
+      username: string
+      profile_image_url?: string
+      public_metrics?: { followers_count: number; following_count: number }
+    }
+  }
+  const d = json.data
+  return {
+    platformAccountId: d.id,
+    displayName: d.name,
+    username: d.username,
+    avatarUrl: d.profile_image_url ?? '',
+    profileUrl: `https://x.com/${d.username}`,
+    accountType: 'personal' as const,
+    meta: {
+      followersCount: d.public_metrics?.followers_count,
+      followingCount: d.public_metrics?.following_count,
+    },
   }
 }
 

@@ -23,7 +23,7 @@ interface SocialAccount {
 }
 
 const PLATFORMS = [
-  { id: 'twitter', label: 'X (Twitter)', color: 'bg-black', short: 'X', oauth: false, note: 'Uses env credentials' },
+  { id: 'twitter', label: 'X (Twitter)', color: 'bg-black', short: 'X', oauth: true },
   { id: 'linkedin', label: 'LinkedIn', color: 'bg-blue-700', short: 'LI', oauth: true },
   { id: 'facebook', label: 'Facebook', color: 'bg-blue-600', short: 'FB', oauth: true },
   { id: 'instagram', label: 'Instagram', color: 'bg-pink-600', short: 'IG', oauth: true },
@@ -400,15 +400,6 @@ export default function AccountsPage() {
           {/* Bluesky inline form */}
           {showBlueskyForm && <BlueskyForm onSuccess={fetchAccounts} />}
 
-          {/* Twitter note */}
-          {!connectedPlatformIds.has('twitter') && (
-            <div className="rounded-xl bg-surface-container p-4 mt-4 flex items-center gap-3">
-              <PlatformBadge platformId="twitter" />
-              <p className="text-xs text-on-surface-variant">
-                X (Twitter) uses environment credentials. Configure <code className="text-on-surface font-mono text-[11px]">TWITTER_*</code> env vars to enable.
-              </p>
-            </div>
-          )}
         </div>
       )}
     </div>

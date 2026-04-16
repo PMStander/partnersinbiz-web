@@ -70,15 +70,21 @@ function buildOAuthHeader(
 }
 
 export class TwitterProvider extends SocialProvider {
+  /** true when using OAuth 2.0 Bearer token (user-linked accounts) */
+  private useOAuth2: boolean
+
   constructor(credentials: ProviderCredentials) {
     super('twitter', credentials)
-    if (!credentials.apiKey) throw new Error('TwitterProvider requires apiKey')
-    if (!credentials.apiKeySecret) throw new Error('TwitterProvider requires apiKeySecret')
+    // OAuth 2.0 mode: only accessToken required (Bearer token)
+    // OAuth 1.0a mode: apiKey, apiKeySecret, accessToken, accessTokenSecret all required
+    this.useOAuth2 = !credentials.apiKey || !credentials.apiKeySecret || !credentials.accessTokenSecret
+    if (!this.useOAuth2) {
+      if (!credentials.accessTokenSecret) throw new Error('TwitterProvider OAuth 1.0a requires accessTokenSecret')
+    }
     if (!credentials.accessToken) throw new Error('TwitterProvider requires accessToken')
-    if (!credentials.accessTokenSecret) throw new Error('TwitterProvider requires accessTokenSecret')
   }
 
-  /** Create from environment variables (for the default account) */
+  /** Create from environment variables (for the default account — OAuth 1.0a) */
   static fromEnv(): TwitterProvider {
     const apiKey = process.env.X_API_KEY
     const apiKeySecret = process.env.X_API_KEY_SECRET
@@ -92,6 +98,9 @@ export class TwitterProvider extends SocialProvider {
   }
 
   private getAuthHeader(method: string, url: string): string {
+    if (this.useOAuth2) {
+      return `Bearer ${this.credentials.accessToken}`
+    }
     return buildOAuthHeader(
       method,
       url,
@@ -207,7 +216,34 @@ export class TwitterProvider extends SocialProvider {
   }
 
   async refreshToken(): Promise<ProviderCredentials | null> {
-    // X OAuth 1.0a tokens don't expire — no refresh needed
-    return null
+    // OAuth 1.0a tokens don't expire — no refresh needed
+    if (!this.useOAuth2) return null
+
+    // OAuth 2.0: refresh using refresh_token grant
+    const refreshToken = this.credentials.refreshToken
+    if (!refreshToken) return null
+
+    const clientId = process.env.TWITTER_CLIENT_ID
+    const clientSecret = process.env.TWITTER_CLIENT_SECRET
+    if (!clientId || !clientSecret) return null
+
+    const res = await fetch('https://api.x.com/2/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }).toString(),
+    })
+
+    if (!res.ok) return null
+    const data = await res.json() as { access_token: string; refresh_token?: string }
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token ?? refreshToken,
+    }
   }
 }

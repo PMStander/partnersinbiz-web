@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const PLATFORMS = [
+  { id: 'twitter', label: 'X (Twitter)', bg: 'bg-black', oauth: true },
   { id: 'linkedin', label: 'LinkedIn', bg: 'bg-blue-700', oauth: true },
   { id: 'facebook', label: 'Facebook', bg: 'bg-blue-600', oauth: true },
   { id: 'instagram', label: 'Instagram', bg: 'bg-pink-600', oauth: true },
