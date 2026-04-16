@@ -4,15 +4,18 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { generateInvoiceNumber } from '@/lib/invoices/invoice-number'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 export const dynamic = 'force-dynamic'
 
 export const GET = withAuth('admin', async (req) => {
   const { searchParams } = new URL(req.url)
   const orgId = searchParams.get('orgId')
+  const billingOrgId = searchParams.get('billingOrgId')
 
   let query = adminDb.collection('invoices').orderBy('createdAt', 'desc') as any
   if (orgId) query = query.where('orgId', '==', orgId)
+  if (billingOrgId) query = query.where('billingOrgId', '==', billingOrgId)
 
   const snapshot = await query.limit(50).get()
   const invoices = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
@@ -78,8 +81,19 @@ export const POST = withAuth('admin', async (req, user) => {
   const taxAmount = subtotal * (taxRate / 100)
   const total = subtotal + taxAmount
 
+  // billingOrgId identifies the platform org doing the billing (defaults to
+  // the platform_owner org). Reports split revenue by billingOrgId when a
+  // workspace runs multiple billing entities. Override via body.billingOrgId.
+  const billingOrgId: string | null =
+    typeof body.billingOrgId === 'string' && body.billingOrgId.trim()
+      ? body.billingOrgId.trim()
+      : platformSnap.empty
+        ? null
+        : platformSnap.docs[0].id
+
   const doc = {
     orgId: body.orgId,
+    billingOrgId,
     invoiceNumber,
     status: 'draft' as const,
     issueDate: FieldValue.serverTimestamp(),
@@ -101,5 +115,19 @@ export const POST = withAuth('admin', async (req, user) => {
   }
 
   const ref = await adminDb.collection('invoices').add(doc)
+
+  try {
+    await dispatchWebhook(body.orgId, 'invoice.created', {
+      id: ref.id,
+      invoiceNumber,
+      total,
+      currency: doc.currency,
+      clientOrgId: body.orgId,
+      dueDate: doc.dueDate,
+    })
+  } catch (err) {
+    console.error('[webhook-dispatch-error] invoice.created', err)
+  }
+
   return apiSuccess({ id: ref.id, invoiceNumber }, 201)
 })

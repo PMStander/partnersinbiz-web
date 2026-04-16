@@ -4,6 +4,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { generateInvoiceNumber } from '@/lib/invoices/invoice-number'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,6 +86,39 @@ export const PATCH = withAuth('admin', async (req, user, ctx) => {
   }
 
   await ref.update(updates)
+
+  // Dispatch quote status webhooks on transitions.
+  const orgId: string | undefined = quoteData.orgId
+  if (
+    orgId &&
+    typeof body.status === 'string' &&
+    body.status !== quoteData.status
+  ) {
+    if (body.status === 'accepted') {
+      try {
+        await dispatchWebhook(orgId, 'quote.accepted', {
+          id,
+          quoteNumber: quoteData.quoteNumber,
+          total: quoteData.total,
+          currency: quoteData.currency,
+        })
+      } catch (err) {
+        console.error('[webhook-dispatch-error] quote.accepted', err)
+      }
+    } else if (body.status === 'rejected') {
+      try {
+        await dispatchWebhook(orgId, 'quote.rejected', {
+          id,
+          quoteNumber: quoteData.quoteNumber,
+          total: quoteData.total,
+          currency: quoteData.currency,
+        })
+      } catch (err) {
+        console.error('[webhook-dispatch-error] quote.rejected', err)
+      }
+    }
+  }
+
   return apiSuccess({ id })
 })
 

@@ -121,5 +121,87 @@ service cloud.firestore {
       allow delete: if request.auth != null &&
         resource.data.members.hasAny([{ userId: request.auth.uid, role: 'owner' }]);
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // New collections (2026-04-16 agent API skills build)
+    //
+    // Rule of thumb: writes are via Admin SDK only (deny client writes),
+    // reads are admin-only unless a specific client-visible surface is
+    // defined. The /api/v1 routes use `withAuth` on the server; the rules
+    // below enforce defense in depth for direct Firestore access.
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // Idempotency cache — never client-readable or writable.
+    match /idempotency_keys/{id} {
+      allow read, write: if false;
+    }
+
+    // Unified comments — admin read/write. Clients cannot see each other's
+    // comment threads (even on their own resources) without deliberate
+    // per-resource exposure later.
+    match /comments/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Standalone tasks (distinct from the nested /tasks/{taskId}/comments above).
+    // Admin only; if a client needs to see their tasks we'd add an orgId check.
+    match /tasks/{id} {
+      allow read: if isAdmin() || (resource.data.orgId != null && isClientFor(resource.data.orgId));
+      allow write: if isAdmin();
+    }
+
+    // Notifications — admin read/write. Per-user visibility via API (withAuth)
+    // rather than client-side Firestore reads.
+    match /notifications/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // File metadata — admin read/write. Uploads are via Admin SDK through /upload.
+    match /uploads/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Calendar events — admin read/write.
+    match /calendar_events/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Time tracking — admin read/write. Self-only reads are API-gated.
+    match /time_entries/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Expenses — admin read/write.
+    match /expenses/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Forms — admin read/write. Public submit goes through the /api/v1/forms/[slug]/submit
+    // route which uses Admin SDK; no client-side form submit to Firestore.
+    match /forms/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /form_submissions/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Form rate-limit buckets — never client-readable or writable.
+    match /form_rate_limits/{id} {
+      allow read, write: if false;
+    }
+
+    // Outbound webhooks system — admin only. Queue + deliveries are internal.
+    match /outbound_webhooks/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /webhook_queue/{id} {
+      allow read, write: if false;
+    }
+
+    match /webhook_deliveries/{id} {
+      allow read, write: if isAdmin();
+    }
   }
 }

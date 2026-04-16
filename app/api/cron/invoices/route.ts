@@ -5,6 +5,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { generateInvoiceNumber } from '@/lib/invoices/invoice-number'
 import { calculateNextDueAt, RecurrenceInterval } from '@/lib/invoices/recurring'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
     .get()
 
   let created = 0
+  let markedOverdue = 0
   const errors: string[] = []
 
   for (const scheduleDoc of snap.docs) {
@@ -98,5 +100,89 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return apiSuccess({ created, errors })
+  // --- Overdue invoice sweep ---------------------------------------------
+  //
+  // Any invoice that is `sent`, `viewed`, or `payment_pending_verification`
+  // with a past dueDate should flip to `overdue`. We run three separate
+  // queries (Firestore doesn't support `in` + range together without an
+  // index per permutation, and doing it this way keeps the index footprint
+  // predictable — one composite per status).
+  const overdueStatuses: Array<'sent' | 'viewed' | 'payment_pending_verification'> = [
+    'sent',
+    'viewed',
+    'payment_pending_verification',
+  ]
+
+  for (const status of overdueStatuses) {
+    try {
+      const overdueSnap = await (adminDb.collection('invoices') as any)
+        .where('status', '==', status)
+        .where('dueDate', '<', now)
+        .get()
+
+      for (const doc of overdueSnap.docs) {
+        try {
+          const invoice = doc.data() ?? {}
+          const invoiceNumber: string = invoice.invoiceNumber ?? doc.id
+          const createdBy: string | undefined = invoice.createdBy
+          const orgId: string | undefined = invoice.orgId
+
+          await doc.ref.update({
+            status: 'overdue',
+            markedOverdueAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: 'cron',
+            updatedByType: 'system',
+          })
+
+          if (createdBy) {
+            await adminDb.collection('notifications').add({
+              orgId: orgId ?? null,
+              userId: createdBy,
+              agentId: null,
+              type: 'invoice.overdue',
+              title: 'Invoice overdue',
+              body: `Invoice ${invoiceNumber} is past its due date`,
+              link: `/admin/invoices/${doc.id}`,
+              status: 'unread',
+              priority: 'high',
+              createdAt: FieldValue.serverTimestamp(),
+            })
+          }
+
+          if (orgId) {
+            const dueDateMs =
+              invoice.dueDate?._seconds != null
+                ? invoice.dueDate._seconds * 1000
+                : invoice.dueDate?.toDate
+                  ? invoice.dueDate.toDate().getTime()
+                  : null
+            const daysOverdue =
+              dueDateMs != null
+                ? Math.floor((Date.now() - dueDateMs) / (24 * 60 * 60 * 1000))
+                : null
+            try {
+              await dispatchWebhook(orgId, 'invoice.overdue', {
+                id: doc.id,
+                invoiceNumber,
+                total: invoice.total,
+                dueDate: invoice.dueDate ?? null,
+                daysOverdue,
+              })
+            } catch (err) {
+              console.error('[webhook-dispatch-error] invoice.overdue', err)
+            }
+          }
+
+          markedOverdue++
+        } catch (err) {
+          errors.push(`invoice ${doc.id}: ${String(err)}`)
+        }
+      }
+    } catch (err) {
+      errors.push(`overdue-query(${status}): ${String(err)}`)
+    }
+  }
+
+  return apiSuccess({ created, markedOverdue, errors })
 }

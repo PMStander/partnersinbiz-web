@@ -45,7 +45,11 @@ next-env.d.ts
 
 # local tooling
 .agents/
-.claude/
+.claude/*
+# but DO version the agent skill definitions — Hermes, CI, and the team
+# all read these as the source of truth for agent capabilities
+!.claude/skills/
+!.claude/skills/**
 dogfood-output/
 skills-lock.json
 AGENTS.md

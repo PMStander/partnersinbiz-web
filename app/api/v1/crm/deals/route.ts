@@ -8,6 +8,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { Deal, DealInput, DealStage, Currency } from '@/lib/crm/types'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 const VALID_STAGES: DealStage[] = ['discovery', 'proposal', 'negotiation', 'won', 'lost']
 const VALID_CURRENCIES: Currency[] = ['USD', 'EUR', 'ZAR']
@@ -43,7 +44,13 @@ export const POST = withAuth('admin', async (req) => {
   if (body.currency && !VALID_CURRENCIES.includes(body.currency))
     return apiError('Invalid currency — use USD, EUR, or ZAR')
 
+  const orgId = typeof (body as { orgId?: unknown }).orgId === 'string'
+    ? ((body as { orgId?: string }).orgId as string).trim()
+    : ''
+  if (!orgId) return apiError('orgId is required — deals must belong to an organisation so webhooks and pipeline reports work', 400)
+
   const docRef = await adminDb.collection('deals').add({
+    orgId,
     contactId: body.contactId.trim(),
     title: body.title.trim(),
     value: body.value ?? 0,
@@ -55,5 +62,18 @@ export const POST = withAuth('admin', async (req) => {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   })
+
+  try {
+    await dispatchWebhook(orgId, 'deal.created', {
+      id: docRef.id,
+      title: body.title.trim(),
+      value: body.value ?? 0,
+      stage: body.stage ?? 'discovery',
+      contactId: body.contactId.trim(),
+    })
+  } catch (err) {
+    console.error('[webhook-dispatch-error] deal.created', err)
+  }
+
   return apiSuccess({ id: docRef.id }, 201)
 })

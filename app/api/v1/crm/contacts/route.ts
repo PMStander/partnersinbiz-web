@@ -17,6 +17,7 @@ import type {
   ContactType,
   ContactSource,
 } from '@/lib/crm/types'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 const VALID_STAGES: ContactStage[] = [
   'new', 'contacted', 'replied', 'demo', 'proposal', 'won', 'lost',
@@ -33,9 +34,18 @@ export const GET = withAuth('admin', async (req) => {
   const stage = searchParams.get('stage') as ContactStage | null
   const type = searchParams.get('type') as ContactType | null
   const source = searchParams.get('source') as ContactSource | null
+  const tagsParam = searchParams.get('tags') ?? ''
   const search = searchParams.get('search') ?? ''
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 200)
   const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1)
+
+  const tagList = tagsParam
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+  if (tagList.length > 10) {
+    return apiError('tags filter supports up to 10 values (array-contains-any limit)', 400)
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query: any = adminDb.collection('contacts').orderBy('createdAt', 'desc')
@@ -48,6 +58,9 @@ export const GET = withAuth('admin', async (req) => {
   }
   if (source && VALID_SOURCES.includes(source)) {
     query = query.where('source', '==', source)
+  }
+  if (tagList.length > 0) {
+    query = query.where('tags', 'array-contains-any', tagList)
   }
 
   const snapshot = await query
@@ -82,7 +95,13 @@ export const POST = withAuth('admin', async (req) => {
   if (body.type && !VALID_TYPES.includes(body.type)) return apiError('Invalid type')
   if (body.source && !VALID_SOURCES.includes(body.source)) return apiError('Invalid source')
 
+  const orgId = typeof (body as { orgId?: unknown }).orgId === 'string'
+    ? ((body as { orgId?: string }).orgId as string).trim()
+    : ''
+  if (!orgId) return apiError('orgId is required — contacts must belong to an organisation so webhooks and org-scoped reports work', 400)
+
   const docRef = await adminDb.collection('contacts').add({
+    orgId,
     name: body.name.trim(),
     email: body.email.trim().toLowerCase(),
     phone: body.phone?.trim() ?? '',
@@ -99,6 +118,19 @@ export const POST = withAuth('admin', async (req) => {
     updatedAt: FieldValue.serverTimestamp(),
     lastContactedAt: null,
   })
+
+  try {
+    await dispatchWebhook(orgId, 'contact.created', {
+      id: docRef.id,
+      name: body.name.trim(),
+      email: body.email.trim().toLowerCase(),
+      phone: body.phone?.trim() ?? '',
+      company: body.company?.trim() ?? '',
+      source: body.source ?? 'manual',
+    })
+  } catch (err) {
+    console.error('[webhook-dispatch-error] contact.created', err)
+  }
 
   return apiSuccess({ id: docRef.id }, 201)
 })

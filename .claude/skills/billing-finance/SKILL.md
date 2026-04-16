@@ -1,0 +1,457 @@
+---
+name: billing-finance
+description: >
+  Invoicing, payments, recurring billing, expenses, and financial reports on Partners in Biz.
+  **EFT-first, PayPal-second, no Stripe** (South Africa). Handles full invoice lifecycle (draft →
+  sent → viewed → proof uploaded → paid), EFT banking details + proof-of-payment flow, PayPal fallback
+  for international clients, recurring invoices, expense submission + approval + billing-to-client,
+  and reports on revenue, outstanding aging, client lifetime value, and expense breakdowns. Use this
+  skill whenever the user mentions anything financial, including: "create an invoice", "draft invoice",
+  "send invoice", "invoice PDF", "duplicate invoice", "recurring invoice", "next invoice number",
+  "EFT", "EFT details", "banking details", "payment instructions", "proof of payment", "POP",
+  "upload POP", "confirm payment", "verify payment", "mark invoice paid", "PayPal invoice",
+  "PayPal order", "PayPal capture", "PayPal payment link", "international payment", "overdue invoice",
+  "invoice viewed", "follow up invoice", "log expense", "submit expense", "expense report",
+  "approve expense", "reject expense", "reimburse expense", "bill expense to client",
+  "revenue report", "monthly revenue", "quarterly revenue", "outstanding invoices", "aged receivables",
+  "client lifetime value", "top clients", "expense by category", "VAT", "ZAR", "currency",
+  "quote to invoice", "mark as paid", "invoice status". If in doubt, trigger.
+---
+
+# Billing & Finance — Partners in Biz Platform API
+
+Full invoicing + payments + recurring billing + expenses + financial reports. Designed for South African operations: **EFT is primary (zero fees), PayPal is secondary (international clients). No Stripe.**
+
+## Base URL & Authentication
+
+```
+https://partnersinbiz.online/api/v1
+```
+
+```
+Authorization: Bearer <AI_API_KEY>
+```
+
+Two public endpoints:
+- `POST /invoices/[id]/mark-viewed?token=X` — invoice view tracking
+- `POST /webhooks/paypal` — PayPal webhook receiver
+
+## Payment philosophy
+
+1. **EFT is preferred.** Banking details live on the platform owner org's `billingDetails.bankingDetails`. When an invoice is sent, the client receives a public link showing the banking details + a reference (invoice number). They pay via EFT, then upload proof of payment. Admin (or agent) verifies the proof and confirms → invoice moves to `paid`.
+
+2. **PayPal is secondary.** Only active if `PAYPAL_CLIENT_ID` + `PAYPAL_CLIENT_SECRET` env vars are set. Used for international clients where EFT isn't practical. Flow: create PayPal order → client approves → capture → invoice paid.
+
+3. **No Stripe** — deliberately not supported.
+
+Required env vars for PayPal: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV` (`live` or `sandbox`), `PAYPAL_WEBHOOK_ID`, `PUBLIC_BASE_URL`.
+
+## Invoice status machine
+
+```
+draft ──► sent ──► viewed ──► payment_pending_verification ──► paid
+              │                                        │
+              └──► paid (PayPal immediate capture)     └──► sent (if rejected)
+              │
+              └──► overdue (cron flips after dueDate)
+              │
+              └──► cancelled
+```
+
+Any status → `cancelled`. `partially_paid` exists as a state but is rarely used.
+
+## Collaboration primitives
+
+- **Idempotency** on `POST /invoices`, `POST /quotes` (see `crm-sales`), `POST /expenses`, `POST /recurring-schedules`
+- **Comments** (`resourceType: 'invoice' | 'expense'`): internal notes with `@mentions`
+- **Notifications**: auto-created on `invoice.paid`, `invoice.overdue`, `expense.submitted`, proof uploads
+
+---
+
+## API Reference
+
+### Invoices — CRUD
+
+#### `GET /invoices` — auth: admin
+List. `?orgId=X` filters by client org. `?billingOrgId=X` filters by the platform billing entity. Sorted `createdAt desc`, limit 50.
+
+#### `POST /invoices` — auth: admin
+Required: `orgId` (client org), `lineItems: [{ description, quantity, unitPrice }]`.
+
+Body:
+```json
+{
+  "orgId": "org_abc",
+  "lineItems": [
+    { "description": "Strategy session", "quantity": 2, "unitPrice": 2500 },
+    { "description": "Implementation", "quantity": 1, "unitPrice": 15000 }
+  ],
+  "dueDate": "2026-05-01",
+  "taxRate": 15,
+  "currency": "ZAR",
+  "notes": "Payment via EFT preferred — banking details on public invoice page."
+}
+```
+
+Auto-snapshots:
+- `fromDetails` from platform owner org (name, address, email, phone, vatNumber, bankingDetails)
+- `clientDetails` from client org (`billingDetails`, `billingEmail`)
+- Sequential `invoiceNumber` like `CLI-001` via `generateInvoiceNumber`
+- `billingOrgId` — identifies the platform org issuing the invoice. Defaults to the `platform_owner` org. Override via `body.billingOrgId` when a workspace runs multiple billing entities. Reports use this to separate revenue per billing entity.
+
+Auto-computes: `subtotal`, `taxAmount`, `total`. Defaults currency from client org `settings.currency` or `USD`.
+
+Response (201): `{ id, invoiceNumber }`. Dispatches `invoice.created`.
+
+#### `GET /invoices/[id]` — auth: admin
+Full invoice.
+
+#### `PUT /invoices/[id]` — auth: admin
+Update fields. Recomputes totals if `lineItems` or `taxRate` changes.
+
+#### `DELETE /invoices/[id]` — auth: admin
+Soft-cancel (`status: 'cancelled'`).
+
+#### `GET /invoices/preview` — auth: admin
+Query: `orgId`, `lineItems` (JSON), `taxRate`, `currency`. Returns what the invoice would look like without saving. Useful before committing.
+
+#### `GET /invoices/next-number?orgId=X` — auth: admin
+Returns the next invoice number for the client org: `{ invoiceNumber: "CLI-042" }`.
+
+#### `GET /invoices/[id]/pdf` — auth: admin
+Returns a PDF binary (Content-Type: application/pdf).
+
+#### `POST /invoices/[id]/duplicate` — auth: admin
+Clones the invoice as a new `draft`. Returns `{ id, invoiceNumber }`.
+
+#### `POST /invoices/[id]/recurring` — auth: admin
+Converts the invoice into a template + creates a recurring schedule. See `/recurring-schedules`.
+
+### Invoice actions — send + status
+
+#### `POST /invoices/[id]/send` — auth: admin
+Generates `publicToken` if absent, sets `status: 'sent'`, `sentAt`. Emails `clientDetails.email` with the public view URL + PDF link.
+
+Dispatches `invoice.sent` webhook.
+
+#### `POST /invoices/[id]/mark-viewed?token=X` — **public**
+Called by the public invoice view page when loaded. Sets `firstViewedAt` (once), increments `viewCount`, auto-flips `status: 'sent' → 'viewed'`. 404 if token doesn't match.
+
+### Invoice actions — payment
+
+#### `GET /invoices/[id]/payment-instructions` — auth: admin OR `?token=<publicToken>`
+Dual-auth. Either pass the admin `Authorization` header, or pass the invoice's `publicToken` as `?token=X`. The public invoice view page uses the token path.
+
+Returns:
+```json
+{
+  "invoiceNumber": "CLI-042",
+  "total": 17250,
+  "currency": "ZAR",
+  "dueDate": "2026-05-01",
+  "eft": {
+    "bankingDetails": {
+      "bankName": "FNB",
+      "accountName": "Partners in Biz (Pty) Ltd",
+      "accountNumber": "...",
+      "branchCode": "...",
+      "swift": "..."
+    },
+    "reference": "CLI-042",
+    "proofOfPaymentEmail": "billing@partnersinbiz.online"
+  },
+  "paypal": { "available": true, "url": "<BASE>/api/v1/invoices/inv_xyz/paypal-order" },
+  "publicViewUrl": "https://partnersinbiz.online/invoice/<publicToken>"
+}
+```
+
+Generates `publicToken` if missing. `paypal.available: true` only if `PAYPAL_CLIENT_ID` set.
+
+#### `POST /invoices/[id]/payment-proof` — auth: admin (or client portal)
+Client uploaded proof of payment. Body: `{ fileId: string, note?: string }`.
+
+Updates: `status: 'payment_pending_verification'`, `paymentProofFileId`, `paymentProofUploadedAt`. Creates org-wide notification for platform admins.
+
+#### `POST /invoices/[id]/confirm-payment` — auth: admin
+Admin verifies the uploaded proof.
+
+Body to confirm:
+```json
+{ "confirmed": true, "paymentMethod": "eft", "reference": "...", "amount": 17250 }
+```
+
+Body to reject:
+```json
+{ "confirmed": false, "reason": "Amount doesn't match invoice total" }
+```
+
+- Confirmed: `status: 'paid'`, `paidAt`, `paymentMethod`, `paymentReference`, `paidAmount`. Dispatches `invoice.paid` + `payment.received`. Notifies invoice creator.
+- Rejected: `status: 'sent'` (reverts), `paymentProofRejectedReason`, `paymentProofRejectedAt`. Notifies proof uploader.
+
+#### `PATCH /invoices/[id]/mark-paid` — auth: admin
+Manual mark-paid (no proof flow). Body:
+```json
+{ "paymentMethod": "eft" | "paypal" | "cash" | "card" | "other",
+  "paidAt": "2026-04-15T...", "reference": "...", "amount": 17250, "proofFileId": "..." }
+```
+
+Required: `paymentMethod`. Dispatches `invoice.paid` + `payment.received`. Creates an `activities` entry and notifies invoice creator.
+
+### PayPal
+
+All three require `PAYPAL_CLIENT_ID` + `PAYPAL_CLIENT_SECRET`. Return `503 "PayPal is not configured"` otherwise.
+
+#### `POST /invoices/[id]/paypal-order` — auth: admin
+Creates a PayPal order (intent: CAPTURE). Returns:
+```json
+{ "orderId": "PAY-...", "approveUrl": "https://...", "provider": "paypal" }
+```
+
+Stores `paypalOrderId` on invoice.
+
+#### `POST /invoices/[id]/paypal-capture` — auth: admin
+Captures the order. Body: `{ orderId: string }` — must match stored order. Marks invoice paid with `paymentMethod: 'paypal'`, `paymentReference: captureId`. Dispatches `invoice.paid` + `payment.received`.
+
+#### `POST /webhooks/paypal` — **public**
+PayPal webhook receiver. Verifies signature via PayPal's verify endpoint (requires `PAYPAL_WEBHOOK_ID`). Handles:
+- `CHECKOUT.ORDER.APPROVED`
+- `PAYMENT.CAPTURE.COMPLETED`
+
+Always returns 200 (prevents PayPal retries). Logs failures.
+
+### Recurring schedules
+
+#### `GET /recurring-schedules` — auth: admin
+Filters: `orgId`, `active`, `type` (`invoice`|`email`|etc.).
+
+#### `POST /recurring-schedules` — auth: admin
+Body:
+```json
+{
+  "orgId": "org_abc",
+  "type": "invoice",
+  "cadence": "monthly",        // monthly | weekly | daily | yearly
+  "dayOfMonth": 1,
+  "templateInvoiceId": "inv_template_xyz",
+  "active": true,
+  "nextRunAt": "2026-05-01"
+}
+```
+
+The daily cron `/api/cron/invoices` runs at 2am UTC and generates invoices from active schedules whose `nextRunAt <= now`.
+
+#### `GET/PUT/DELETE /recurring-schedules/[id]` — auth: admin
+
+### Expenses
+
+#### `GET /expenses` — auth: admin
+Filters: `orgId` (required), `userId`, `status`, `category`, `projectId`, `clientOrgId`, `from`, `to`, `billable`, `billed` (has invoiceId), `page`, `limit`.
+
+#### `POST /expenses` — auth: admin (idempotent)
+Required: `date`, `amount`, `category`. Defaults: `currency='ZAR'`, `billable=false`, `reimbursable=true`, `status='draft'`, `userId=current user`.
+
+Body:
+```json
+{
+  "orgId": "org_abc",
+  "date": "2026-04-10",
+  "amount": 450,
+  "currency": "ZAR",
+  "category": "travel",
+  "description": "Uber to client meeting",
+  "vendor": "Uber",
+  "receiptFileId": "file_xyz",
+  "projectId": "proj_abc",
+  "clientOrgId": "org_client",
+  "billable": true,
+  "reimbursable": true
+}
+```
+
+#### `GET/PUT/DELETE /expenses/[id]` — auth: admin
+PUT rejects if status is `approved`/`reimbursed`/`rejected` OR `invoiceId` is set (409).
+
+#### `POST /expenses/[id]/submit` — auth: admin
+`draft → submitted`. Creates org-wide notification. Dispatches `expense.submitted`.
+
+#### `POST /expenses/[id]/approve` — auth: admin
+Body: `{ action: 'approve' | 'reject', note?: string }`.
+- `approve`: `status: 'approved'`, `reviewedBy`, `reviewedAt`. Notifies submitter.
+- `reject`: `status: 'rejected'`, `rejectionReason=note`, notify submitter.
+
+Requires current status `submitted` (409 otherwise).
+
+#### `POST /expenses/bill` — auth: admin
+Bill approved billable expenses to a client invoice.
+
+Body: `{ expenseIds: string[], invoiceId: string }`.
+
+Each expense becomes an invoice line item `{ description: "<category>[: <description>]", quantity: 1, unitPrice: amount, amount }`. Recomputes invoice totals. Sets `invoiceId` on each expense. Batched atomically.
+
+Response: `{ billed: count, invoiceId, newTotal }`.
+
+### Reports (billing-related)
+
+#### `GET /reports/revenue?orgId=X&from=...&to=...&groupBy=month`
+Buckets paid invoices by `paidAt`. `groupBy`: `day` | `week` | `month` | `quarter`.
+
+Response:
+```json
+{ "from": "...", "to": "...", "groupBy": "month",
+  "buckets": [{ "label": "2026-03", "total": 45000, "count": 8 }],
+  "grandTotal": 180000, "currency": "ZAR" }
+```
+
+If invoices span multiple currencies, `currency` becomes null and each bucket has `byCurrency: {...}`.
+
+#### `GET /reports/outstanding?orgId=X`
+Aged receivables — `sent` / `overdue` / `payment_pending_verification` grouped by `dueDate` age: `0-30`, `31-60`, `61-90`, `90+`.
+
+#### `GET /reports/client-value?orgId=X`
+Top clients ranked by lifetime paid total.
+
+#### `GET /reports/expense-summary?orgId=X&from=...&to=...&groupBy=category|project|user`
+Expense breakdown.
+
+### Comments on invoices/expenses
+
+```json
+POST /comments
+{ "orgId": "org_abc", "resourceType": "invoice", "resourceId": "inv_xyz",
+  "body": "Client asked to extend due date by 14 days. @user:uid123 please confirm." }
+```
+
+---
+
+## Workflow guides
+
+### 1. EFT payment flow (primary path)
+
+```bash
+# 1. Create invoice
+POST /invoices
+{ "orgId": "org_client", "lineItems": [...], "dueDate": "2026-05-01", "taxRate": 15, "currency": "ZAR" }
+# → { id: "inv_xyz", invoiceNumber: "CLI-042" }
+
+# 2. Send it
+POST /invoices/inv_xyz/send
+# Emails client with public view URL + PDF. Status: sent. Dispatches invoice.sent
+
+# 3. Client views the public invoice page
+# (public GET triggers) POST /invoices/inv_xyz/mark-viewed?token=<publicToken>
+# Status remains 'sent' but viewedAt/viewCount populate. If first view, status flips to 'viewed'.
+
+# 4. Get payment instructions (to show on public page)
+GET /invoices/inv_xyz/payment-instructions
+# Returns EFT banking details + reference + publicViewUrl
+
+# 5. Client pays via EFT, uploads proof
+POST /invoices/inv_xyz/payment-proof
+{ "fileId": "upload_file_id_from_upload_endpoint", "note": "Paid via EFT 15 Apr" }
+# Status: payment_pending_verification. Admin gets notification.
+
+# 6. Admin verifies proof
+POST /invoices/inv_xyz/confirm-payment
+{ "confirmed": true, "paymentMethod": "eft", "reference": "CLI-042", "amount": 17250 }
+# Status: paid. Dispatches invoice.paid + payment.received.
+```
+
+### 2. PayPal flow (international)
+
+```bash
+POST /invoices/inv_xyz/send   # same
+# Public invoice page shows PayPal button if available
+
+POST /invoices/inv_xyz/paypal-order
+# → { orderId: "PAY-...", approveUrl: "https://..." }
+# Redirect client to approveUrl
+
+# After client approves on PayPal:
+POST /invoices/inv_xyz/paypal-capture
+{ "orderId": "PAY-..." }
+# Captures + marks paid.
+
+# OR the webhook path:
+# PayPal POSTs to /webhooks/paypal with CHECKOUT.ORDER.APPROVED or PAYMENT.CAPTURE.COMPLETED
+# → automatically marks paid
+```
+
+### 3. Recurring monthly invoice
+
+```bash
+# Create the template invoice first (keep it in draft)
+POST /invoices
+{ "orgId": "org_client", "lineItems": [{ "description": "Monthly retainer", "quantity": 1,
+  "unitPrice": 15000 }], "taxRate": 15, "currency": "ZAR" }
+
+POST /invoices/inv_template/recurring
+# Or directly:
+POST /recurring-schedules
+{ "orgId": "org_client", "type": "invoice", "cadence": "monthly", "dayOfMonth": 1,
+  "templateInvoiceId": "inv_template", "active": true, "nextRunAt": "2026-05-01" }
+
+# Daily cron generates the new invoice at 2am UTC on the schedule
+```
+
+### 4. Submit and approve an expense
+
+```bash
+POST /expenses
+{ "orgId": "org_abc", "date": "2026-04-10", "amount": 450, "currency": "ZAR",
+  "category": "travel", "description": "Client meeting", "billable": true,
+  "clientOrgId": "org_client", "receiptFileId": "file_xyz" }
+
+POST /expenses/exp_abc/submit   # draft → submitted
+
+POST /expenses/exp_abc/approve
+{ "action": "approve" }   # status → approved
+```
+
+### 5. Bill billable expenses to a client invoice
+
+```bash
+# Create a new invoice or use existing
+POST /expenses/bill
+{ "expenseIds": ["exp_abc", "exp_def"], "invoiceId": "inv_xyz" }
+# Appends line items, recomputes totals, marks expenses billed
+```
+
+### 6. Handle overdue invoices
+
+```bash
+# Cron /api/cron/invoices runs daily at 2am UTC
+# For each invoice where status in ['sent','viewed','payment_pending_verification']
+# AND dueDate < now: sets status='overdue', markedOverdueAt, dispatches invoice.overdue
+
+# Check aged receivables
+GET /reports/outstanding?orgId=org_abc
+```
+
+### 7. Revenue reports
+
+```bash
+GET /reports/revenue?orgId=org_abc&from=2026-01-01&to=2026-04-16&groupBy=month
+GET /reports/client-value?orgId=org_abc
+```
+
+## Error reference
+
+| HTTP | Error | Fix |
+|------|-------|-----|
+| 400 | `orgId is required` | Include orgId in body |
+| 400 | `At least one line item is required` | Add line items |
+| 400 | `Invalid payment method` | Use `eft`/`paypal`/`cash`/`card`/`other` |
+| 400 | `Can only approve/reject a submitted expense` | Check status first |
+| 404 | `Invoice not found` / `Client organisation not found` | Verify IDs |
+| 409 | `Cannot modify a billed entry` / `Cannot delete a billed expense` | Unlink invoice first |
+| 503 | `PayPal is not configured` | Set `PAYPAL_CLIENT_ID` + `PAYPAL_CLIENT_SECRET` |
+
+## Agent patterns
+
+1. **Always prefer EFT** — it's cheaper. Only suggest PayPal when client is international.
+2. **Check `payment-instructions` before sending** — confirms banking details are populated on the platform org.
+3. **Verify proof of payment carefully** — confirm amount + reference match the invoice before confirming.
+4. **Use `/invoices/preview` before committing** — lets you show the user the totals first.
+5. **Idempotency on creates** — pass `Idempotency-Key: <uuid>` on `POST /invoices` and `POST /expenses`.
+6. **Webhooks** — subscribe to `invoice.paid`, `invoice.overdue`, `payment.received` (see `platform-ops`).
+7. **Currency consistency** — check client org `settings.currency`; default to `ZAR` for SA clients.

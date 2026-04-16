@@ -19,7 +19,7 @@ type RouteHandler = (req: NextRequest, user: ApiUser, context?: Record<string, u
 export function withAuth(requiredRole: 'admin' | 'client', handler: RouteHandler): any {
   return async (req: NextRequest, context?: Record<string, unknown>): Promise<NextResponse> => {
     try {
-      const user = await resolveUser(req)
+      const user = await _resolveUser(req)
       if (!user) return apiError('Unauthorized', 401)
 
       // ai and admin satisfy any role; client only satisfies "client"
@@ -37,7 +37,18 @@ export function withAuth(requiredRole: 'admin' | 'client', handler: RouteHandler
   }
 }
 
-async function resolveUser(req: NextRequest): Promise<ApiUser | null> {
+/**
+ * Resolve the authenticated user from a request without enforcing a role.
+ * Returns null if no valid credential is present.
+ *
+ * Useful for dual-auth routes (admin OR public token) where you need to
+ * check auth manually instead of via `withAuth`.
+ */
+export async function resolveUser(req: NextRequest): Promise<ApiUser | null> {
+  return _resolveUser(req)
+}
+
+async function _resolveUser(req: NextRequest): Promise<ApiUser | null> {
   const authHeader = req.headers.get('authorization') ?? ''
 
   if (authHeader.startsWith('Bearer ')) {

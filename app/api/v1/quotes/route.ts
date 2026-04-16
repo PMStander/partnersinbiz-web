@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 export const dynamic = 'force-dynamic'
 
@@ -113,5 +114,18 @@ export const POST = withAuth('admin', async (req, user) => {
   }
 
   const ref = await adminDb.collection('quotes').add(doc)
+
+  try {
+    await dispatchWebhook(body.orgId, 'quote.created', {
+      id: ref.id,
+      quoteNumber,
+      total,
+      currency: doc.currency,
+      clientOrgId: body.orgId,
+    })
+  } catch (err) {
+    console.error('[webhook-dispatch-error] quote.created', err)
+  }
+
   return apiSuccess({ id: ref.id, quoteNumber }, 201)
 })

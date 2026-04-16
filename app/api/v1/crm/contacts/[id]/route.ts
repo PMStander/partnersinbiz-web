@@ -8,6 +8,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -28,6 +29,24 @@ export const PUT = withAuth('admin', async (req, _user, context) => {
     ...body,
     updatedAt: FieldValue.serverTimestamp(),
   })
+
+  // Prefer orgId from body if provided (rare on PUT), else fall back to existing doc.
+  const existing = doc.data() ?? {}
+  const orgId =
+    (typeof body?.orgId === 'string' && body.orgId) ||
+    (typeof existing.orgId === 'string' && existing.orgId) ||
+    undefined
+
+  if (orgId) {
+    try {
+      await dispatchWebhook(orgId, 'contact.updated', { id, ...body })
+    } catch (err) {
+      console.error('[webhook-dispatch-error] contact.updated', err)
+    }
+  } else {
+    console.warn('[webhook-dispatch-skip] contact.updated — no orgId on contact', id)
+  }
+
   return apiSuccess({ id })
 })
 

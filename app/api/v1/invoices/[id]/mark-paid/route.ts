@@ -1,0 +1,123 @@
+/**
+ * PATCH /api/v1/invoices/[id]/mark-paid — mark an invoice paid + record payment details
+ *
+ * Body: {
+ *   paidAt?: ISO string,
+ *   paymentMethod: 'eft' | 'paypal' | 'cash' | 'card' | 'other',
+ *   reference?: string,
+ *   amount?: number,
+ *   proofFileId?: string,
+ * }
+ *
+ * Side effects:
+ *  - Updates invoice status to `paid` with payment details
+ *  - Writes an entry to `activities` collection
+ *  - Notifies the invoice creator (unless they triggered the update themselves)
+ *
+ * Auth: admin (ai satisfies)
+ */
+import { adminDb } from '@/lib/firebase/admin'
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'
+import { withAuth } from '@/lib/api/auth'
+import { apiSuccess, apiError } from '@/lib/api/response'
+import { actorFrom, lastActorFrom } from '@/lib/api/actor'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+
+export const dynamic = 'force-dynamic'
+
+type RouteContext = { params: Promise<{ id: string }> }
+
+const VALID_METHODS = ['eft', 'paypal', 'cash', 'card', 'other'] as const
+type PaymentMethod = (typeof VALID_METHODS)[number]
+
+export const PATCH = withAuth('admin', async (req, user, ctx) => {
+  const { id } = await (ctx as RouteContext).params
+  const body = await req.json().catch(() => ({}))
+
+  const paymentMethod = body.paymentMethod as PaymentMethod | undefined
+  if (!paymentMethod || !VALID_METHODS.includes(paymentMethod)) {
+    return apiError(
+      `paymentMethod is required and must be one of: ${VALID_METHODS.join(', ')}`,
+      400,
+    )
+  }
+
+  const ref = adminDb.collection('invoices').doc(id)
+  const snap = await ref.get()
+  if (!snap.exists) return apiError('Invoice not found', 404)
+
+  const invoice = snap.data() ?? {}
+  const orgId: string | undefined = invoice.orgId
+  const invoiceNumber: string = invoice.invoiceNumber ?? id
+  const createdBy: string | undefined = invoice.createdBy
+
+  // Parse paidAt (accept ISO string) or fall back to server timestamp
+  let paidAt: FieldValue | Timestamp = FieldValue.serverTimestamp()
+  if (typeof body.paidAt === 'string' && body.paidAt.trim()) {
+    const parsed = new Date(body.paidAt)
+    if (!Number.isNaN(parsed.getTime())) {
+      paidAt = Timestamp.fromDate(parsed)
+    }
+  }
+
+  const updates: Record<string, unknown> = {
+    status: 'paid',
+    paidAt,
+    paymentMethod,
+    ...lastActorFrom(user),
+  }
+  if (typeof body.reference === 'string') updates.paymentReference = body.reference
+  if (typeof body.amount === 'number') updates.paidAmount = body.amount
+  if (typeof body.proofFileId === 'string') updates.paymentProofFileId = body.proofFileId
+
+  await ref.update(updates)
+
+  // Activity log entry
+  await adminDb.collection('activities').add({
+    orgId: orgId ?? null,
+    type: 'invoice.paid',
+    resourceType: 'invoice',
+    resourceId: id,
+    summary: `Invoice ${invoiceNumber} marked paid via ${paymentMethod}`,
+    ...actorFrom(user),
+    createdAt: FieldValue.serverTimestamp(),
+  })
+
+  // Notify invoice creator (unless they're the one marking it paid)
+  if (createdBy && createdBy !== user.uid) {
+    await adminDb.collection('notifications').add({
+      orgId: orgId ?? null,
+      userId: createdBy,
+      type: 'invoice.paid',
+      title: 'Invoice paid',
+      body: `Invoice ${invoiceNumber} was marked paid`,
+      link: `/admin/invoices/${id}`,
+      status: 'unread',
+      priority: 'normal',
+      createdAt: FieldValue.serverTimestamp(),
+    })
+  }
+
+  if (orgId) {
+    const webhookPayload = {
+      id,
+      invoiceNumber,
+      total: invoice.total,
+      paymentMethod,
+      paymentReference: typeof body.reference === 'string' ? body.reference : null,
+      paidAmount: typeof body.amount === 'number' ? body.amount : invoice.total,
+    }
+    try {
+      await dispatchWebhook(orgId, 'invoice.paid', webhookPayload)
+    } catch (err) {
+      console.error('[webhook-dispatch-error] invoice.paid', err)
+    }
+    try {
+      await dispatchWebhook(orgId, 'payment.received', webhookPayload)
+    } catch (err) {
+      console.error('[webhook-dispatch-error] payment.received', err)
+    }
+  }
+
+  return apiSuccess({ id, status: 'paid' })
+})
