@@ -9,7 +9,8 @@ export const GET = withAuth('admin', async (req: NextRequest, ctx: unknown) => {
   const { distinctId } = await (ctx as RouteContext).params
   const { searchParams } = new URL(req.url)
   const propertyId = searchParams.get('propertyId')
-  const limit = Math.min(parseInt(searchParams.get('limit') ?? '500', 10), 2000)
+  const rawLimit = parseInt(searchParams.get('limit') ?? '500', 10)
+  const limit = isNaN(rawLimit) ? 500 : Math.min(rawLimit, 2000)
 
   if (!propertyId) return apiError('propertyId required', 400)
 
@@ -56,10 +57,16 @@ export const DELETE = withAuth('admin', async (req: NextRequest, ctx: unknown) =
       .get(),
   ])
 
-  const batch = adminDb.batch()
-  for (const doc of eventsSnap.docs) batch.delete(doc.ref)
-  for (const doc of sessionsSnap.docs) batch.delete(doc.ref)
-  await batch.commit()
+  const allRefs = [
+    ...eventsSnap.docs.map(d => d.ref),
+    ...sessionsSnap.docs.map(d => d.ref),
+  ]
+  const CHUNK = 490
+  for (let i = 0; i < allRefs.length; i += CHUNK) {
+    const b = adminDb.batch()
+    for (const ref of allRefs.slice(i, i + CHUNK)) b.delete(ref)
+    await b.commit()
+  }
 
   return apiSuccess({ deleted: { events: eventsSnap.size, sessions: sessionsSnap.size } })
 })

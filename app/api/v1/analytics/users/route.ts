@@ -6,7 +6,8 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 export const GET = withAuth('admin', async (req: NextRequest) => {
   const { searchParams } = new URL(req.url)
   const propertyId = searchParams.get('propertyId')
-  const limit = Math.min(parseInt(searchParams.get('limit') ?? '200', 10), 500)
+  const rawLimit = parseInt(searchParams.get('limit') ?? '200', 10)
+  const limit = isNaN(rawLimit) ? 200 : Math.min(rawLimit, 500)
 
   if (!propertyId) return apiError('propertyId required', 400)
 
@@ -27,6 +28,7 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
   for (const doc of snap.docs) {
     const d = doc.data()
     const key = d.distinctId as string
+    if (!key) continue
     const ts = (d.serverTime?.toDate?.() ?? new Date()).toISOString()
     if (!seen.has(key)) {
       seen.set(key, { distinctId: key, userId: d.userId ?? null, firstSeen: ts, lastSeen: ts, eventCount: 1 })
