@@ -21,6 +21,7 @@ export default function PropertiesPage() {
   const [loading, setLoading] = useState(true)
   const [orgMap, setOrgMap] = useState<Record<string, string>>({})
   const [orgFilter, setOrgFilter] = useState('')
+  const [orgLoadError, setOrgLoadError] = useState(false)
 
   useEffect(() => {
     fetch('/api/v1/organizations')
@@ -30,13 +31,13 @@ export default function PropertiesPage() {
         for (const org of body.data ?? []) map[org.id] = org.name
         setOrgMap(map)
       })
-      .catch(() => {})
+      .catch(() => setOrgLoadError(true))
   }, [])
 
   useEffect(() => {
     if (!orgFilter) { setLoading(false); return }
     setLoading(true)
-    fetch(`/api/v1/properties?orgId=${orgFilter}`)
+    fetch(`/api/v1/properties?${new URLSearchParams({ orgId: orgFilter })}`)
       .then(r => r.json())
       .then(body => { setProperties(body.data ?? []); setLoading(false) })
       .catch(() => setLoading(false))
@@ -69,6 +70,7 @@ export default function PropertiesPage() {
             <option key={id} value={id}>{name}</option>
           ))}
         </select>
+        {orgLoadError && <p className="text-xs text-red-400 mt-1">Could not load clients. Refresh to retry.</p>}
       </div>
 
       {/* Properties list */}

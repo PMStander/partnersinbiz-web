@@ -54,7 +54,7 @@ export default function NewPropertyPage() {
         <h1 className="text-xl font-headline font-bold text-on-surface">New Property</h1>
       </div>
 
-      <div className="pib-card p-5 space-y-4">
+      <form className="pib-card p-5 space-y-4" onSubmit={e => { e.preventDefault(); handleCreate() }}>
         <div>
           <label className="text-xs text-on-surface-variant font-label block mb-1">Client *</label>
           <select value={orgId} onChange={e => setOrgId(e.target.value)} className="pib-input text-sm w-full">
@@ -91,10 +91,10 @@ export default function NewPropertyPage() {
           </div>
         </div>
         {error && <p className="text-sm text-red-400 font-label">{error}</p>}
-        <button onClick={handleCreate} disabled={saving} className="pib-btn-primary text-sm font-label w-full">
+        <button type="submit" disabled={saving} className="pib-btn-primary text-sm font-label w-full">
           {saving ? 'Creating…' : 'Create Property'}
         </button>
-      </div>
+      </form>
     </div>
   )
 }

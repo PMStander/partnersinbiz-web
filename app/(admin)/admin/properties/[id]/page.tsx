@@ -333,7 +333,7 @@ export default function PropertyDetailPage() {
 
   useEffect(() => {
     fetch(`/api/v1/properties/${id}`)
-      .then(r => { if (!r.ok) router.push('/admin/properties'); return r.json() })
+      .then(r => { if (!r.ok) throw new Error('not found'); return r.json() })
       .then(body => { setProperty(body.data); setLoading(false) })
       .catch(() => { setLoading(false); router.push('/admin/properties') })
   }, [id, router])
