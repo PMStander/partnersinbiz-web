@@ -110,3 +110,20 @@ export interface IngestResult {
   rejected: number
   errors: string[]
 }
+
+export type RetentionGranularity = 'day' | 'week'
+
+export interface RetentionCohortRow {
+  cohortLabel: string        // e.g. "2026-04-07" (day) or "2026-W15" (week)
+  cohortStart: number        // Unix ms — start of the cohort period
+  cohortSize: number         // distinct users who fired the cohort event in this period
+  periods: (number | null)[] // retention % for period 0, 1, 2 … N (period 0 = 100% always)
+}
+
+export interface RetentionResult {
+  granularity: RetentionGranularity
+  cohortEvent: string
+  returnEvent: string
+  maxPeriods: number
+  rows: RetentionCohortRow[]
+}
