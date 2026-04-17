@@ -3,6 +3,9 @@
 export type PropertyType = 'web' | 'ios' | 'android' | 'universal'
 export type PropertyStatus = 'draft' | 'active' | 'paused' | 'archived'
 
+export const VALID_PROPERTY_TYPES: PropertyType[] = ['web', 'ios', 'android', 'universal']
+export const VALID_PROPERTY_STATUSES: PropertyStatus[] = ['draft', 'active', 'paused', 'archived']
+
 export interface PropertyConfig {
   appStoreUrl?: string
   playStoreUrl?: string
