@@ -139,6 +139,179 @@ const config = await res.json()`}
   )
 }
 
+// ── Config Tab ────────────────────────────────────────────────────────────
+
+function ConfigTab({ property, onSave }: { property: Property; onSave: (updated: Property) => void }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  const [appStoreUrl, setAppStoreUrl] = useState(property.config?.appStoreUrl ?? '')
+  const [playStoreUrl, setPlayStoreUrl] = useState(property.config?.playStoreUrl ?? '')
+  const [primaryCtaUrl, setPrimaryCtaUrl] = useState(property.config?.primaryCtaUrl ?? '')
+  const [siteUrl, setSiteUrl] = useState(property.config?.siteUrl ?? '')
+  const [killSwitch, setKillSwitch] = useState(property.config?.killSwitch ?? false)
+  const [status, setStatus] = useState(property.status)
+
+  const [featureFlagsText, setFeatureFlagsText] = useState(
+    JSON.stringify(property.config?.featureFlags ?? {}, null, 2)
+  )
+  const [customConfigText, setCustomConfigText] = useState(
+    JSON.stringify(property.config?.customConfig ?? {}, null, 2)
+  )
+  const [conversionSequenceId, setConversionSequenceId] = useState(property.conversionSequenceId ?? '')
+  const [creatorLinkPrefix, setCreatorLinkPrefix] = useState(property.creatorLinkPrefix ?? '')
+
+  async function handleSave() {
+    setSaving(true); setError(''); setSuccess(false)
+    let featureFlags: Record<string, boolean | string> = {}
+    let customConfig: Record<string, unknown> = {}
+    try {
+      featureFlags = JSON.parse(featureFlagsText || '{}')
+      customConfig = JSON.parse(customConfigText || '{}')
+    } catch {
+      setError('Feature flags and custom config must be valid JSON.'); setSaving(false); return
+    }
+
+    const body = {
+      status,
+      config: { appStoreUrl, playStoreUrl, primaryCtaUrl, siteUrl, killSwitch, featureFlags, customConfig },
+      conversionSequenceId: conversionSequenceId || null,
+      creatorLinkPrefix: creatorLinkPrefix || null,
+    }
+
+    try {
+      const res = await fetch(`/api/v1/properties/${property.id}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Save failed')
+      onSave(data.data)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="pib-card p-4 space-y-4">
+        <h2 className="text-sm font-label font-semibold text-on-surface">Status</h2>
+        <select value={status} onChange={e => setStatus(e.target.value as any)} className="pib-input text-sm w-48">
+          <option value="draft">Draft</option>
+          <option value="active">Active</option>
+          <option value="paused">Paused</option>
+          <option value="archived">Archived</option>
+        </select>
+      </div>
+
+      <div className="pib-card p-4 space-y-4">
+        <h2 className="text-sm font-label font-semibold text-on-surface">Store &amp; CTA URLs</h2>
+        <div>
+          <label className="text-xs text-on-surface-variant font-label block mb-1">App Store URL</label>
+          <input type="url" value={appStoreUrl} onChange={e => setAppStoreUrl(e.target.value)} placeholder="https://apps.apple.com/…" className="pib-input text-sm w-full" />
+        </div>
+        <div>
+          <label className="text-xs text-on-surface-variant font-label block mb-1">Play Store URL</label>
+          <input type="url" value={playStoreUrl} onChange={e => setPlayStoreUrl(e.target.value)} placeholder="https://play.google.com/…" className="pib-input text-sm w-full" />
+        </div>
+        <div>
+          <label className="text-xs text-on-surface-variant font-label block mb-1">Primary CTA URL (fallback)</label>
+          <input type="url" value={primaryCtaUrl} onChange={e => setPrimaryCtaUrl(e.target.value)} placeholder="https://…" className="pib-input text-sm w-full" />
+        </div>
+        <div>
+          <label className="text-xs text-on-surface-variant font-label block mb-1">Canonical Site URL</label>
+          <input type="url" value={siteUrl} onChange={e => setSiteUrl(e.target.value)} placeholder="https://scrolledbrain.com" className="pib-input text-sm w-full" />
+        </div>
+      </div>
+
+      <div className="pib-card p-4 space-y-3">
+        <h2 className="text-sm font-label font-semibold text-on-surface">Kill Switch</h2>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={killSwitch}
+            onChange={e => setKillSwitch(e.target.checked)}
+            className="w-4 h-4 rounded accent-[var(--color-accent-text)]"
+          />
+          <span className="text-sm text-on-surface">
+            Take site offline immediately (returns 503, CDN bypassed)
+          </span>
+        </label>
+      </div>
+
+      <div className="pib-card p-4 space-y-4">
+        <h2 className="text-sm font-label font-semibold text-on-surface">Feature Flags</h2>
+        <p className="text-xs text-on-surface-variant">
+          JSON object of key → boolean or string. Example: <code>{`{"cardStyle":"meme","showLeaderboard":true}`}</code>
+        </p>
+        <textarea
+          value={featureFlagsText}
+          onChange={e => setFeatureFlagsText(e.target.value)}
+          rows={6}
+          className="pib-input text-xs font-mono w-full"
+          spellCheck={false}
+        />
+      </div>
+
+      <div className="pib-card p-4 space-y-4">
+        <h2 className="text-sm font-label font-semibold text-on-surface">Custom Config</h2>
+        <p className="text-xs text-on-surface-variant">Escape hatch for site-specific config. Any valid JSON object.</p>
+        <textarea
+          value={customConfigText}
+          onChange={e => setCustomConfigText(e.target.value)}
+          rows={6}
+          className="pib-input text-xs font-mono w-full"
+          spellCheck={false}
+        />
+      </div>
+
+      <div className="pib-card p-4 space-y-4">
+        <h2 className="text-sm font-label font-semibold text-on-surface">Integrations</h2>
+        <div>
+          <label className="text-xs text-on-surface-variant font-label block mb-1">Conversion Sequence ID</label>
+          <input
+            type="text"
+            value={conversionSequenceId}
+            onChange={e => setConversionSequenceId(e.target.value)}
+            placeholder="seq_…"
+            className="pib-input text-sm w-72"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-on-surface-variant font-label block mb-1">Creator Link Prefix</label>
+          <input
+            type="text"
+            value={creatorLinkPrefix}
+            onChange={e => setCreatorLinkPrefix(e.target.value)}
+            placeholder="sb-"
+            className="pib-input text-sm w-48"
+          />
+          <p className="text-xs text-on-surface-variant mt-1">
+            Links with slugs starting with this prefix are attributed to this property.
+          </p>
+        </div>
+      </div>
+
+      {error && <p className="text-sm text-red-400 font-label">{error}</p>}
+      {success && <p className="text-sm text-green-400 font-label">Saved.</p>}
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="pib-btn-primary text-sm font-label"
+      >
+        {saving ? 'Saving…' : 'Save Changes'}
+      </button>
+    </div>
+  )
+}
+
 // ── Placeholder tabs ──────────────────────────────────────────────────────
 
 function PlaceholderTab({ label }: { label: string }) {
@@ -210,7 +383,12 @@ export default function PropertyDetailPage() {
 
       {/* Tab content */}
       {activeTab === 'overview'  && <OverviewTab property={property} />}
-      {activeTab === 'config'    && <PlaceholderTab label="Config editor" />}
+      {activeTab === 'config' && (
+        <ConfigTab
+          property={property}
+          onSave={(updated) => setProperty(updated)}
+        />
+      )}
       {activeTab === 'sequences' && <PlaceholderTab label="Sequence linking" />}
       {activeTab === 'creators'  && <PlaceholderTab label="Creator links" />}
       {activeTab === 'analytics' && <PlaceholderTab label="Analytics (Module 2)" />}
