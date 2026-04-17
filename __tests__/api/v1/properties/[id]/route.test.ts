@@ -101,3 +101,22 @@ describe('DELETE /api/v1/properties/:id', () => {
     expect(res.status).toBe(200)
   })
 })
+
+import { POST as ROTATE } from '@/app/api/v1/properties/[id]/rotate-ingest-key/route'
+
+describe('POST /api/v1/properties/:id/rotate-ingest-key', () => {
+  it('returns 404 when not found', async () => {
+    mockDocNotFound()
+    const res = await ROTATE(makeReq('POST'), CTX)
+    expect(res.status).toBe(404)
+  })
+
+  it('returns new ingest key (64-char hex) and id', async () => {
+    mockDocFound()
+    const res = await ROTATE(makeReq('POST'), CTX)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.ingestKey).toMatch(/^[0-9a-f]{64}$/)
+    expect(body.data.id).toBe('prop-123')
+  })
+})
