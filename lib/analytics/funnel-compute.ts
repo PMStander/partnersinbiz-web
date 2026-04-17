@@ -37,6 +37,7 @@ export function computeFunnelResults(
 
     for (const ev of userEvents) {
       if (stepIdx >= steps.length) break
+      // FunnelStep.filters is reserved for a future property-filter pass; not yet implemented
       if (ev.event !== steps[stepIdx].event) continue
 
       if (stepIdx === 0) {
