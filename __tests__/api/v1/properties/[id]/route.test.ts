@@ -10,7 +10,7 @@ jest.mock('@/lib/firebase/admin', () => ({
 import { adminDb } from '@/lib/firebase/admin'
 process.env.AI_API_KEY = 'test-key'
 
-const CTX = { params: { id: 'prop-123' } }
+const CTX = { params: Promise.resolve({ id: 'prop-123' }) }
 
 function makeReq(method: string, body?: object) {
   return new NextRequest('http://localhost/api/v1/properties/prop-123', {
