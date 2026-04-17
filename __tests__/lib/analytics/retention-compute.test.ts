@@ -33,4 +33,16 @@ describe('computeRetention', () => {
     const result = computeRetention([], 'signup', 'pageview', 'day', 0, DAY * 3)
     expect(result.rows).toHaveLength(0)
   })
+
+  it('produces correct week label using ISO 8601', () => {
+    // 2026-04-13 is a Monday — first day of ISO week 16
+    const weekStart = Date.UTC(2026, 3, 13)  // April 13, 2026
+    const events = [
+      { distinctId: 'u-x', event: 'signup', timestamp: weekStart },
+      { distinctId: 'u-x', event: 'pageview', timestamp: weekStart + 7 * 86400000 },
+    ]
+    const result = computeRetention(events, 'signup', 'pageview', 'week', weekStart - 1, weekStart + 14 * 86400000)
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0].cohortLabel).toBe('2026-W16')
+  })
 })

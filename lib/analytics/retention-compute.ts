@@ -23,10 +23,14 @@ function periodLabel(ts: number, granularity: RetentionGranularity): string {
   if (granularity === 'day') {
     return d.toISOString().slice(0, 10)
   }
-  // ISO week string e.g. "2026-W15"
-  const jan4 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4))
-  const week = Math.ceil(((ts - jan4.getTime()) / 86400000 + jan4.getUTCDay() + 1) / 7)
-  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
+  // ISO 8601 week: Thursday-based. The year of the week belongs to the year
+  // that contains the Thursday of that week.
+  const thursday = new Date(ts)
+  thursday.setUTCDate(thursday.getUTCDate() - ((thursday.getUTCDay() + 6) % 7) + 3)
+  const isoYear = thursday.getUTCFullYear()
+  const jan4 = Date.UTC(isoYear, 0, 4)
+  const weekNum = Math.round((thursday.getTime() - jan4) / 604800000) + 1
+  return `${isoYear}-W${String(weekNum).padStart(2, '0')}`
 }
 
 export function computeRetention(
@@ -61,7 +65,9 @@ export function computeRetention(
   }
 
   // Determine max periods we can compute
-  const maxPeriods = Math.max(1, Math.floor((toMs - Math.min(...cohorts.keys())) / periodMs) + 1)
+  let minCohortStart = Infinity
+  for (const k of cohorts.keys()) if (k < minCohortStart) minCohortStart = k
+  const maxPeriods = Math.max(1, Math.floor((toMs - minCohortStart) / periodMs) + 1)
 
   // Build return event map: distinctId → Set<returnPeriod offset>
   const userReturns = new Map<string, Set<number>>()
