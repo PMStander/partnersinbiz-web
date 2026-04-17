@@ -55,10 +55,16 @@ describe('GET /api/v1/properties/:id/config', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 404 when property not found', async () => {
+  it('returns 401 (not 404) when property not found — prevents ID enumeration', async () => {
     mockDoc(null)
     const res = await GET(makeReq(INGEST_KEY), CTX)
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 401 when key is wrong and property does not exist', async () => {
+    mockDoc(null)
+    const res = await GET(makeReq('b'.repeat(64)), CTX)
+    expect(res.status).toBe(401)
   })
 
   it('returns 503 when kill switch is active', async () => {
@@ -67,6 +73,7 @@ describe('GET /api/v1/properties/:id/config', () => {
     expect(res.status).toBe(503)
     const body = await res.json()
     expect(body.killSwitch).toBe(true)
+    expect(res.headers.get('Cache-Control')).toBe('no-store')
   })
 
   it('returns config with cache headers when all is valid', async () => {

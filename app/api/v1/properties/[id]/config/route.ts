@@ -23,7 +23,7 @@ export async function GET(
   try {
     const snap = await adminDb.collection('properties').doc(id).get()
     if (!snap.exists || snap.data()?.deleted) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      return NextResponse.json({ error: 'Invalid ingest key' }, { status: 401 })
     }
 
     const data = snap.data()!
