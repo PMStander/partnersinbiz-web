@@ -208,5 +208,23 @@ service cloud.firestore {
     match /properties/{docId} {
       allow read, write: if false;
     }
+
+    // Analytics — all written via Admin SDK (ingest endpoint), all queried via admin-authed API
+    match /product_events/{id} {
+      allow read, write: if false;
+    }
+
+    match /product_sessions/{id} {
+      allow read, write: if false;
+    }
+
+    match /product_funnels/{id} {
+      allow read, write: if false;
+    }
+
+    // Analytics rate limiting — internal only
+    match /analytics_rate_limits/{id} {
+      allow read, write: if false;
+    }
   }
 }

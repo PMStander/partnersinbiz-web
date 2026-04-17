@@ -338,6 +338,74 @@
         { "fieldPath": "type", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "product_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "event", "order": "ASCENDING" },
+        { "fieldPath": "serverTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "product_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "serverTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "product_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "event", "order": "ASCENDING" },
+        { "fieldPath": "serverTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "product_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "distinctId", "order": "ASCENDING" },
+        { "fieldPath": "serverTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "product_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sessionId", "order": "ASCENDING" },
+        { "fieldPath": "serverTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "product_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "product_funnels",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "analytics_rate_limits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ingestKey", "order": "ASCENDING" },
+        { "fieldPath": "minuteBucket", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
