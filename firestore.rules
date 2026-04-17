@@ -203,5 +203,10 @@ service cloud.firestore {
     match /webhook_deliveries/{id} {
       allow read, write: if isAdmin();
     }
+
+    // Properties — managed via server-side API only
+    match /properties/{docId} {
+      allow read, write: if false;
+    }
   }
 }
