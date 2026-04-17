@@ -85,4 +85,14 @@ describe('GET /api/v1/analytics/sessions/:id', () => {
     )
     expect(res.status).toBe(200)
   })
+
+  it('returns 404 when session not found', async () => {
+    mockCollection('product_sessions', [])
+    const ctx = { params: Promise.resolve({ id: 'nonexistent' }) }
+    const res = await GET_DETAIL(
+      makeReq('http://localhost/api/v1/analytics/sessions/nonexistent'),
+      ctx,
+    )
+    expect(res.status).toBe(404)
+  })
 })
