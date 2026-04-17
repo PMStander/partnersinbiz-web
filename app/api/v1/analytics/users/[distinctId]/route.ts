@@ -44,29 +44,36 @@ export const DELETE = withAuth('admin', async (req: NextRequest, ctx: unknown) =
 
   if (!propertyId) return apiError('propertyId required', 400)
 
-  const [eventsSnap, sessionsSnap] = await Promise.all([
-    adminDb.collection('product_events')
-      .where('propertyId', '==', propertyId)
-      .where('distinctId', '==', distinctId)
-      .limit(500)
-      .get(),
-    adminDb.collection('product_sessions')
-      .where('propertyId', '==', propertyId)
-      .where('distinctId', '==', distinctId)
-      .limit(200)
-      .get(),
-  ])
+  let totalEvents = 0
+  let totalSessions = 0
 
-  const allRefs = [
-    ...eventsSnap.docs.map(d => d.ref),
-    ...sessionsSnap.docs.map(d => d.ref),
-  ]
-  const CHUNK = 490
-  for (let i = 0; i < allRefs.length; i += CHUNK) {
+  while (true) {
+    const snap = await adminDb.collection('product_events')
+      .where('propertyId', '==', propertyId)
+      .where('distinctId', '==', distinctId)
+      .limit(490)
+      .get()
+    if (snap.empty) break
     const b = adminDb.batch()
-    for (const ref of allRefs.slice(i, i + CHUNK)) b.delete(ref)
+    for (const doc of snap.docs) b.delete(doc.ref)
     await b.commit()
+    totalEvents += snap.size
+    if (snap.size < 490) break
   }
 
-  return apiSuccess({ deleted: { events: eventsSnap.size, sessions: sessionsSnap.size } })
+  while (true) {
+    const snap = await adminDb.collection('product_sessions')
+      .where('propertyId', '==', propertyId)
+      .where('distinctId', '==', distinctId)
+      .limit(490)
+      .get()
+    if (snap.empty) break
+    const b = adminDb.batch()
+    for (const doc of snap.docs) b.delete(doc.ref)
+    await b.commit()
+    totalSessions += snap.size
+    if (snap.size < 490) break
+  }
+
+  return apiSuccess({ deleted: { events: totalEvents, sessions: totalSessions } })
 })

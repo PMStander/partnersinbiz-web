@@ -42,6 +42,10 @@ describe('GET /api/v1/analytics/users', () => {
     const req = new NextRequest('http://localhost/api/v1/analytics/users?propertyId=prop_x')
     const res = await listUsers(req)
     expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(Array.isArray(body.users)).toBe(true)
+    expect(body.users[0].distinctId).toBe('u-abc')
+    expect(body.users[0].eventCount).toBe(1)
   })
 })
 

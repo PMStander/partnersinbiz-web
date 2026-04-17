@@ -95,8 +95,8 @@ export default function LivePage() {
                 </p>
               </div>
               <span className="text-on-surface-variant text-xs whitespace-nowrap">
-                {(ev.serverTime as any)?.toDate
-                  ? (ev.serverTime as any).toDate().toLocaleTimeString()
+                {(ev.serverTime as any)?._seconds
+                  ? new Date((ev.serverTime as any)._seconds * 1000).toLocaleTimeString()
                   : 'now'}
               </span>
             </div>
