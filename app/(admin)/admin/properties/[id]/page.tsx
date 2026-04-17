@@ -2,9 +2,10 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import type { Property } from '@/lib/properties/types'
+import type { PropertyStatus } from '@/lib/properties/types'
 
 type Tab = 'overview' | 'config' | 'sequences' | 'creators' | 'analytics' | 'keys'
 
@@ -145,6 +146,9 @@ function ConfigTab({ property, onSave }: { property: Property; onSave: (updated:
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => { if (successTimerRef.current) clearTimeout(successTimerRef.current) }, [])
 
   const [appStoreUrl, setAppStoreUrl] = useState(property.config?.appStoreUrl ?? '')
   const [playStoreUrl, setPlayStoreUrl] = useState(property.config?.playStoreUrl ?? '')
@@ -190,9 +194,10 @@ function ConfigTab({ property, onSave }: { property: Property; onSave: (updated:
       if (!res.ok) throw new Error(data.error ?? 'Save failed')
       onSave(data.data)
       setSuccess(true)
-      setTimeout(() => setSuccess(false), 3000)
-    } catch (e: any) {
-      setError(e.message)
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+      successTimerRef.current = setTimeout(() => setSuccess(false), 3000)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'An unexpected error occurred.')
     } finally {
       setSaving(false)
     }
@@ -202,7 +207,7 @@ function ConfigTab({ property, onSave }: { property: Property; onSave: (updated:
     <div className="space-y-4">
       <div className="pib-card p-4 space-y-4">
         <h2 className="text-sm font-label font-semibold text-on-surface">Status</h2>
-        <select value={status} onChange={e => setStatus(e.target.value as any)} className="pib-input text-sm w-48">
+        <select value={status} onChange={e => setStatus(e.target.value as PropertyStatus)} className="pib-input text-sm w-48">
           <option value="draft">Draft</option>
           <option value="active">Active</option>
           <option value="paused">Paused</option>
