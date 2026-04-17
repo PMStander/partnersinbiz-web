@@ -18,6 +18,7 @@ interface NavItem {
 const OPERATOR_NAV: NavItem[] = [
   { label: 'Dashboard',   href: '/admin/dashboard',          icon: '⊞' },
   { label: 'Properties',  href: '/admin/properties',         icon: '◉' },
+  { label: 'Analytics',   href: '/admin/analytics',          icon: '◎' },
   { label: 'Pipeline',    href: '/admin/crm/contacts',       icon: '⟳' },
   { label: 'Clients',    href: '/admin/clients',         icon: '◎' },
   { label: 'Invoicing',  href: '/admin/invoicing',       icon: '◷' },
