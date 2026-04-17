@@ -6,6 +6,7 @@ const nextConfig: any = {
   turbopack: {
     root: path.resolve('.'),
   },
+  transpilePackages: ['@partnersinbiz/analytics-js'],
 };
 
 export default nextConfig;

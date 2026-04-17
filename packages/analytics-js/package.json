@@ -1,0 +1,10 @@
+{
+  "name": "@partnersinbiz/analytics-js",
+  "version": "0.1.0",
+  "description": "Partners in Biz browser analytics SDK — PostHog-API-compatible",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "license": "MIT",
+  "keywords": ["analytics", "partnersinbiz"],
+  "peerDependencies": {}
+}
