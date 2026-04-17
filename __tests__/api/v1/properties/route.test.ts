@@ -7,10 +7,6 @@ jest.mock('@/lib/firebase/admin', () => ({
   adminDb: { collection: jest.fn() },
 }))
 
-jest.mock('@/lib/webhooks/dispatch', () => ({
-  dispatchWebhook: jest.fn().mockResolvedValue(undefined),
-}))
-
 import { adminDb } from '@/lib/firebase/admin'
 process.env.AI_API_KEY = 'test-key'
 

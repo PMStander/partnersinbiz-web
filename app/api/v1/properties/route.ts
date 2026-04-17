@@ -36,7 +36,11 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     query = query.where('type', '==', type) as any
   }
 
-  const snap = await query.limit(limit).offset(offset).get()
+  const snap = await query.limit(limit).offset(offset).get().catch((err) => {
+    console.error('[properties-list-error]', err)
+    return null
+  })
+  if (!snap) return apiError('Failed to list properties', 500)
   const data = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }))
 
   return apiSuccess(data)
@@ -72,7 +76,12 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     updatedAt: FieldValue.serverTimestamp(),
   }
 
-  const ref = await adminDb.collection('properties').add(doc)
-
-  return apiSuccess({ id: ref.id, ...doc, ingestKey }, 201)
+  try {
+    const ref = await adminDb.collection('properties').add(doc)
+    // TODO: dispatch property.created webhook
+    return apiSuccess({ id: ref.id, ...doc, ingestKey }, 201)
+  } catch (err) {
+    console.error('[properties-create-error]', err)
+    return apiError('Failed to create property', 500)
+  }
 })
