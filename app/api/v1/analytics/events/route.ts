@@ -17,6 +17,9 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
   const distinctId = searchParams.get('distinctId')
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '100', 10), 500)
 
+  if (from && isNaN(new Date(from).getTime())) return apiError('Invalid from date', 400)
+  if (to && isNaN(new Date(to).getTime())) return apiError('Invalid to date', 400)
+
   try {
     let q = adminDb.collection('product_events')
       .where('propertyId', '==', propertyId) as FirebaseFirestore.Query
