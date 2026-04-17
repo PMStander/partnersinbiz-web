@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { AnalyticsNav } from '@/components/admin/AnalyticsNav'
 
 interface Session {
   id: string
@@ -59,6 +60,7 @@ export default function SessionsPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      <AnalyticsNav active="sessions" />
       <h1 className="text-xl font-headline font-bold text-on-surface">Sessions</h1>
 
       <div className="pib-card p-4 flex flex-wrap gap-3 items-end">

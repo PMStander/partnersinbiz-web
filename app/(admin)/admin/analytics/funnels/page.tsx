@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useState } from 'react'
 import type { FunnelResults } from '@/lib/analytics/types'
 import { VALID_FUNNEL_WINDOWS } from '@/lib/analytics/types'
+import { AnalyticsNav } from '@/components/admin/AnalyticsNav'
 
 interface Funnel {
   id: string
@@ -91,6 +92,7 @@ export default function FunnelsPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      <AnalyticsNav active="funnels" />
       <h1 className="text-xl font-headline font-bold text-on-surface">Funnels</h1>
 
       <div className="pib-card p-4 flex gap-3 items-end">

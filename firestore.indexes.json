@@ -406,6 +406,23 @@
         { "fieldPath": "ingestKey", "order": "ASCENDING" },
         { "fieldPath": "minuteBucket", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "product_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "distinctId", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "product_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "serverTime", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

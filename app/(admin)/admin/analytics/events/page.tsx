@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { AnalyticsNav } from '@/components/admin/AnalyticsNav'
 
 interface AnalyticsEvent {
   id: string
@@ -53,6 +54,7 @@ export default function AnalyticsEventsPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      <AnalyticsNav active="events" />
       <h1 className="text-xl font-headline font-bold text-on-surface">Events</h1>
 
       <div className="pib-card p-4 flex flex-wrap gap-3 items-end">
