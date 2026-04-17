@@ -28,6 +28,8 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
 
   const snap = await adminDb.collection('product_events')
     .where('propertyId', '==', propertyId)
+    .where('serverTime', '>=', fromDate)
+    .where('serverTime', '<=', toDate)
     .orderBy('serverTime', 'desc')
     .limit(20000)
     .get()
