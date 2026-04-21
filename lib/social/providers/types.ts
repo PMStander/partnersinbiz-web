@@ -176,6 +176,7 @@ export interface SocialMedia {
   height: number
   duration: number | null
   altText: string
+  storagePath: string | null
   usedInPosts: string[]
   uploadedBy: string
   createdAt: Timestamp
