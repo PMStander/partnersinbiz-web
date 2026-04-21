@@ -47,7 +47,7 @@ export function getOAuthConfig(platform: SocialPlatformType): OAuthConfig | null
         platform: 'linkedin',
         authUrl: 'https://www.linkedin.com/oauth/v2/authorization',
         tokenUrl: 'https://www.linkedin.com/oauth/v2/accessToken',
-        scopes: ['w_member_social', 'w_organization_social', 'openid', 'profile'],
+        scopes: ['w_member_social', 'openid', 'profile'],
       }
     case 'reddit':
       return {
