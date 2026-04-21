@@ -67,7 +67,7 @@ export class MastodonProvider extends SocialProvider {
   async publishPost(options: PublishOptions): Promise<PublishResult> {
     // If thread parts provided, publish as thread and return first ID
     if (options.threadParts && options.threadParts.length > 0) {
-      const results = await this.publishThread(options.threadParts)
+      const results = await this.publishThread(options.threadParts, options.mediaUrls)
       return results[0]
     }
 
@@ -118,7 +118,7 @@ export class MastodonProvider extends SocialProvider {
     }
   }
 
-  async publishThread(parts: string[]): Promise<PublishResult[]> {
+  async publishThread(parts: string[], mediaUrls?: string[]): Promise<PublishResult[]> {
     if (parts.length === 0) throw new Error('publishThread requires at least one part')
 
     const results: PublishResult[] = []
@@ -134,6 +134,18 @@ export class MastodonProvider extends SocialProvider {
       // Reply to previous post for proper threading
       if (i > 0) {
         body.in_reply_to_id = results[results.length - 1].platformPostId
+      }
+
+      // Attach media to first post only
+      if (i === 0 && mediaUrls && mediaUrls.length > 0) {
+        const mediaIds: string[] = []
+        for (const mediaUrl of mediaUrls) {
+          const mediaId = await this.uploadMedia(mediaUrl)
+          if (mediaId) mediaIds.push(mediaId)
+        }
+        if (mediaIds.length > 0) {
+          body.media_ids = mediaIds
+        }
       }
 
       const response = await fetch(url, {

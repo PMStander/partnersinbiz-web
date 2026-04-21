@@ -32,7 +32,7 @@ export const POST = withAuth('admin', withTenant(async (_req, user, orgId, conte
   if (!text) return apiError('Post has no content', 400)
 
   const mediaUrls: string[] | undefined = Array.isArray(post.media) && post.media.length > 0
-    ? (post.media as Array<{ url: string }>).map((m) => m.url).filter(Boolean)
+    ? (post.media as Array<{ url?: string }>).map((m) => m.url).filter((u): u is string => Boolean(u))
     : undefined
 
   let externalId: string

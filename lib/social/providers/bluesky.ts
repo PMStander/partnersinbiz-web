@@ -35,7 +35,7 @@ export class BlueskyProvider extends SocialProvider {
   async publishPost(options: PublishOptions): Promise<PublishResult> {
     // If thread parts provided, publish as thread and return first ID
     if (options.threadParts && options.threadParts.length > 0) {
-      const results = await this.publishThread(options.threadParts)
+      const results = await this.publishThread(options.threadParts, options.mediaUrls)
       return results[0]
     }
 
@@ -84,7 +84,7 @@ export class BlueskyProvider extends SocialProvider {
     }
   }
 
-  async publishThread(parts: string[]): Promise<PublishResult[]> {
+  async publishThread(parts: string[], mediaUrls?: string[]): Promise<PublishResult[]> {
     if (parts.length === 0) throw new Error('publishThread requires at least one part')
 
     const results: PublishResult[] = []

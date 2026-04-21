@@ -139,9 +139,15 @@ export async function processQueue(): Promise<QueueProcessResult> {
 
     try {
       const orgId = post.orgId ?? entry.orgId
+      if (!orgId) {
+        await failQueueEntry(lockRef, entry, 'Missing orgId on post/queue entry')
+        result.failed++
+        result.errors.push({ postId: entry.postId, error: 'Missing orgId' })
+        continue
+      }
       const { provider, accountId } = await resolveProvider(post, orgId, platformType)
       const mediaUrls: string[] | undefined = Array.isArray(post.media) && post.media.length > 0
-        ? (post.media as Array<{ url: string }>).map(m => m.url).filter(Boolean)
+        ? (post.media as Array<{ url?: string }>).map(m => m.url).filter((u): u is string => Boolean(u))
         : undefined
       const externalId = await publishWithRefresh(provider, text, post.threadParts, mediaUrls, accountId, orgId, platformType)
 
