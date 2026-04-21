@@ -132,21 +132,21 @@ export function getOAuthConfig(platform: SocialPlatformType): OAuthConfig | null
 export function getClientCredentials(platform: SocialPlatformType): { clientId: string; clientSecret: string } | null {
   // Twitter OAuth 2.0 uses TWITTER_CLIENT_ID / TWITTER_CLIENT_SECRET
   if (platform === 'twitter') {
-    const clientId = process.env.TWITTER_CLIENT_ID
-    const clientSecret = process.env.TWITTER_CLIENT_SECRET
+    const clientId = process.env.TWITTER_CLIENT_ID?.trim()
+    const clientSecret = process.env.TWITTER_CLIENT_SECRET?.trim()
     if (!clientId || !clientSecret) return null
     return { clientId, clientSecret }
   }
   // TikTok uses CLIENT_KEY naming convention instead of CLIENT_ID
   if (platform === 'tiktok') {
-    const clientId = process.env.TIKTOK_CLIENT_KEY
-    const clientSecret = process.env.TIKTOK_CLIENT_SECRET
+    const clientId = process.env.TIKTOK_CLIENT_KEY?.trim()
+    const clientSecret = process.env.TIKTOK_CLIENT_SECRET?.trim()
     if (!clientId || !clientSecret) return null
     return { clientId, clientSecret }
   }
   const prefix = platform.toUpperCase()
-  const clientId = process.env[`${prefix}_CLIENT_ID`]
-  const clientSecret = process.env[`${prefix}_CLIENT_SECRET`]
+  const clientId = process.env[`${prefix}_CLIENT_ID`]?.trim()
+  const clientSecret = process.env[`${prefix}_CLIENT_SECRET`]?.trim()
   if (!clientId || !clientSecret) return null
   return { clientId, clientSecret }
 }

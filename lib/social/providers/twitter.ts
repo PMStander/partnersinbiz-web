@@ -223,8 +223,8 @@ export class TwitterProvider extends SocialProvider {
     const refreshToken = this.credentials.refreshToken
     if (!refreshToken) return null
 
-    const clientId = process.env.TWITTER_CLIENT_ID
-    const clientSecret = process.env.TWITTER_CLIENT_SECRET
+    const clientId = process.env.TWITTER_CLIENT_ID?.trim()
+    const clientSecret = process.env.TWITTER_CLIENT_SECRET?.trim()
     if (!clientId || !clientSecret) return null
 
     const res = await fetch('https://api.x.com/2/oauth2/token', {
