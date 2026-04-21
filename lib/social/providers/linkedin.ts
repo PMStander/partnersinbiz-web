@@ -115,11 +115,12 @@ export class LinkedInProvider extends SocialProvider {
     }
 
     const videoUrn = initJson.value.video
-    await fetch(`https://api.linkedin.com/rest/videos/${encodeURIComponent(videoUrn)}?action=finalizeUpload`, {
+    const finalizeRes = await fetch(`https://api.linkedin.com/rest/videos/${encodeURIComponent(videoUrn)}?action=finalizeUpload`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ finalizeUploadRequest: { uploadToken: initJson.value.uploadToken, uploadedPartIds: [] } }),
     })
+    if (!finalizeRes.ok) throw new Error(`LinkedIn video finalizeUpload error ${finalizeRes.status}: ${await finalizeRes.text()}`)
 
     return videoUrn
   }
