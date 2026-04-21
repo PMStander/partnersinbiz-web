@@ -53,6 +53,15 @@ export default function OrgSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [copiedId, setCopiedId] = useState(false)
+
+  function copyOrgId() {
+    if (!orgId) return
+    navigator.clipboard.writeText(orgId).then(() => {
+      setCopiedId(true)
+      setTimeout(() => setCopiedId(false), 2000)
+    })
+  }
 
   useEffect(() => {
     async function load() {
@@ -167,6 +176,27 @@ export default function OrgSettingsPage() {
         </p>
         <h1 className="text-2xl font-headline font-bold text-on-surface">Organisation Settings</h1>
       </div>
+
+      {/* Org ID */}
+      {orgId && (
+        <div className="pib-card-section">
+          <div className="pib-card-section-header">
+            <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Organisation ID</span>
+          </div>
+          <div className="pib-card-section-row">
+            <span className="text-sm text-on-surface-variant">Org ID</span>
+            <span className="flex items-center gap-2">
+              <code className="font-mono text-xs text-on-surface bg-[var(--color-surface-container)] px-2 py-1 rounded select-all">{orgId}</code>
+              <button type="button" onClick={copyOrgId} className="text-xs text-on-surface-variant hover:text-on-surface transition-colors px-2 py-1 rounded hover:bg-[var(--color-surface-container)]">
+                {copiedId ? 'Copied!' : 'Copy'}
+              </button>
+            </span>
+          </div>
+          <div className="px-4 pb-3">
+            <p className="text-[11px] text-on-surface-variant/60">Use this ID when configuring AI agents or API integrations for this organisation.</p>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="space-y-5">
         {/* General Settings */}
