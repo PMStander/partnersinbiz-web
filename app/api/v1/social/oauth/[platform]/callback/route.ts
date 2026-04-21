@@ -469,11 +469,9 @@ async function fetchLinkedInProfile(accessToken: string): Promise<{
       // personUrn is the ORG URN for posting as the org
       personUrn: primary.orgUrn,
       meta: {
-        // Store the personal URN — needed for auth and to post as personal later
         personalUrn,
         personalName: user.name,
-        personalEmail: user.email,
-        // All administered org pages for future switching
+        personalEmail: user.email ?? null,
         administeredOrgs,
       },
     }
@@ -490,7 +488,7 @@ async function fetchLinkedInProfile(accessToken: string): Promise<{
     personUrn: personalUrn,
     meta: {
       personalUrn,
-      personalEmail: user.email,
+      personalEmail: user.email ?? null,
       administeredOrgs: [],
     },
   }
