@@ -23,6 +23,7 @@ function buildOAuthHeader(
   apiKeySecret: string,
   accessToken: string,
   accessTokenSecret: string,
+  bodyParams?: Record<string, string>,
 ): string {
   const urlObj = new URL(url)
   const baseUrl = `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}`
@@ -40,7 +41,7 @@ function buildOAuthHeader(
     oauth_version: '1.0',
   }
 
-  const allParams: Record<string, string> = { ...urlQueryParams, ...oauthParams }
+  const allParams: Record<string, string> = { ...urlQueryParams, ...oauthParams, ...(bodyParams ?? {}) }
 
   const encodedPairs = Object.entries(allParams)
     .map(([k, v]) => [percentEncode(k), percentEncode(v)] as [string, string])
@@ -97,7 +98,7 @@ export class TwitterProvider extends SocialProvider {
     return new TwitterProvider({ apiKey, apiKeySecret, accessToken, accessTokenSecret })
   }
 
-  private getAuthHeader(method: string, url: string): string {
+  private getAuthHeader(method: string, url: string, bodyParams?: Record<string, string>): string {
     if (this.useOAuth2) {
       return `Bearer ${this.credentials.accessToken}`
     }
@@ -108,21 +109,137 @@ export class TwitterProvider extends SocialProvider {
       this.credentials.apiKeySecret!,
       this.credentials.accessToken,
       this.credentials.accessTokenSecret!,
+      bodyParams,
     )
   }
 
+  private guessMimeType(url: string): string {
+    const lower = url.toLowerCase().split('?')[0]
+    if (lower.endsWith('.mp4')) return 'video/mp4'
+    if (lower.endsWith('.mov')) return 'video/quicktime'
+    if (lower.endsWith('.gif')) return 'image/gif'
+    if (lower.endsWith('.png')) return 'image/png'
+    if (lower.endsWith('.webp')) return 'image/webp'
+    return 'image/jpeg'
+  }
+
+  private async uploadImageFromUrl(imageUrl: string, mimeType: string): Promise<string> {
+    const UPLOAD_URL = 'https://upload.twitter.com/1.1/media/upload.json'
+    const res = await fetch(imageUrl)
+    if (!res.ok) throw new Error(`Failed to download image: ${res.status}`)
+    const buffer = Buffer.from(await res.arrayBuffer())
+
+    const form = new FormData()
+    form.append('media', new Blob([buffer], { type: mimeType }), 'media')
+
+    const uploadRes = await fetch(UPLOAD_URL, {
+      method: 'POST',
+      headers: { Authorization: this.getAuthHeader('POST', UPLOAD_URL) },
+      body: form,
+    })
+    if (!uploadRes.ok) throw new Error(`Twitter media upload error ${uploadRes.status}: ${await uploadRes.text()}`)
+    const json = await uploadRes.json() as { media_id_string: string }
+    return json.media_id_string
+  }
+
+  private async uploadVideoFromUrl(videoUrl: string, mimeType: string): Promise<string> {
+    const UPLOAD_URL = 'https://upload.twitter.com/1.1/media/upload.json'
+    const res = await fetch(videoUrl)
+    if (!res.ok) throw new Error(`Failed to download video: ${res.status}`)
+    const buffer = Buffer.from(await res.arrayBuffer())
+
+    const initParams: Record<string, string> = {
+      command: 'INIT',
+      media_type: mimeType,
+      total_bytes: buffer.length.toString(),
+      media_category: 'tweet_video',
+    }
+    const initRes = await fetch(UPLOAD_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: this.getAuthHeader('POST', UPLOAD_URL, initParams),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(initParams).toString(),
+    })
+    if (!initRes.ok) throw new Error(`Twitter video INIT error ${initRes.status}: ${await initRes.text()}`)
+    const initJson = await initRes.json() as { media_id_string: string }
+    const mediaId = initJson.media_id_string
+
+    const appendForm = new FormData()
+    appendForm.append('command', 'APPEND')
+    appendForm.append('media_id', mediaId)
+    appendForm.append('segment_index', '0')
+    appendForm.append('media', new Blob([buffer], { type: mimeType }), 'media')
+    const appendRes = await fetch(UPLOAD_URL, {
+      method: 'POST',
+      headers: { Authorization: this.getAuthHeader('POST', UPLOAD_URL) },
+      body: appendForm,
+    })
+    if (!appendRes.ok && appendRes.status !== 204) {
+      throw new Error(`Twitter video APPEND error ${appendRes.status}: ${await appendRes.text()}`)
+    }
+
+    const finalizeParams: Record<string, string> = { command: 'FINALIZE', media_id: mediaId }
+    const finalizeRes = await fetch(UPLOAD_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: this.getAuthHeader('POST', UPLOAD_URL, finalizeParams),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(finalizeParams).toString(),
+    })
+    if (!finalizeRes.ok) throw new Error(`Twitter video FINALIZE error ${finalizeRes.status}: ${await finalizeRes.text()}`)
+    const finalizeJson = await finalizeRes.json() as {
+      media_id_string: string
+      processing_info?: { state: string; check_after_secs?: number }
+    }
+
+    if (finalizeJson.processing_info?.state === 'pending' || finalizeJson.processing_info?.state === 'in_progress') {
+      await this.pollMediaStatus(mediaId, finalizeJson.processing_info.check_after_secs ?? 5)
+    }
+
+    return mediaId
+  }
+
+  private async pollMediaStatus(mediaId: string, waitSecs: number): Promise<void> {
+    await new Promise(r => setTimeout(r, waitSecs * 1000))
+    const STATUS_URL = `https://upload.twitter.com/1.1/media/upload.json?command=STATUS&media_id=${mediaId}`
+    const res = await fetch(STATUS_URL, { headers: { Authorization: this.getAuthHeader('GET', STATUS_URL) } })
+    if (!res.ok) return
+    const json = await res.json() as { processing_info?: { state: string; check_after_secs?: number } }
+    const state = json.processing_info?.state
+    if (state === 'failed') throw new Error(`Twitter video processing failed for media_id: ${mediaId}`)
+    if (state === 'pending' || state === 'in_progress') {
+      await this.pollMediaStatus(mediaId, json.processing_info?.check_after_secs ?? 5)
+    }
+  }
+
   async publishPost(options: PublishOptions): Promise<PublishResult> {
-    // If thread parts provided, publish as thread and return first ID
     if (options.threadParts && options.threadParts.length > 0) {
-      const results = await this.publishThread(options.threadParts)
+      const results = await this.publishThread(options.threadParts, options.mediaUrls)
       return results[0]
     }
 
+    // Upload media to Twitter and collect media_ids
+    const mediaIds: string[] = []
+    if (options.mediaUrls && options.mediaUrls.length > 0) {
+      for (const url of options.mediaUrls.slice(0, 4)) {
+        const mimeType = this.guessMimeType(url)
+        const mediaId = mimeType.startsWith('video/')
+          ? await this.uploadVideoFromUrl(url, mimeType)
+          : await this.uploadImageFromUrl(url, mimeType)
+        mediaIds.push(mediaId)
+      }
+    }
+
     const authHeader = this.getAuthHeader('POST', TWEETS_URL)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const bodyObj: any = { text: options.text }
+    const bodyObj: Record<string, unknown> = { text: options.text }
     if (options.replyToId) {
       bodyObj.reply = { in_reply_to_tweet_id: options.replyToId }
+    }
+    if (mediaIds.length > 0) {
+      bodyObj.media = { media_ids: mediaIds }
     }
 
     const response = await fetch(TWEETS_URL, {
@@ -145,19 +262,17 @@ export class TwitterProvider extends SocialProvider {
     }
   }
 
-  async publishThread(parts: string[]): Promise<PublishResult[]> {
+  async publishThread(parts: string[], mediaUrls?: string[]): Promise<PublishResult[]> {
     if (parts.length === 0) throw new Error('publishThread requires at least one part')
-
     const results: PublishResult[] = []
-
     for (let i = 0; i < parts.length; i++) {
       const result = await this.publishPost({
         text: parts[i],
         replyToId: results[results.length - 1]?.platformPostId,
+        mediaUrls: i === 0 ? mediaUrls : undefined,
       })
       results.push(result)
     }
-
     return results
   }
 
