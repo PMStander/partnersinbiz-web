@@ -15,7 +15,21 @@ const ALLOWED_TYPES = [
   'video/mp4', 'video/quicktime',
 ]
 
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+}
+
 export const POST = withAuth('admin', withTenant(async (req, user, orgId) => {
+  const contentLength = Number(req.headers.get('content-length') ?? 0)
+  if (contentLength > MAX_SIZE_BYTES) {
+    return apiError('File exceeds 512MB limit', 413)
+  }
+
   let formData: FormData
   try {
     formData = await req.formData()
@@ -41,30 +55,46 @@ export const POST = withAuth('admin', withTenant(async (req, user, orgId) => {
     ? 'gif'
     : 'image'
 
-  const { publicUrl, storagePath } = await uploadMediaToStorage(buffer, file.type, orgId, file.name)
-
-  const doc = {
-    orgId,
-    originalUrl: publicUrl,
-    originalFilename: file.name,
-    originalMimeType: file.type,
-    originalSize: file.size,
-    status: 'ready' as MediaStatus,
-    variants: {},
-    thumbnailUrl: publicUrl,
-    type,
-    width: 0,
-    height: 0,
-    duration: null,
-    altText,
-    storagePath,
-    usedInPosts: [],
-    uploadedBy: user.uid,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
+  let publicUrl: string
+  let storagePath: string
+  try {
+    const safeFilename = `upload.${MIME_TO_EXT[file.type] ?? 'bin'}`
+    const result = await uploadMediaToStorage(buffer, file.type, orgId, safeFilename)
+    publicUrl = result.publicUrl
+    storagePath = result.storagePath
+  } catch (err) {
+    console.error('[media/upload] storage upload error:', err)
+    return apiError('Upload failed. Please try again.', 500)
   }
 
-  const docRef = await adminDb.collection('social_media').add(doc)
+  let docId: string
+  try {
+    const doc = {
+      orgId,
+      originalUrl: publicUrl,
+      originalFilename: file.name,
+      originalMimeType: file.type,
+      originalSize: file.size,
+      status: 'ready' as MediaStatus,
+      variants: {},
+      thumbnailUrl: publicUrl,
+      type,
+      width: 0,
+      height: 0,
+      duration: null,
+      altText,
+      storagePath,
+      usedInPosts: [],
+      uploadedBy: user.uid,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }
+    const docRef = await adminDb.collection('social_media').add(doc)
+    docId = docRef.id
+  } catch (err) {
+    console.error('[media/upload] Firestore write error:', err)
+    return apiError('Failed to save media record. Please try again.', 500)
+  }
 
-  return apiSuccess({ id: docRef.id, url: publicUrl, type, mimeType: file.type }, 201)
+  return apiSuccess({ id: docId, url: publicUrl, type, mimeType: file.type }, 201)
 }))
