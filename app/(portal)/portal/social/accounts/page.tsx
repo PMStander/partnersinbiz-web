@@ -13,6 +13,7 @@ const PLATFORMS = [
   { id: 'tiktok', label: 'TikTok', bg: 'bg-gray-800', oauth: true },
   { id: 'pinterest', label: 'Pinterest', bg: 'bg-red-700', oauth: true },
   { id: 'threads', label: 'Threads', bg: 'bg-gray-700', oauth: true },
+  { id: 'youtube', label: 'YouTube', bg: 'bg-red-600', oauth: true },
   { id: 'bluesky', label: 'Bluesky', bg: 'bg-sky-500', oauth: false },
 ]
 
@@ -27,6 +28,7 @@ const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
   pinterest: { bg: 'bg-red-700', label: 'PI' },
   bluesky: { bg: 'bg-sky-500', label: 'BS' },
   threads: { bg: 'bg-gray-700', label: 'TH' },
+  youtube: { bg: 'bg-red-600', label: 'YT' },
 }
 
 const STATUS_STYLES: Record<string, string> = {
