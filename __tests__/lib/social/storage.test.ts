@@ -28,4 +28,10 @@ describe('deleteMediaFromStorage', () => {
   it('calls delete on the file', async () => {
     await expect(deleteMediaFromStorage('social-media/org-123/abc.jpg')).resolves.toBeUndefined()
   })
+
+  it('re-throws unexpected errors', async () => {
+    const { getStorage } = jest.requireMock('firebase-admin/storage')
+    getStorage().bucket().file().delete.mockRejectedValueOnce(new Error('Permission denied'))
+    await expect(deleteMediaFromStorage('social-media/org/file.jpg')).rejects.toThrow('Permission denied')
+  })
 })

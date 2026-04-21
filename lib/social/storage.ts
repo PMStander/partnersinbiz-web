@@ -23,13 +23,6 @@ export async function uploadMediaToStorage(
 
 export async function deleteMediaFromStorage(storagePath: string): Promise<void> {
   const bucket = getStorage(getAdminApp()).bucket()
-  try {
-    await bucket.file(storagePath).delete()
-  } catch (error) {
-    // Ignore "not found" errors, re-throw others
-    if (error instanceof Error && error.message.includes('No such object')) {
-      return
-    }
-    throw error
-  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (bucket.file(storagePath) as any).delete({ ignoreNotFound: true })
 }
