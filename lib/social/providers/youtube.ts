@@ -199,8 +199,8 @@ export class YouTubeProvider extends SocialProvider {
   async refreshToken(): Promise<ProviderCredentials | null> {
     if (!this.credentials.refreshToken) return null
 
-    const clientId = process.env.YOUTUBE_CLIENT_ID
-    const clientSecret = process.env.YOUTUBE_CLIENT_SECRET
+    const clientId = process.env.YOUTUBE_CLIENT_ID?.trim()
+    const clientSecret = process.env.YOUTUBE_CLIENT_SECRET?.trim()
     if (!clientId || !clientSecret) return null
 
     const response = await fetch('https://oauth2.googleapis.com/token', {

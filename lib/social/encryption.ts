@@ -11,7 +11,7 @@ const IV_LENGTH = 12
 const TAG_LENGTH = 16
 
 function getMasterKey(): Buffer {
-  const key = process.env.SOCIAL_TOKEN_MASTER_KEY
+  const key = process.env.SOCIAL_TOKEN_MASTER_KEY?.trim()
   if (!key) throw new Error('Missing env var: SOCIAL_TOKEN_MASTER_KEY')
   // Accept hex-encoded 32-byte key or raw string (hashed to 32 bytes)
   if (key.length === 64 && /^[0-9a-f]+$/i.test(key)) {
