@@ -8,7 +8,8 @@ export async function uploadMediaToStorage(
   orgId: string,
   originalFilename: string,
 ): Promise<{ publicUrl: string; storagePath: string }> {
-  const ext = (originalFilename.split('.').pop() ?? 'bin').toLowerCase().split('?')[0]
+  const rawExt = (originalFilename.split('.').pop() ?? 'bin').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const ext = rawExt || 'bin'
   const id = crypto.randomBytes(12).toString('hex')
   const storagePath = `social-media/${orgId}/${id}.${ext}`
 

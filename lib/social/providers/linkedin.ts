@@ -104,6 +104,7 @@ export class LinkedInProvider extends SocialProvider {
       }
     }
 
+    const uploadedPartIds: string[] = []
     for (const instruction of initJson.value.uploadInstructions) {
       const chunk = buffer.subarray(instruction.firstByte, instruction.lastByte + 1)
       const chunkRes = await fetch(instruction.uploadUrl, {
@@ -112,13 +113,15 @@ export class LinkedInProvider extends SocialProvider {
         body: chunk,
       })
       if (!chunkRes.ok) throw new Error(`LinkedIn video chunk PUT error ${chunkRes.status}: ${await chunkRes.text()}`)
+      const etag = chunkRes.headers.get('etag') ?? chunkRes.headers.get('x-amz-etag')
+      if (etag) uploadedPartIds.push(etag.replace(/"/g, ''))
     }
 
     const videoUrn = initJson.value.video
     const finalizeRes = await fetch(`https://api.linkedin.com/rest/videos/${encodeURIComponent(videoUrn)}?action=finalizeUpload`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ finalizeUploadRequest: { uploadToken: initJson.value.uploadToken, uploadedPartIds: [] } }),
+      body: JSON.stringify({ finalizeUploadRequest: { uploadToken: initJson.value.uploadToken, uploadedPartIds } }),
     })
     if (!finalizeRes.ok) throw new Error(`LinkedIn video finalizeUpload error ${finalizeRes.status}: ${await finalizeRes.text()}`)
 

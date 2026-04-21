@@ -304,8 +304,8 @@ export class ThreadsProvider extends SocialProvider {
   }
 
   private isVideoUrl(url: string): boolean {
-    const lower = url.toLowerCase()
-    return lower.includes('.mp4') || lower.includes('.mov') || lower.includes('.avi') || lower.includes('video')
+    const lower = url.toLowerCase().split('?')[0]
+    return lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.avi')
   }
 
   private async resolveUsername(): Promise<string> {

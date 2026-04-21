@@ -86,6 +86,10 @@ export class BlueskyProvider extends SocialProvider {
 
   async publishThread(parts: string[], mediaUrls?: string[]): Promise<PublishResult[]> {
     if (parts.length === 0) throw new Error('publishThread requires at least one part')
+    // TODO: AT Protocol blob upload not yet implemented — mediaUrls are intentionally ignored
+    if (mediaUrls && mediaUrls.length > 0) {
+      console.warn('[bluesky] publishThread: mediaUrls provided but AT Protocol blob upload is not yet implemented — media will not be attached')
+    }
 
     const results: PublishResult[] = []
     // Track root post URI and CID for proper thread references

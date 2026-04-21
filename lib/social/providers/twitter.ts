@@ -202,7 +202,8 @@ export class TwitterProvider extends SocialProvider {
     return mediaId
   }
 
-  private async pollMediaStatus(mediaId: string, waitSecs: number): Promise<void> {
+  private async pollMediaStatus(mediaId: string, waitSecs: number, attemptsLeft = 20): Promise<void> {
+    if (attemptsLeft <= 0) throw new Error(`Twitter video processing timed out for media_id: ${mediaId}`)
     await new Promise(r => setTimeout(r, waitSecs * 1000))
     const STATUS_URL = `https://upload.twitter.com/1.1/media/upload.json?command=STATUS&media_id=${mediaId}`
     const res = await fetch(STATUS_URL, { headers: { Authorization: this.getAuthHeader('GET', STATUS_URL) } })
@@ -211,7 +212,7 @@ export class TwitterProvider extends SocialProvider {
     const state = json.processing_info?.state
     if (state === 'failed') throw new Error(`Twitter video processing failed for media_id: ${mediaId}`)
     if (state === 'pending' || state === 'in_progress') {
-      await this.pollMediaStatus(mediaId, json.processing_info?.check_after_secs ?? 5)
+      await this.pollMediaStatus(mediaId, json.processing_info?.check_after_secs ?? 5, attemptsLeft - 1)
     }
   }
 
