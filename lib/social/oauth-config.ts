@@ -144,6 +144,13 @@ export function getClientCredentials(platform: SocialPlatformType): { clientId: 
     if (!clientId || !clientSecret) return null
     return { clientId, clientSecret }
   }
+  // Instagram and Threads are part of the same Meta app as Facebook — share credentials
+  if (platform === 'instagram' || platform === 'threads') {
+    const clientId = process.env.FACEBOOK_CLIENT_ID?.trim()
+    const clientSecret = process.env.FACEBOOK_CLIENT_SECRET?.trim()
+    if (!clientId || !clientSecret) return null
+    return { clientId, clientSecret }
+  }
   const prefix = platform.toUpperCase()
   const clientId = process.env[`${prefix}_CLIENT_ID`]?.trim()
   const clientSecret = process.env[`${prefix}_CLIENT_SECRET`]?.trim()
