@@ -187,19 +187,17 @@ export class ThreadsProvider extends SocialProvider {
     return publishJson.id
   }
 
-  async publishThread(parts: string[]): Promise<PublishResult[]> {
+  async publishThread(parts: string[], mediaUrls?: string[]): Promise<PublishResult[]> {
     if (parts.length === 0) throw new Error('publishThread requires at least one part')
-
     const results: PublishResult[] = []
-
     for (let i = 0; i < parts.length; i++) {
       const result = await this.publishPost({
         text: parts[i],
         replyToId: results[results.length - 1]?.platformPostId,
+        mediaUrls: i === 0 ? mediaUrls : undefined,
       })
       results.push(result)
     }
-
     return results
   }
 
