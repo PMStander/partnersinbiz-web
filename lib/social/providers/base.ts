@@ -50,12 +50,15 @@ export abstract class SocialProvider {
   /** Publish a post (single or thread) to the platform */
   abstract publishPost(options: PublishOptions): Promise<PublishResult>
 
-  /** Publish a thread (multi-part post) — defaults to publishPost for non-thread platforms */
-  async publishThread(parts: string[]): Promise<PublishResult[]> {
-    // Default: publish each part as a separate post. Thread-capable platforms override this.
+  /** Publish a thread (multi-part post). Media applies to first part only. */
+  async publishThread(parts: string[], mediaUrls?: string[]): Promise<PublishResult[]> {
     const results: PublishResult[] = []
-    for (const part of parts) {
-      const result = await this.publishPost({ text: part, replyToId: results[results.length - 1]?.platformPostId })
+    for (let i = 0; i < parts.length; i++) {
+      const result = await this.publishPost({
+        text: parts[i],
+        replyToId: results[results.length - 1]?.platformPostId,
+        mediaUrls: i === 0 ? mediaUrls : undefined,
+      })
       results.push(result)
     }
     return results
