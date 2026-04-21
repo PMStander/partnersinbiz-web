@@ -29,8 +29,118 @@ export class LinkedInProvider extends SocialProvider {
     return new LinkedInProvider({ accessToken, personUrn })
   }
 
+  private guessMimeType(url: string): string {
+    const lower = url.toLowerCase().split('?')[0]
+    if (lower.endsWith('.mp4')) return 'video/mp4'
+    if (lower.endsWith('.mov')) return 'video/quicktime'
+    if (lower.endsWith('.gif')) return 'image/gif'
+    if (lower.endsWith('.png')) return 'image/png'
+    if (lower.endsWith('.webp')) return 'image/webp'
+    return 'image/jpeg'
+  }
+
+  private async uploadImageFromUrl(imageUrl: string): Promise<string> {
+    const res = await fetch(imageUrl)
+    if (!res.ok) throw new Error(`Failed to download image: ${res.status}`)
+    const buffer = Buffer.from(await res.arrayBuffer())
+    const mimeType = res.headers.get('content-type') ?? 'image/jpeg'
+
+    const headers = {
+      Authorization: `Bearer ${this.credentials.accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0',
+      'LinkedIn-Version': '202502',
+    }
+
+    const initRes = await fetch('https://api.linkedin.com/rest/images?action=initializeUpload', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ initializeUploadRequest: { owner: this.credentials.personUrn } }),
+    })
+    if (!initRes.ok) throw new Error(`LinkedIn image initializeUpload error ${initRes.status}: ${await initRes.text()}`)
+    const initJson = await initRes.json() as { value: { uploadUrl: string; image: string } }
+
+    const uploadRes = await fetch(initJson.value.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': mimeType },
+      body: buffer,
+    })
+    if (!uploadRes.ok) throw new Error(`LinkedIn image PUT error ${uploadRes.status}: ${await uploadRes.text()}`)
+
+    return initJson.value.image
+  }
+
+  private async uploadVideoFromUrl(videoUrl: string): Promise<string> {
+    const res = await fetch(videoUrl)
+    if (!res.ok) throw new Error(`Failed to download video: ${res.status}`)
+    const buffer = Buffer.from(await res.arrayBuffer())
+    const mimeType = res.headers.get('content-type') ?? 'video/mp4'
+
+    const headers = {
+      Authorization: `Bearer ${this.credentials.accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0',
+      'LinkedIn-Version': '202502',
+    }
+
+    const initRes = await fetch('https://api.linkedin.com/rest/videos?action=initializeUpload', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        initializeUploadRequest: {
+          owner: this.credentials.personUrn,
+          fileSizeBytes: buffer.length,
+          uploadCaptions: false,
+          uploadThumbnail: false,
+        },
+      }),
+    })
+    if (!initRes.ok) throw new Error(`LinkedIn video initializeUpload error ${initRes.status}: ${await initRes.text()}`)
+    const initJson = await initRes.json() as {
+      value: {
+        uploadInstructions: Array<{ uploadUrl: string; firstByte: number; lastByte: number }>
+        video: string
+        uploadToken: string
+      }
+    }
+
+    for (const instruction of initJson.value.uploadInstructions) {
+      const chunk = buffer.subarray(instruction.firstByte, instruction.lastByte + 1)
+      const chunkRes = await fetch(instruction.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': mimeType },
+        body: chunk,
+      })
+      if (!chunkRes.ok) throw new Error(`LinkedIn video chunk PUT error ${chunkRes.status}: ${await chunkRes.text()}`)
+    }
+
+    const videoUrn = initJson.value.video
+    await fetch(`https://api.linkedin.com/rest/videos/${encodeURIComponent(videoUrn)}?action=finalizeUpload`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ finalizeUploadRequest: { uploadToken: initJson.value.uploadToken, uploadedPartIds: [] } }),
+    })
+
+    return videoUrn
+  }
+
   async publishPost(options: PublishOptions): Promise<PublishResult> {
-    const body = JSON.stringify({
+    let mediaUrn: string | null = null
+    let mediaCategory: 'IMAGE' | 'VIDEO' | null = null
+
+    if (options.mediaUrls && options.mediaUrls.length > 0) {
+      const url = options.mediaUrls[0]
+      const mimeType = this.guessMimeType(url)
+      if (mimeType.startsWith('video/')) {
+        mediaUrn = await this.uploadVideoFromUrl(url)
+        mediaCategory = 'VIDEO'
+      } else {
+        mediaUrn = await this.uploadImageFromUrl(url)
+        mediaCategory = 'IMAGE'
+      }
+    }
+
+    const body: Record<string, unknown> = {
       author: this.credentials.personUrn,
       commentary: options.text,
       visibility: 'PUBLIC',
@@ -41,7 +151,12 @@ export class LinkedInProvider extends SocialProvider {
       },
       lifecycleState: 'PUBLISHED',
       isReshareDisabledByAuthor: false,
-    })
+    }
+
+    if (mediaUrn && mediaCategory) {
+      body.content = { media: { id: mediaUrn, title: 'Media' } }
+      body.mediaCategory = mediaCategory
+    }
 
     const response = await fetch(LINKEDIN_POSTS_URL, {
       method: 'POST',
@@ -51,7 +166,7 @@ export class LinkedInProvider extends SocialProvider {
         'X-Restli-Protocol-Version': '2.0.0',
         'LinkedIn-Version': '202502',
       },
-      body,
+      body: JSON.stringify(body),
     })
 
     if (!response.ok) {
