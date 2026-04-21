@@ -32,6 +32,7 @@ const PLATFORMS = [
   { id: 'pinterest', label: 'Pinterest', color: 'bg-red-700', short: 'PI', oauth: true },
   { id: 'bluesky', label: 'Bluesky', color: 'bg-sky-500', short: 'BS', oauth: false, note: 'Uses app password' },
   { id: 'threads', label: 'Threads', color: 'bg-gray-700', short: 'TH', oauth: true },
+  { id: 'youtube', label: 'YouTube', color: 'bg-red-600', short: 'YT', oauth: true },
 ] as const
 
 const STATUS_STYLES: Record<AccountStatus, string> = {
