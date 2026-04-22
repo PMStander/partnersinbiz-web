@@ -7,6 +7,18 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 
 export const dynamic = 'force-dynamic'
 
+interface PendingOption {
+  platformAccountId: string
+  displayName: string
+  username: string
+  avatarUrl: string
+  profileUrl: string
+  accountType: 'personal' | 'page'
+  scopes?: string[]
+  encryptedTokens?: { expiresAt?: Date | { seconds: number } | null; [key: string]: unknown }
+  platformMeta?: Record<string, unknown>
+}
+
 export const POST = withAuth('client', withTenant(async (req: NextRequest, user: any, orgId: string) => {
   const body = await req.json()
   const { nonce, selections } = body as {
@@ -29,7 +41,15 @@ export const POST = withAuth('client', withTenant(async (req: NextRequest, user:
   if (pending.expiresAt.toDate() < new Date()) return apiError('Not found', 404)
 
   const platform: string = pending.platform
-  const options: any[] = pending.options
+  const options = (pending.options ?? []) as PendingOption[]
+
+  // Pre-validate all selection indexes and accountType values before writing
+  for (const sel of selections) {
+    if (!options[sel.index]) return apiError(`Invalid selection index: ${sel.index}`, 400)
+    if (!['personal', 'page'].includes(options[sel.index].accountType)) {
+      return apiError(`Invalid accountType: ${options[sel.index].accountType}`, 400)
+    }
+  }
 
   const batch = adminDb.batch()
 
@@ -48,7 +68,6 @@ export const POST = withAuth('client', withTenant(async (req: NextRequest, user:
 
   for (const sel of selections) {
     const option = options[sel.index]
-    if (!option) continue
 
     const encryptedTokens = {
       ...option.encryptedTokens,
@@ -75,7 +94,7 @@ export const POST = withAuth('client', withTenant(async (req: NextRequest, user:
       username: option.username,
       avatarUrl: option.avatarUrl,
       profileUrl: option.profileUrl,
-      subAccountType: option.accountType as 'personal' | 'page',
+      subAccountType: option.accountType,
       isDefault: sel.isDefault ?? false,
       status: 'active',
       scopes: option.scopes ?? [],
@@ -92,7 +111,7 @@ export const POST = withAuth('client', withTenant(async (req: NextRequest, user:
       const ref = adminDb.collection('social_accounts').doc()
       batch.set(ref, {
         ...accountData,
-        connectedBy: user?.uid ?? 'unknown',
+        connectedBy: user?.uid ?? '',
         connectedAt: FieldValue.serverTimestamp(),
         lastTokenRefresh: null,
         lastUsed: null,
