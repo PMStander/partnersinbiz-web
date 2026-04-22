@@ -1,0 +1,48 @@
+const mockGet = jest.fn()
+const mockWhere = jest.fn()
+const mockLimit = jest.fn()
+
+const chain: any = { where: mockWhere, limit: mockLimit, get: mockGet }
+mockWhere.mockReturnValue(chain)
+mockLimit.mockReturnValue(chain)
+
+jest.mock('@/lib/firebase/admin', () => ({
+  adminDb: { collection: jest.fn(() => ({ where: mockWhere })) },
+}))
+jest.mock('@/lib/social/providers', () => ({
+  getProvider: jest.fn(),
+  getDefaultProvider: jest.fn(),
+}))
+jest.mock('@/lib/social/encryption', () => ({
+  decryptTokenBlock: jest.fn(() => ({ accessToken: 'tok', refreshToken: null })),
+}))
+
+import { findDefaultAccount } from '@/lib/social/account-resolver'
+
+describe('findDefaultAccount', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('returns isDefault=true account first when available', async () => {
+    const defaultDoc = { id: 'acc-1', data: () => ({ platform: 'linkedin', isDefault: true, status: 'active' }) }
+    mockGet.mockResolvedValueOnce({ empty: false, docs: [defaultDoc] })
+    const result = await findDefaultAccount('org-1', 'linkedin')
+    expect(result?.id).toBe('acc-1')
+  })
+
+  it('falls back to any active account when no isDefault exists', async () => {
+    const fallbackDoc = { id: 'acc-2', data: () => ({ platform: 'linkedin', isDefault: false, status: 'active' }) }
+    mockGet
+      .mockResolvedValueOnce({ empty: true, docs: [] })
+      .mockResolvedValueOnce({ empty: false, docs: [fallbackDoc] })
+    const result = await findDefaultAccount('org-1', 'linkedin')
+    expect(result?.id).toBe('acc-2')
+  })
+
+  it('returns null when no active accounts exist', async () => {
+    mockGet
+      .mockResolvedValueOnce({ empty: true, docs: [] })
+      .mockResolvedValueOnce({ empty: true, docs: [] })
+    const result = await findDefaultAccount('org-1', 'linkedin')
+    expect(result).toBeNull()
+  })
+})

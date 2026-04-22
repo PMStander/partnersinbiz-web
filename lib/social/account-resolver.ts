@@ -94,6 +94,22 @@ export async function findDefaultAccount(
   const platformNames = platformMap[platformType]
   if (!platformNames) return null
 
+  // 1. Prefer isDefault=true + active
+  const defaultSnap = await adminDb
+    .collection('social_accounts')
+    .where('orgId', '==', orgId)
+    .where('status', '==', 'active')
+    .where('isDefault', '==', true)
+    .get()
+
+  for (const doc of defaultSnap.docs) {
+    const data = doc.data()
+    if (platformNames.includes(data.platform)) {
+      return { id: doc.id, data }
+    }
+  }
+
+  // 2. Fall back to any active account (existing behaviour)
   const snap = await adminDb
     .collection('social_accounts')
     .where('orgId', '==', orgId)
