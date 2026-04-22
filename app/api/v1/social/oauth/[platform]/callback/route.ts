@@ -108,19 +108,62 @@ export async function GET(req: NextRequest) {
       providerCreds.accessToken = longLived.accessToken
     }
 
-    // Fetch profile from platform
+    // Facebook and LinkedIn: collect all accounts/pages, write pending doc, redirect with picker nonce
+    if (platform === 'facebook') {
+      const fbResult = await fetchAllFacebookAccounts(tokenResponse.accessToken)
+      const options = fbResult.map((acc, i) => {
+        const encrypted = encryptTokenBlock(
+          { accessToken: acc.accessToken, refreshToken: null, tokenType: 'Bearer', expiresAt: null },
+          orgId,
+        )
+        return {
+          index: i,
+          displayName: acc.displayName,
+          username: acc.username,
+          avatarUrl: acc.avatarUrl,
+          profileUrl: acc.profileUrl,
+          accountType: acc.accountType,
+          platformAccountId: acc.platformAccountId,
+          encryptedTokens: encrypted,
+          platformMeta: acc.meta ?? {},
+          scopes: config.scopes,
+        }
+      })
+      return writePendingAndRedirect(options, platform, orgId, nonce, redirectUrl, url.origin)
+    }
+
+    if (platform === 'linkedin') {
+      const liResult = await fetchAllLinkedInAccounts(tokenResponse.accessToken)
+      const refreshToken = tokenResponse.refreshToken ?? null
+      const expiresAt = tokenResponse.expiresIn
+        ? new Date(Date.now() + tokenResponse.expiresIn * 1000)
+        : null
+      const options = liResult.map((acc, i) => {
+        const encrypted = encryptTokenBlock(
+          { accessToken: tokenResponse.accessToken, refreshToken, expiresAt },
+          orgId,
+        )
+        return {
+          index: i,
+          displayName: acc.displayName,
+          username: acc.username,
+          avatarUrl: acc.avatarUrl,
+          profileUrl: acc.profileUrl,
+          accountType: acc.accountType,
+          platformAccountId: acc.platformAccountId,
+          encryptedTokens: encrypted,
+          platformMeta: acc.meta ?? {},
+          scopes: config.scopes,
+        }
+      })
+      return writePendingAndRedirect(options, platform, orgId, nonce, redirectUrl, url.origin)
+    }
+
+    // All other platforms: fetch profile, encrypt, upsert social_accounts, audit log
     let profile
     try {
-      // For Facebook/Instagram, we need additional steps to get page tokens
-      if (platform === 'facebook') {
-        profile = await fetchFacebookPageProfile(tokenResponse.accessToken)
-        providerCreds.accessToken = profile.pageAccessToken ?? tokenResponse.accessToken
-      } else if (platform === 'instagram') {
+      if (platform === 'instagram') {
         profile = await fetchInstagramProfile(providerCreds.accessToken)
-      } else if (platform === 'linkedin') {
-        const linkedInProfile = await fetchLinkedInProfile(tokenResponse.accessToken)
-        providerCreds.personUrn = linkedInProfile.personUrn
-        profile = linkedInProfile
       } else if (platform === 'twitter') {
         profile = await fetchTwitterProfile(tokenResponse.accessToken)
       } else {
@@ -313,61 +356,59 @@ async function exchangeCode(
 
 // --- Platform-specific profile helpers ---
 
-async function fetchFacebookPageProfile(userAccessToken: string) {
-  // Get user's pages
-  const pagesRes = await fetch(
-    `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,category,access_token,picture&access_token=${userAccessToken}`,
-  )
-  if (!pagesRes.ok) throw new Error('Failed to fetch Facebook pages')
-  const pagesData = await pagesRes.json()
+interface FacebookAccount {
+  platformAccountId: string
+  displayName: string
+  username: string
+  avatarUrl: string
+  profileUrl: string
+  accountType: 'personal' | 'page'
+  accessToken: string
+  meta: Record<string, unknown>
+}
 
-  // Also get the user's personal profile
+async function fetchAllFacebookAccounts(userAccessToken: string): Promise<FacebookAccount[]> {
+  const accounts: FacebookAccount[] = []
+
   const meRes = await fetch(
     `https://graph.facebook.com/v19.0/me?fields=id,name,picture&access_token=${userAccessToken}`,
   )
-  const meData = meRes.ok ? await meRes.json() as { id: string; name: string; picture?: { data?: { url?: string } } } : null
-
-  // Return ALL pages + the user's personal profile info for multi-account support
-  const pages = (pagesData.data ?? []) as Array<{
-    id: string; name: string; category?: string; access_token: string;
-    picture?: { data?: { url?: string } }
-  }>
-
-  if (pages.length === 0 && !meData) {
-    throw new Error('No Facebook pages found and unable to fetch profile')
+  if (meRes.ok) {
+    const me = await meRes.json() as { id: string; name: string; picture?: { data?: { url?: string } } }
+    accounts.push({
+      platformAccountId: me.id,
+      displayName: me.name,
+      username: me.name,
+      avatarUrl: me.picture?.data?.url ?? '',
+      profileUrl: `https://www.facebook.com/${me.id}`,
+      accountType: 'personal',
+      accessToken: userAccessToken,
+      meta: {},
+    })
   }
 
-  // Use the first page if available, otherwise store as personal account
-  if (pages.length > 0) {
-    const page = pages[0]
-    return {
-      platformAccountId: page.id,
-      displayName: page.name,
-      username: page.name,
-      avatarUrl: page.picture?.data?.url ?? '',
-      profileUrl: `https://www.facebook.com/${page.id}`,
-      accountType: 'page' as const,
-      pageAccessToken: page.access_token,
-      meta: {
-        pageCategory: page.category,
-        // Store all available pages so the user can switch later
-        availablePages: pages.map(p => ({ id: p.id, name: p.name, category: p.category })),
-        userAccessToken: userAccessToken, // Needed to fetch other page tokens later
-      },
+  const pagesRes = await fetch(
+    `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,category,access_token,picture&access_token=${userAccessToken}`,
+  )
+  if (pagesRes.ok) {
+    const pagesData = await pagesRes.json() as {
+      data: Array<{ id: string; name: string; category?: string; access_token: string; picture?: { data?: { url?: string } } }>
+    }
+    for (const page of pagesData.data ?? []) {
+      accounts.push({
+        platformAccountId: page.id,
+        displayName: page.name,
+        username: page.name,
+        avatarUrl: page.picture?.data?.url ?? '',
+        profileUrl: `https://www.facebook.com/${page.id}`,
+        accountType: 'page',
+        accessToken: page.access_token,
+        meta: { pageCategory: page.category },
+      })
     }
   }
 
-  // No pages — store as personal account (user can still manage pages later)
-  return {
-    platformAccountId: meData!.id,
-    displayName: meData!.name,
-    username: meData!.name,
-    avatarUrl: meData!.picture?.data?.url ?? '',
-    profileUrl: `https://www.facebook.com/${meData!.id}`,
-    accountType: 'personal' as const,
-    pageAccessToken: null,
-    meta: { availablePages: [] },
-  }
+  return accounts
 }
 
 async function fetchInstagramProfile(accessToken: string) {
@@ -395,32 +436,42 @@ async function fetchInstagramProfile(accessToken: string) {
   }
 }
 
-async function fetchLinkedInProfile(accessToken: string): Promise<{
+interface LinkedInAccount {
   platformAccountId: string
   displayName: string
   username: string
   avatarUrl: string
   profileUrl: string
   accountType: 'personal' | 'page'
-  personUrn: string
   meta: Record<string, unknown>
-}> {
+}
+
+async function fetchAllLinkedInAccounts(accessToken: string): Promise<LinkedInAccount[]> {
+  const accounts: LinkedInAccount[] = []
   const headers = {
     Authorization: `Bearer ${accessToken}`,
     'X-Restli-Protocol-Version': '2.0.0',
     'LinkedIn-Version': '202502',
   }
 
-  // Get user info first
   const userRes = await fetch('https://api.linkedin.com/v2/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
-  if (!userRes.ok) throw new Error(`Failed to fetch LinkedIn user info: ${await userRes.text()}`)
-  const user = await userRes.json() as { sub: string; name: string; picture?: string; email?: string }
-  const personalUrn = `urn:li:person:${user.sub}`
+  let personalUrn = ''
+  if (userRes.ok) {
+    const user = await userRes.json() as { sub: string; name: string; picture?: string; email?: string }
+    personalUrn = `urn:li:person:${user.sub}`
+    accounts.push({
+      platformAccountId: personalUrn,
+      displayName: user.name,
+      username: user.email ?? user.sub,
+      avatarUrl: user.picture ?? '',
+      profileUrl: `https://www.linkedin.com/in/${user.sub}`,
+      accountType: 'personal',
+      meta: { personUrn: personalUrn, personalEmail: user.email ?? null },
+    })
+  }
 
-  // Try to find administered org pages with w_organization_social scope
-  const administeredOrgs: Array<{ orgUrn: string; orgId: string; name: string; vanityName: string }> = []
   try {
     const orgAclsRes = await fetch(
       'https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&count=10',
@@ -441,57 +492,23 @@ async function fetchLinkedInProfile(accessToken: string): Promise<{
           )
           if (orgRes.ok) {
             const orgData = await orgRes.json() as { id: number; localizedName: string; vanityName?: string }
-            administeredOrgs.push({
-              orgUrn,
-              orgId: orgNumId,
-              name: orgData.localizedName,
-              vanityName: orgData.vanityName ?? String(orgData.id),
+            const vanityName = orgData.vanityName ?? String(orgData.id)
+            accounts.push({
+              platformAccountId: orgUrn,
+              displayName: orgData.localizedName,
+              username: vanityName,
+              avatarUrl: '',
+              profileUrl: `https://www.linkedin.com/company/${vanityName}`,
+              accountType: 'page',
+              meta: { personUrn: orgUrn, personalUrn },
             })
           }
         } catch { /* skip this org */ }
       }
     }
-  } catch {
-    // Org fetch failed — will fall through to personal account
-  }
+  } catch { /* org fetch failed, personal only */ }
 
-  // If org pages found, use the first one as the primary linked account
-  // Store ALL orgs in meta so the user can switch later
-  if (administeredOrgs.length > 0) {
-    const primary = administeredOrgs[0]
-    return {
-      platformAccountId: primary.orgUrn,
-      displayName: primary.name,
-      username: primary.vanityName,
-      avatarUrl: '',
-      profileUrl: `https://www.linkedin.com/company/${primary.vanityName}`,
-      accountType: 'page',
-      // personUrn is the ORG URN for posting as the org
-      personUrn: primary.orgUrn,
-      meta: {
-        personalUrn,
-        personalName: user.name,
-        personalEmail: user.email ?? null,
-        administeredOrgs,
-      },
-    }
-  }
-
-  // Personal account only
-  return {
-    platformAccountId: personalUrn,
-    displayName: user.name,
-    username: user.email ?? user.sub,
-    avatarUrl: user.picture ?? '',
-    profileUrl: `https://www.linkedin.com/in/${user.sub}`,
-    accountType: 'personal',
-    personUrn: personalUrn,
-    meta: {
-      personalUrn,
-      personalEmail: user.email ?? null,
-      administeredOrgs: [],
-    },
-  }
+  return accounts
 }
 
 async function fetchTwitterProfile(accessToken: string) {
@@ -544,4 +561,54 @@ async function exchangeThreadsLongLivedToken(
   if (!res.ok) throw new Error(`Threads long-lived token exchange failed: ${await res.text()}`)
   const data = await res.json() as { access_token: string; token_type: string; expires_in: number }
   return { accessToken: data.access_token, expiresIn: data.expires_in }
+}
+
+async function writePendingAndRedirect(
+  options: Array<{
+    index: number
+    displayName: string
+    username: string
+    avatarUrl: string
+    profileUrl: string
+    accountType: 'personal' | 'page'
+    platformAccountId: string
+    encryptedTokens: {
+      accessToken: string
+      refreshToken: string | null
+      tokenType: string
+      expiresAt: Date | null
+      iv: string
+      tag: string
+    }
+    platformMeta: Record<string, unknown>
+    scopes: string[]
+  }>,
+  platform: string,
+  orgId: string,
+  nonce: string,
+  redirectUrl: string,
+  originUrl: string,
+): Promise<NextResponse> {
+  const expiresAt = Timestamp.fromDate(new Date(Date.now() + 30 * 60 * 1000))
+  const pendingData = {
+    nonce,
+    orgId,
+    platform,
+    createdAt: Timestamp.now(),
+    expiresAt,
+    options: options.map(opt => ({
+      ...opt,
+      encryptedTokens: {
+        ...opt.encryptedTokens,
+        expiresAt: opt.encryptedTokens.expiresAt
+          ? Timestamp.fromDate(opt.encryptedTokens.expiresAt)
+          : null,
+      },
+    })),
+  }
+  await adminDb.collection('social_oauth_pending').doc(nonce).set(pendingData)
+  const url = new URL(redirectUrl, originUrl)
+  url.searchParams.set('picker', nonce)
+  url.searchParams.set('platform', platform)
+  return NextResponse.redirect(url.toString())
 }
