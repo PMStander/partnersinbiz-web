@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ id: string }> }
 
-export const GET = withAuth('admin', withTenant(async (_req, _user, orgId, context) => {
+export const GET = withAuth('client', withTenant(async (_req, _user, orgId, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('social_accounts').doc(id).get()
   if (!doc.exists) return apiError('Account not found', 404)
@@ -27,7 +27,7 @@ export const GET = withAuth('admin', withTenant(async (_req, _user, orgId, conte
   return apiSuccess({ id: doc.id, ...safe })
 }))
 
-export const PUT = withAuth('admin', withTenant(async (req, _user, orgId, context) => {
+export const PUT = withAuth('client', withTenant(async (req, _user, orgId, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('social_accounts').doc(id).get()
   if (!doc.exists) return apiError('Account not found', 404)
@@ -53,7 +53,7 @@ export const PUT = withAuth('admin', withTenant(async (req, _user, orgId, contex
   return apiSuccess({ id })
 }))
 
-export const DELETE = withAuth('admin', withTenant(async (req, user, orgId, context) => {
+export const DELETE = withAuth('client', withTenant(async (req, user, orgId, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('social_accounts').doc(id).get()
   if (!doc.exists) return apiError('Account not found', 404)

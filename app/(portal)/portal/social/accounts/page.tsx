@@ -1,8 +1,13 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import {
+  FaXTwitter, FaLinkedin, FaFacebook, FaInstagram,
+  FaReddit, FaTiktok, FaPinterest, FaYoutube, FaMastodon,
+} from 'react-icons/fa6'
+import { SiThreads, SiBluesky } from 'react-icons/si'
 
 const PLATFORMS = [
   { id: 'twitter', label: 'X (Twitter)', bg: 'bg-black', oauth: true },
@@ -17,18 +22,19 @@ const PLATFORMS = [
   { id: 'bluesky', label: 'Bluesky', bg: 'bg-sky-500', oauth: false },
 ]
 
-const PLATFORM_COLORS: Record<string, { bg: string; label: string }> = {
-  twitter: { bg: 'bg-black', label: 'X' },
-  x: { bg: 'bg-black', label: 'X' },
-  linkedin: { bg: 'bg-blue-700', label: 'LI' },
-  facebook: { bg: 'bg-blue-600', label: 'FB' },
-  instagram: { bg: 'bg-pink-600', label: 'IG' },
-  reddit: { bg: 'bg-orange-600', label: 'RD' },
-  tiktok: { bg: 'bg-gray-800', label: 'TT' },
-  pinterest: { bg: 'bg-red-700', label: 'PI' },
-  bluesky: { bg: 'bg-sky-500', label: 'BS' },
-  threads: { bg: 'bg-gray-700', label: 'TH' },
-  youtube: { bg: 'bg-red-600', label: 'YT' },
+const PLATFORM_ICONS: Record<string, { bg: string; icon: React.ReactNode }> = {
+  twitter:   { bg: 'bg-black',       icon: <FaXTwitter size={14} /> },
+  x:         { bg: 'bg-black',       icon: <FaXTwitter size={14} /> },
+  linkedin:  { bg: 'bg-blue-700',    icon: <FaLinkedin size={14} /> },
+  facebook:  { bg: 'bg-blue-600',    icon: <FaFacebook size={14} /> },
+  instagram: { bg: 'bg-pink-600',    icon: <FaInstagram size={14} /> },
+  reddit:    { bg: 'bg-orange-600',  icon: <FaReddit size={14} /> },
+  tiktok:    { bg: 'bg-gray-800',    icon: <FaTiktok size={14} /> },
+  pinterest: { bg: 'bg-red-700',     icon: <FaPinterest size={14} /> },
+  bluesky:   { bg: 'bg-sky-500',     icon: <SiBluesky size={14} /> },
+  threads:   { bg: 'bg-gray-700',    icon: <SiThreads size={14} /> },
+  youtube:   { bg: 'bg-red-600',     icon: <FaYoutube size={14} /> },
+  mastodon:  { bg: 'bg-purple-600',  icon: <FaMastodon size={14} /> },
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -82,7 +88,8 @@ export default function PortalAccountsPage() {
   const handleDisconnect = async (accountId: string) => {
     setDisconnecting(accountId)
     try {
-      await fetch(`/api/v1/social/accounts/${accountId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/v1/social/accounts/${accountId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`Failed to disconnect (${res.status})`)
       setMessage('Account disconnected.')
       setMessageType('success')
       fetchAccounts()
@@ -156,10 +163,10 @@ export default function PortalAccountsPage() {
         ) : (
           <div className="space-y-3">
             {accounts.filter(a => a.status !== 'disconnected').map((acc: any) => {
-              const pcfg = PLATFORM_COLORS[acc.platform] ?? { bg: 'bg-gray-600', label: '??' }
+              const pcfg = PLATFORM_ICONS[acc.platform] ?? { bg: 'bg-gray-600', icon: null }
               return (
                 <div key={acc.id} className="pib-card p-4 flex items-center gap-4">
-                  <span className={`${pcfg.bg} text-white text-[10px] px-2 py-0.5 rounded font-bold`}>{pcfg.label}</span>
+                  <span className={`${pcfg.bg} text-white w-7 h-7 flex items-center justify-center rounded`}>{pcfg.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-headline font-bold tracking-tight">{acc.displayName}</p>
                     <p className="text-[var(--color-on-surface-variant)] text-xs">@{acc.username || acc.displayName}</p>
@@ -196,8 +203,8 @@ export default function PortalAccountsPage() {
                     isConnected ? 'opacity-50 pointer-events-none' : 'pib-card-hover'
                   }`}
                 >
-                  <span className={`${plat.bg} text-white text-xs px-2 py-1 rounded font-bold`}>
-                    {PLATFORM_COLORS[plat.id]?.label ?? plat.id.slice(0, 2).toUpperCase()}
+                  <span className={`${plat.bg} text-white w-7 h-7 flex items-center justify-center rounded`}>
+                    {PLATFORM_ICONS[plat.id]?.icon ?? <span className="text-[10px] font-bold">{plat.id.slice(0, 2).toUpperCase()}</span>}
                   </span>
                   <span className="flex-1 text-sm font-label">
                     {isConnected ? `${plat.label} (connected)` : `Connect ${plat.label}`}
@@ -213,7 +220,7 @@ export default function PortalAccountsPage() {
         {/* Bluesky (App Password) */}
         <div className="pib-card p-4 mt-3 space-y-3">
           <div className="flex items-center gap-3">
-            <span className="bg-sky-500 text-white text-xs px-2 py-1 rounded font-bold">BS</span>
+            <span className="bg-sky-500 text-white w-7 h-7 flex items-center justify-center rounded"><SiBluesky size={14} /></span>
             <span className="text-sm font-label">Connect Bluesky</span>
             <span className="text-xs text-[var(--color-on-surface-variant)]">(App Password)</span>
           </div>
