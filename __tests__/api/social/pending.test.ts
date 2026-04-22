@@ -1,8 +1,38 @@
 const mockGet = jest.fn()
-const mockDocFn = jest.fn(() => ({ get: mockGet }))
-const mockCollection = jest.fn(() => ({ doc: mockDocFn }))
+const mockCommit = jest.fn().mockResolvedValue(undefined)
+const mockBatchUpdate = jest.fn()
+const mockBatchSet = jest.fn()
+const mockBatchDelete = jest.fn()
+const mockBatch = {
+  update: mockBatchUpdate,
+  set: mockBatchSet,
+  delete: mockBatchDelete,
+  commit: mockCommit,
+}
 
-jest.mock('@/lib/firebase/admin', () => ({ adminDb: { collection: mockCollection } }))
+const mockWhereFn: any = jest.fn()
+const mockLimitFn = jest.fn()
+const mockDocRef = { id: 'new-doc-id' }
+const mockDocFn = jest.fn(() => ({ get: mockGet, ...mockDocRef }))
+const mockCollection = jest.fn(() => ({
+  doc: mockDocFn,
+  where: mockWhereFn,
+}))
+
+// Set up where chain: .where().where().where().limit().get() all resolve via mockGet
+mockWhereFn.mockReturnValue({
+  where: mockWhereFn,
+  limit: mockLimitFn,
+  get: mockGet,
+})
+mockLimitFn.mockReturnValue({ get: mockGet })
+
+jest.mock('@/lib/firebase/admin', () => ({
+  adminDb: {
+    get collection() { return mockCollection },
+    get batch() { return () => mockBatch },
+  },
+}))
 jest.mock('@/lib/api/auth', () => ({
   withAuth: (_role: string, handler: any) => (req: any, ctx: any) =>
     handler(req, null, ctx),
@@ -12,11 +42,16 @@ jest.mock('@/lib/api/tenant', () => ({
     handler(req, _user, 'org-1', ctx),
 }))
 jest.mock('@/lib/api/response', () => ({
-  apiSuccess: (data: any) => ({ json: () => ({ data }), status: 200 }),
+  apiSuccess: (data: any, status = 200) => ({ json: () => ({ data }), status }),
   apiError: (msg: string, code = 400) => ({ json: () => ({ error: msg }), status: code }),
+}))
+jest.mock('firebase-admin/firestore', () => ({
+  FieldValue: { serverTimestamp: jest.fn(() => 'SERVER_TIMESTAMP') },
+  Timestamp: { fromDate: jest.fn((d: Date) => d) },
 }))
 
 import { GET } from '@/app/api/v1/social/oauth/pending/[nonce]/route'
+import { POST } from '@/app/api/v1/social/accounts/confirm/route'
 
 function makeCtx(nonce: string) {
   return { params: Promise.resolve({ nonce }) } as { params: Promise<{ nonce: string }> }
@@ -92,5 +127,82 @@ describe('GET /api/v1/social/oauth/pending/[nonce]', () => {
     expect(body.data.options[0].profileUrl).toBe('https://linkedin.com/in/peetstander')
     expect(body.data.options[0].platformAccountId).toBe('li-123456')
     expect(body.data.options[0].platformMeta).toEqual({ headline: 'CEO at Partners in Biz' })
+  })
+})
+
+// --- confirm tests ---
+
+const pendingDocData = {
+  orgId: 'org-1',
+  platform: 'linkedin',
+  expiresAt: { toDate: () => new Date(Date.now() + 60000) },
+  options: [
+    {
+      index: 0,
+      displayName: 'Peet',
+      username: 'peet@test.com',
+      avatarUrl: '',
+      profileUrl: '',
+      accountType: 'personal',
+      platformAccountId: 'urn:li:person:abc',
+      encryptedTokens: { accessToken: 'enc', refreshToken: null, tokenType: 'Bearer', expiresAt: null, iv: 'iv', tag: 'tag' },
+      platformMeta: {},
+      scopes: ['openid'],
+    },
+  ],
+}
+
+describe('POST /api/v1/social/accounts/confirm', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockCommit.mockResolvedValue(undefined)
+    // Re-wire where chain after clearAllMocks
+    mockWhereFn.mockReturnValue({
+      where: mockWhereFn,
+      limit: mockLimitFn,
+      get: mockGet,
+    })
+    mockLimitFn.mockReturnValue({ get: mockGet })
+    // Default: pending doc exists
+    mockGet.mockResolvedValue({
+      exists: true,
+      ref: { delete: jest.fn() },
+      data: () => pendingDocData,
+    })
+  })
+
+  it('returns 404 for unknown nonce', async () => {
+    mockGet.mockResolvedValue({ exists: false })
+    const req = { json: async () => ({ nonce: 'bad', selections: [{ index: 0, isDefault: true }] }) } as any
+    const res = await POST(req, undefined as any)
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 400 when selections is empty', async () => {
+    const req = { json: async () => ({ nonce: 'nonce-1', selections: [] }) } as any
+    const res = await POST(req, undefined as any)
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when more than one isDefault selection', async () => {
+    // For this test, where queries return empty docs so batch doesn't error
+    mockGet
+      .mockResolvedValueOnce({
+        exists: true,
+        ref: { delete: jest.fn() },
+        data: () => pendingDocData,
+      })
+      .mockResolvedValue({ docs: [] })
+    const req = {
+      json: async () => ({
+        nonce: 'nonce-1',
+        selections: [
+          { index: 0, isDefault: true },
+          { index: 0, isDefault: true },
+        ],
+      }),
+    } as any
+    const res = await POST(req, undefined as any)
+    expect(res.status).toBe(400)
   })
 })
