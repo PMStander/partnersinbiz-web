@@ -1,5 +1,4 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
 import React, { useEffect, useState, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -25,9 +24,9 @@ interface SocialAccount {
   status: AccountStatus
   isDefault?: boolean
   subAccountType?: SubAccountType
-  lastUsedAt: any
-  tokenExpiresAt: any
-  platformMeta?: Record<string, any>
+  lastUsedAt: { _seconds?: number; seconds?: number } | string | null
+  tokenExpiresAt: { _seconds?: number; seconds?: number } | string | null
+  platformMeta?: Record<string, unknown>
 }
 
 interface PendingOption {
@@ -37,7 +36,7 @@ interface PendingOption {
   avatarUrl: string
   accountType: 'personal' | 'page'
   platformAccountId: string
-  platformMeta?: Record<string, any>
+  platformMeta?: Record<string, unknown>
 }
 
 /* ------------------------------------------------------------------ */
@@ -69,14 +68,14 @@ const OAUTH_PLATFORMS = ['twitter','linkedin','facebook','instagram','reddit','t
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function tsToDate(ts: any): Date | null {
+function tsToDate(ts: { _seconds?: number; seconds?: number } | string | null): Date | null {
   if (!ts) return null
-  if (ts._seconds) return new Date(ts._seconds * 1000)
-  if (ts.seconds) return new Date(ts.seconds * 1000)
-  return new Date(ts)
+  if (typeof ts === 'object' && ts._seconds) return new Date(ts._seconds * 1000)
+  if (typeof ts === 'object' && ts.seconds) return new Date(ts.seconds * 1000)
+  return new Date(ts as string)
 }
 
-function daysUntil(ts: any): number | null {
+function daysUntil(ts: { _seconds?: number; seconds?: number } | string | null): number | null {
   const d = tsToDate(ts)
   if (!d) return null
   return Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
@@ -129,6 +128,7 @@ function SubAccountRow({
         </span>
       )}
       <button
+        aria-pressed={account.isDefault}
         title={account.isDefault ? 'Default account for agents' : 'Set as default'}
         onClick={() => !account.isDefault && onSetDefault(account.id)}
         className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-colors ${
@@ -217,6 +217,10 @@ function PickerModal({
   const [error, setError] = useState('')
 
   useEffect(() => {
+    setSelected(new Set())
+    setDefaultIndex(null)
+    setLoading(true)
+    setError('')
     const qs = orgId ? `?orgId=${orgId}` : ''
     fetch(`/api/v1/social/oauth/pending/${nonce}${qs}`)
       .then(r => r.json())
@@ -302,7 +306,10 @@ function PickerModal({
               return (
                 <div
                   key={i}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => isSelected ? setAsDefault(i) : toggleSelect(i)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); isSelected ? setAsDefault(i) : toggleSelect(i) } }}
                   className={`flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors border ${
                     isSelected
                       ? isDefault
@@ -389,14 +396,14 @@ function BlueskyForm({ onSuccess, orgId }: { onSuccess: () => void; orgId: strin
         }),
       })
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error((body as any).error ?? `Failed (${res.status})`)
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(body.error ?? `Failed (${res.status})`)
       }
       setHandle('')
       setAppPassword('')
       onSuccess()
-    } catch (err: any) {
-      setError(err.message ?? 'Something went wrong')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setSubmitting(false)
     }
@@ -448,6 +455,7 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<SocialAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const pickerNonce = searchParams.get('picker')
   const pickerPlatform = searchParams.get('platform') ?? ''
@@ -470,6 +478,7 @@ export default function AccountsPage() {
 
   async function handleDisconnect(id: string) {
     if (!confirm('Disconnect this account? You can reconnect later.')) return
+    setActionError(null)
     setDisconnectingId(id)
     try {
       const qs = orgId ? `?orgId=${orgId}` : ''
@@ -477,18 +486,21 @@ export default function AccountsPage() {
       if (!res.ok) throw new Error(`Failed (${res.status})`)
       await fetchAccounts()
     } catch {
-      // silently keep account in list
+      setActionError('Failed to disconnect account. Please try again.')
     } finally {
       setDisconnectingId(null)
     }
   }
 
   async function handleSetDefault(id: string) {
+    setActionError(null)
     try {
       const qs = orgId ? `?orgId=${orgId}` : ''
       await fetch(`/api/v1/social/accounts/${id}/set-default${qs}`, { method: 'PUT' })
       await fetchAccounts()
-    } catch { /* silently fail */ }
+    } catch {
+      setActionError('Failed to update default account.')
+    }
   }
 
   function dismissPicker() {
@@ -532,6 +544,9 @@ export default function AccountsPage() {
           Connect and manage your social media accounts. Click ☆ on any account to set it as the agent default.
         </p>
       </div>
+      {actionError && (
+        <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/30 rounded-lg px-4 py-2">{actionError}</p>
+      )}
 
       <div>
         <h2 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-3">
