@@ -22,6 +22,22 @@ export interface ResolvedAccount {
   accountId: string | null
 }
 
+/** Map provider type to the platform string stored in social_accounts */
+const platformMap: Record<string, string[]> = {
+  twitter: ['twitter'],
+  linkedin: ['linkedin'],
+  facebook: ['facebook'],
+  instagram: ['instagram'],
+  bluesky: ['bluesky'],
+  pinterest: ['pinterest'],
+  threads: ['threads'],
+  tiktok: ['tiktok'],
+  youtube: ['youtube'],
+  mastodon: ['mastodon'],
+  reddit: ['reddit'],
+  dribbble: ['dribbble'],
+}
+
 /** Map post platform field to provider platform type */
 export function toPlatformType(platform: string): SocialPlatformType | null {
   if (platform === 'x' || platform === 'twitter') return 'twitter'
@@ -75,22 +91,6 @@ export async function findDefaultAccount(
   orgId: string,
   platformType: SocialPlatformType,
 ): Promise<{ id: string; data: FirebaseFirestore.DocumentData } | null> {
-  // Map provider type to the platform string stored in social_accounts
-  const platformMap: Record<string, string[]> = {
-    twitter: ['twitter'],
-    linkedin: ['linkedin'],
-    facebook: ['facebook'],
-    instagram: ['instagram'],
-    bluesky: ['bluesky'],
-    pinterest: ['pinterest'],
-    threads: ['threads'],
-    tiktok: ['tiktok'],
-    youtube: ['youtube'],
-    mastodon: ['mastodon'],
-    reddit: ['reddit'],
-    dribbble: ['dribbble'],
-  }
-
   const platformNames = platformMap[platformType]
   if (!platformNames) return null
 
@@ -100,6 +100,7 @@ export async function findDefaultAccount(
     .where('orgId', '==', orgId)
     .where('status', '==', 'active')
     .where('isDefault', '==', true)
+    .where('platform', 'in', platformNames)
     .get()
 
   for (const doc of defaultSnap.docs) {
@@ -109,15 +110,14 @@ export async function findDefaultAccount(
     }
   }
 
-  // 2. Fall back to any active account (existing behaviour)
+  // 2. Fall back to any active account for this platform
   const snap = await adminDb
     .collection('social_accounts')
     .where('orgId', '==', orgId)
     .where('status', '==', 'active')
+    .where('platform', 'in', platformNames)
     .get()
 
-  // Filter to matching platform and pick the first one
-  // (Firestore doesn't support IN + equality on different fields efficiently)
   for (const doc of snap.docs) {
     const data = doc.data()
     if (platformNames.includes(data.platform)) {

@@ -45,4 +45,14 @@ describe('findDefaultAccount', () => {
     const result = await findDefaultAccount('org-1', 'linkedin')
     expect(result).toBeNull()
   })
+
+  it('ignores isDefault account from a different platform', async () => {
+    const wrongPlatformDoc = { id: 'acc-wrong', data: () => ({ platform: 'twitter', isDefault: true, status: 'active' }) }
+    const correctDoc = { id: 'acc-correct', data: () => ({ platform: 'linkedin', isDefault: false, status: 'active' }) }
+    mockGet
+      .mockResolvedValueOnce({ empty: false, docs: [wrongPlatformDoc] }) // isDefault query returns twitter account
+      .mockResolvedValueOnce({ empty: false, docs: [correctDoc] })       // fallback returns linkedin
+    const result = await findDefaultAccount('org-1', 'linkedin')
+    expect(result?.id).toBe('acc-correct')
+  })
 })
