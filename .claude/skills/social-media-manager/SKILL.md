@@ -44,7 +44,7 @@ All requests require authentication via the `Authorization` header.
 Authorization: Bearer <AI_API_KEY>
 ```
 
-Read it from the environment:
+The token must match `process.env.AI_API_KEY` set in Vercel for the `partnersinbiz-web` project. Read it from the environment:
 
 ```javascript
 const headers = {
@@ -52,6 +52,20 @@ const headers = {
   'Content-Type': 'application/json'
 };
 ```
+
+### Auth Troubleshooting
+
+If all endpoints return **401 Unauthorized** with `{"success":false,"error":"Unauthorized"}`:
+
+1. **Token rotated.** Get the current `AI_API_KEY` from the Vercel dashboard:
+   - Project: `peet-standers-projects-caab22b2/partnersinbiz-web`
+   - Settings → Environment Variables → `AI_API_KEY`
+2. **Vercel CLI may not work** — local project isn't linked and CLI tends to hang. Use the web dashboard.
+3. **gcloud credentials may need refresh** — run `gcloud auth application-default login` to restore Firestore access as a fallback.
+4. **Update cron jobs.** Both cron jobs in `~/.hermes/profiles/partners-main/cron/jobs.json` contain the token in their prompts. Update both `pib-weekly-content-scheduler` and `pib-weekly-performance-report`.
+5. **Cron output logs** at `~/.hermes/profiles/partners-main/cron/output/<job_id>/` — check for failure history.
+6. **Local codebase unavailable** — worktrees at `~/.claude-squad/worktrees/` are empty. The auth middleware is at `lib/api/auth.ts` (the `resolveUser` function checks AI_API_KEY against Bearer token).
+7. **Cron scheduler has never successfully posted content.** The content scheduler cron (`e30975908977`) has failed on every run (timeout Apr 6, connection error Apr 13, 401 Apr 20). The performance report cron (`aec8fa1224fa`) did successfully fetch posts on Apr 3 and Apr 10 using the same token — so the token was valid then but has since been invalidated.
 
 ### Base URL
 
@@ -358,7 +372,40 @@ Response: `{ "total": 5, "succeeded": 4, "failed": 1, "results": [{ "index": 0, 
 
 ### Media
 
-Media records are metadata entries — the actual file must already be uploaded to cloud storage. The API registers the URL and metadata, not the binary file.
+Two endpoints: one to upload a binary file, one to manage media metadata records.
+
+#### `POST /media/upload` — auth: admin
+
+**Binary file upload.** Accepts `multipart/form-data`. Uploads the file to Firebase Storage and writes a Firestore media record. Returns a public URL ready to attach to posts.
+
+Fields:
+- `file` (required) — the binary file. Allowed MIME types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `video/mp4`, `video/quicktime`. Max 512 MB.
+- `altText` (optional) — accessibility text
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  -H "X-Org-Id: pib-platform-owner" \
+  -F "file=@photo.jpg" \
+  -F "altText=Product screenshot" \
+  "https://partnersinbiz.online/api/v1/social/media/upload"
+```
+
+Response:
+```json
+{
+  "id": "media_abc",
+  "url": "https://storage.googleapis.com/bucket/social-media/org_abc123/abc123.jpg",
+  "storagePath": "social-media/org_abc123/abc123.jpg",
+  "mimeType": "image/jpeg",
+  "altText": "Product screenshot"
+}
+```
+
+Use the returned `url` in the `media` array when creating/updating a post:
+```json
+"media": [{ "url": "https://storage.googleapis.com/..." }]
+```
 
 #### `GET /media/` — auth: admin
 
@@ -368,7 +415,7 @@ Query params: `orgId`, `type` (`image`/`video`/`gif`), `status` (`uploading`/`pr
 
 #### `POST /media/` — auth: admin
 
-Register a media record. **JSON body, not file upload.**
+Register a media record from an external URL. **JSON body, not file upload.** Use `POST /media/upload` instead when you have the binary file.
 
 Required: `originalUrl`, `originalFilename`, `type`
 
@@ -381,11 +428,7 @@ Body:
   "originalMimeType": "image/png",
   "originalSize": 204800,
   "type": "image",
-  "width": 1024,
-  "height": 1024,
-  "altText": "Product screenshot",
-  "thumbnailUrl": "https://...",
-  "variants": {}
+  "altText": "Product screenshot"
 }
 ```
 
@@ -827,16 +870,47 @@ POST /posts/bulk/
 }
 ```
 
-### 2. Generate AI Content, Image, and Schedule
+### 2. Schedule a Post with Media
+
+```
+1. POST /media/upload  (multipart/form-data)  — upload binary to Firebase Storage, get back { url }
+2. POST /posts/  with "media": [{ "url": "<returned url>" }] and "scheduledFor"
+```
+
+Platform media limits:
+- **Twitter/X**: up to 4 images OR 1 video (chunked upload handled server-side)
+- **LinkedIn**: 1 image or 1 video per post
+- **Threads**: 1 image/video, or carousel (multiple URLs → carousel post)
+- **Mastodon**: images and video supported
+- **Bluesky**: media parameter accepted but not yet attached (AT Protocol blob upload pending)
+- **Facebook/Instagram**: URL-based; upload first then pass URL
+
+### 3. Post a Thread on X/Twitter
+
+Set `threadParts` instead of a plain content string. Media in `post.media[].url` attaches to the first tweet only.
+
+```json
+{
+  "orgId": "org_abc123",
+  "content": "Part 1 of 3...",
+  "threadParts": ["Part 1 of 3...", "Part 2 of 3...", "Part 3 of 3..."],
+  "platforms": ["twitter"],
+  "media": [{ "url": "https://storage.googleapis.com/..." }],
+  "scheduledFor": "2026-04-14T09:00:00Z",
+  "status": "scheduled"
+}
+```
+
+### 4. Generate AI Content, Image, and Schedule
 
 ```
 1. POST /ai/generate  — get content options
 2. GET  /analytics/?view=best-times  — find best posting time
 3. POST /ai/hashtags  — generate hashtags
-4. POST /ai/image-templates  → GET /ai/image-templates  — pick a template
-5. POST /ai/image  — generate image
-6. POST /media/  — register the image URL
-7. POST /posts/  — create post with content, media ID, and time
+4. GET  /ai/image-templates  — pick a template
+5. POST /ai/image  — generate image (returns URL or base64)
+6. POST /media/upload  — upload the binary to Firebase Storage (preferred over POST /media/)
+7. POST /posts/  — create post with content, media URL, and time
 ```
 
 ### 3. Post Approval Workflow
@@ -902,22 +976,24 @@ For Bluesky: skip OAuth. Create the account directly with `POST /accounts/` usin
 
 ## Platform Constraints — Quick Reference
 
-| Platform | Max Characters | Max Images | Max Video | Link Behaviour |
-|----------|---------------|------------|-----------|----------------|
-| X/Twitter | 280 (25,000 long posts) | 4 | 2m 20s | Shortened, uses chars |
-| LinkedIn | 3,000 | 20 | 10m | Clickable, no char cost |
-| Facebook | 63,206 | 10 | 240m | Preview card |
-| Instagram | 2,200 | 10 (carousel) | 90s (Reels) | Not clickable in caption |
-| TikTok | 4,000 | N/A | 10m | Bio only |
-| Pinterest | 500 | 1 | 60s | Pin links to URL |
-| Reddit | 40,000 | 20 | 15m | Self-post or link |
-| Bluesky | 300 | 4 | N/A | Clickable |
-| Threads | 500 | 10 | 5m | Clickable |
+| Platform | Max Characters | Media Support (via this platform) | Link Behaviour |
+|----------|---------------|-----------------------------------|----------------|
+| X/Twitter | 280 (25,000 long posts) | Up to 4 images OR 1 video (chunked) | Shortened, uses chars |
+| LinkedIn | 3,000 | 1 image OR 1 video | Clickable, no char cost |
+| Facebook | 63,206 | URL-based (pass public URL) | Preview card |
+| Instagram | 2,200 | URL-based (pass public URL) | Not clickable in caption |
+| TikTok | 4,000 | Not yet wired | Bio only |
+| Pinterest | 500 | Not yet wired | Pin links to URL |
+| Reddit | 40,000 | Not yet wired | Self-post or link |
+| Bluesky | 300 | Accepted but not yet attached (AT Protocol blob pending) | Clickable |
+| Threads | 500 | 1 image/video OR carousel (multiple URLs) | Clickable |
+| Mastodon | 500 | Images and video supported | Clickable |
 
 Key notes:
-- Twitter/X: URLs always count ~23 chars
-- Instagram: image or video required (no text-only)
-- Pinterest: image required
+- Twitter/X: URLs always count ~23 chars; use `threadParts` for thread posts
+- Twitter/X: GIF upload uses simple multipart (≤5 MB); larger GIFs may fail
+- LinkedIn: only index 0 of `media[]` is used (one media per post)
+- Threads: passing multiple `media[]` URLs triggers a carousel post
 - Always verify with `GET /platforms/[platform]` — limits may change
 
 ---
