@@ -496,7 +496,8 @@ export default function AccountsPage() {
     setActionError(null)
     try {
       const qs = orgId ? `?orgId=${orgId}` : ''
-      await fetch(`/api/v1/social/accounts/${id}/set-default${qs}`, { method: 'PUT' })
+      const res = await fetch(`/api/v1/social/accounts/${id}/set-default${qs}`, { method: 'PUT' })
+      if (!res.ok) throw new Error(`Failed (${res.status})`)
       await fetchAccounts()
     } catch {
       setActionError('Failed to update default account.')
