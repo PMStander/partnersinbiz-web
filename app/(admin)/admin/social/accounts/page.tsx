@@ -326,7 +326,8 @@ export default function AccountsPage() {
     if (!confirm('Disconnect this account? You can reconnect later.')) return
     setDisconnectingId(id)
     try {
-      const res = await fetch(`/api/v1/social/accounts/${id}`, { method: 'DELETE' })
+      const qs = orgId ? `?orgId=${orgId}` : ''
+      const res = await fetch(`/api/v1/social/accounts/${id}${qs}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(`Failed (${res.status})`)
       await fetchAccounts()
     } catch {
