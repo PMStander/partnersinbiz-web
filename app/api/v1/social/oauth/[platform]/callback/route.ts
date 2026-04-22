@@ -129,6 +129,11 @@ export async function GET(req: NextRequest) {
           scopes: config.scopes,
         }
       })
+      if (options.length === 0) {
+        return NextResponse.redirect(
+          new URL(`${redirectUrl}?status=error&message=${encodeURIComponent('No Facebook accounts found')}`, url.origin).toString()
+        )
+      }
       return writePendingAndRedirect(options, platform, orgId, nonce, redirectUrl, url.origin)
     }
 
@@ -138,24 +143,28 @@ export async function GET(req: NextRequest) {
       const expiresAt = tokenResponse.expiresIn
         ? new Date(Date.now() + tokenResponse.expiresIn * 1000)
         : null
-      const options = liResult.map((acc, i) => {
-        const encrypted = encryptTokenBlock(
-          { accessToken: tokenResponse.accessToken, refreshToken, expiresAt },
-          orgId,
+      // Encrypt once — all LinkedIn sub-accounts share the same user token
+      const encrypted = encryptTokenBlock(
+        { accessToken: tokenResponse.accessToken, refreshToken, expiresAt },
+        orgId,
+      )
+      const options = liResult.map((acc, i) => ({
+        index: i,
+        displayName: acc.displayName,
+        username: acc.username,
+        avatarUrl: acc.avatarUrl,
+        profileUrl: acc.profileUrl,
+        accountType: acc.accountType,
+        platformAccountId: acc.platformAccountId,
+        encryptedTokens: encrypted,
+        platformMeta: acc.meta ?? {},
+        scopes: config.scopes,
+      }))
+      if (options.length === 0) {
+        return NextResponse.redirect(
+          new URL(`${redirectUrl}?status=error&message=${encodeURIComponent('No LinkedIn accounts found')}`, url.origin).toString()
         )
-        return {
-          index: i,
-          displayName: acc.displayName,
-          username: acc.username,
-          avatarUrl: acc.avatarUrl,
-          profileUrl: acc.profileUrl,
-          accountType: acc.accountType,
-          platformAccountId: acc.platformAccountId,
-          encryptedTokens: encrypted,
-          platformMeta: acc.meta ?? {},
-          scopes: config.scopes,
-        }
-      })
+      }
       return writePendingAndRedirect(options, platform, orgId, nonce, redirectUrl, url.origin)
     }
 
