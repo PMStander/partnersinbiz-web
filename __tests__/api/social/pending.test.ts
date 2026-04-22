@@ -19,7 +19,7 @@ jest.mock('@/lib/api/response', () => ({
 import { GET } from '@/app/api/v1/social/oauth/pending/[nonce]/route'
 
 function makeCtx(nonce: string) {
-  return { params: Promise.resolve({ nonce }) } as any
+  return { params: Promise.resolve({ nonce }) } as { params: Promise<{ nonce: string }> }
 }
 
 describe('GET /api/v1/social/oauth/pending/[nonce]', () => {

@@ -8,6 +8,18 @@ export const dynamic = 'force-dynamic'
 
 type Params = { params: Promise<{ nonce: string }> }
 
+type PendingOption = {
+  index: number
+  displayName: string
+  username: string
+  avatarUrl: string
+  profileUrl: string
+  accountType: 'personal' | 'page'
+  platformAccountId: string
+  encryptedTokens: unknown
+  platformMeta: Record<string, unknown>
+}
+
 export const GET = withAuth('client', withTenant(async (_req: NextRequest, _user, orgId, context) => {
   const { nonce } = await (context as Params).params
   const doc = await adminDb.collection('social_oauth_pending').doc(nonce).get()
@@ -18,8 +30,7 @@ export const GET = withAuth('client', withTenant(async (_req: NextRequest, _user
   if (data.orgId !== orgId) return apiError('Not found', 404)
   if (data.expiresAt.toDate() < new Date()) return apiError('Not found', 404)
 
-  // Strip encrypted tokens before returning to client
-  const options = (data.options as any[]).map(({ encryptedTokens: _, ...opt }) => opt)
+  const options = ((data.options ?? []) as PendingOption[]).map(({ encryptedTokens: _, ...opt }) => opt)
 
   return apiSuccess({ platform: data.platform, options })
 }))
