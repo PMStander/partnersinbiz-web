@@ -69,8 +69,13 @@ describe('GET /api/v1/social/oauth/pending/[nonce]', () => {
         options: [
           {
             index: 0,
-            displayName: 'Peet',
+            displayName: 'Peet Stander',
+            username: 'peetstander',
+            avatarUrl: 'https://example.com/avatar.jpg',
+            profileUrl: 'https://linkedin.com/in/peetstander',
             accountType: 'personal',
+            platformAccountId: 'li-123456',
+            platformMeta: { headline: 'CEO at Partners in Biz' },
             encryptedTokens: { accessToken: 'secret', iv: 'iv', tag: 'tag' },
           },
         ],
@@ -80,7 +85,12 @@ describe('GET /api/v1/social/oauth/pending/[nonce]', () => {
     expect(res.status).toBe(200)
     const body = res.json()
     expect(body.data.options[0].encryptedTokens).toBeUndefined()
-    expect(body.data.options[0].displayName).toBe('Peet')
+    expect(body.data.options[0].displayName).toBe('Peet Stander')
     expect(body.data.platform).toBe('linkedin')
+    expect(body.data.options[0].username).toBe('peetstander')
+    expect(body.data.options[0].avatarUrl).toBe('https://example.com/avatar.jpg')
+    expect(body.data.options[0].profileUrl).toBe('https://linkedin.com/in/peetstander')
+    expect(body.data.options[0].platformAccountId).toBe('li-123456')
+    expect(body.data.options[0].platformMeta).toEqual({ headline: 'CEO at Partners in Biz' })
   })
 })
