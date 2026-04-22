@@ -1,9 +1,14 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useOrg } from '@/lib/contexts/OrgContext'
+import {
+  FaXTwitter, FaLinkedin, FaFacebook, FaInstagram,
+  FaReddit, FaTiktok, FaPinterest, FaYoutube,
+} from 'react-icons/fa6'
+import { SiThreads, SiBluesky } from 'react-icons/si'
 
 /* ------------------------------------------------------------------ */
 /*  Types & config                                                     */
@@ -23,17 +28,30 @@ interface SocialAccount {
 }
 
 const PLATFORMS = [
-  { id: 'twitter', label: 'X (Twitter)', color: 'bg-black', short: 'X', oauth: true },
-  { id: 'linkedin', label: 'LinkedIn', color: 'bg-blue-700', short: 'LI', oauth: true },
-  { id: 'facebook', label: 'Facebook', color: 'bg-blue-600', short: 'FB', oauth: true },
-  { id: 'instagram', label: 'Instagram', color: 'bg-pink-600', short: 'IG', oauth: true },
-  { id: 'reddit', label: 'Reddit', color: 'bg-orange-600', short: 'RD', oauth: true },
-  { id: 'tiktok', label: 'TikTok', color: 'bg-gray-800', short: 'TT', oauth: true },
-  { id: 'pinterest', label: 'Pinterest', color: 'bg-red-700', short: 'PI', oauth: true },
-  { id: 'bluesky', label: 'Bluesky', color: 'bg-sky-500', short: 'BS', oauth: false, note: 'Uses app password' },
-  { id: 'threads', label: 'Threads', color: 'bg-gray-700', short: 'TH', oauth: true },
-  { id: 'youtube', label: 'YouTube', color: 'bg-red-600', short: 'YT', oauth: true },
+  { id: 'twitter', label: 'X (Twitter)', color: 'bg-black', oauth: true },
+  { id: 'linkedin', label: 'LinkedIn', color: 'bg-blue-700', oauth: true },
+  { id: 'facebook', label: 'Facebook', color: 'bg-blue-600', oauth: true },
+  { id: 'instagram', label: 'Instagram', color: 'bg-pink-600', oauth: true },
+  { id: 'reddit', label: 'Reddit', color: 'bg-orange-600', oauth: true },
+  { id: 'tiktok', label: 'TikTok', color: 'bg-gray-800', oauth: true },
+  { id: 'pinterest', label: 'Pinterest', color: 'bg-red-700', oauth: true },
+  { id: 'bluesky', label: 'Bluesky', color: 'bg-sky-500', oauth: false, note: 'Uses app password' },
+  { id: 'threads', label: 'Threads', color: 'bg-gray-700', oauth: true },
+  { id: 'youtube', label: 'YouTube', color: 'bg-red-600', oauth: true },
 ] as const
+
+const PLATFORM_ICONS: Record<string, { color: string; icon: React.ReactNode }> = {
+  twitter:   { color: 'bg-black',      icon: <FaXTwitter size={14} /> },
+  linkedin:  { color: 'bg-blue-700',   icon: <FaLinkedin size={14} /> },
+  facebook:  { color: 'bg-blue-600',   icon: <FaFacebook size={14} /> },
+  instagram: { color: 'bg-pink-600',   icon: <FaInstagram size={14} /> },
+  reddit:    { color: 'bg-orange-600', icon: <FaReddit size={14} /> },
+  tiktok:    { color: 'bg-gray-800',   icon: <FaTiktok size={14} /> },
+  pinterest: { color: 'bg-red-700',    icon: <FaPinterest size={14} /> },
+  bluesky:   { color: 'bg-sky-500',    icon: <SiBluesky size={14} /> },
+  threads:   { color: 'bg-gray-700',   icon: <SiThreads size={14} /> },
+  youtube:   { color: 'bg-red-600',    icon: <FaYoutube size={14} /> },
+}
 
 const STATUS_STYLES: Record<AccountStatus, string> = {
   active: 'bg-green-900/30 text-green-400',
@@ -82,11 +100,15 @@ function platformConfig(id: string) {
 /* ------------------------------------------------------------------ */
 
 function PlatformBadge({ platformId }: { platformId: string }) {
-  const cfg = platformConfig(platformId)
-  if (!cfg) {
-    return <span className="bg-surface-container-high text-on-surface-variant text-[10px] px-2 py-0.5 rounded font-bold uppercase">{platformId}</span>
+  const icfg = PLATFORM_ICONS[platformId]
+  if (!icfg) {
+    return <span className="bg-surface-container-high text-on-surface-variant text-[10px] px-2 py-0.5 rounded font-bold uppercase">{platformId.slice(0, 2)}</span>
   }
-  return <span className={`${cfg.color} text-white text-[10px] px-2 py-0.5 rounded font-bold`}>{cfg.short}</span>
+  return (
+    <span className={`${icfg.color} text-white w-7 h-7 flex items-center justify-center rounded`}>
+      {icfg.icon}
+    </span>
+  )
 }
 
 function StatusBadge({ status }: { status: AccountStatus }) {
@@ -304,8 +326,11 @@ export default function AccountsPage() {
     if (!confirm('Disconnect this account? You can reconnect later.')) return
     setDisconnectingId(id)
     try {
-      await fetch(`/api/v1/social/accounts/${id}`, { method: 'DELETE' })
-      setAccounts((prev) => prev.filter((a) => a.id !== id))
+      const res = await fetch(`/api/v1/social/accounts/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`Failed (${res.status})`)
+      await fetchAccounts()
+    } catch {
+      // Silently fail — account will remain in list
     } finally {
       setDisconnectingId(null)
     }
@@ -320,8 +345,9 @@ export default function AccountsPage() {
     }
   }
 
+  const activeAccounts = accounts.filter((a) => a.status !== 'disconnected')
   /* Compute which platforms are not yet connected */
-  const connectedPlatformIds = new Set(accounts.map((a) => a.platform))
+  const connectedPlatformIds = new Set(activeAccounts.map((a) => a.platform))
   const unconnectedOAuth = PLATFORMS.filter((p) => p.oauth && !connectedPlatformIds.has(p.id))
   const showBlueskyForm = !connectedPlatformIds.has('bluesky')
 
@@ -351,7 +377,7 @@ export default function AccountsPage() {
               <div key={i} className="h-36 rounded-xl bg-surface-container animate-pulse" />
             ))}
           </div>
-        ) : accounts.length === 0 ? (
+        ) : activeAccounts.length === 0 ? (
           <div className="rounded-xl bg-surface-container p-8 text-center">
             <p className="text-sm text-on-surface-variant">No accounts connected yet.</p>
             <p className="text-xs text-on-surface-variant/60 mt-1">
@@ -360,7 +386,7 @@ export default function AccountsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {accounts.map((account) => (
+            {activeAccounts.map((account) => (
               <AccountCard
                 key={account.id}
                 account={account}
@@ -389,8 +415,8 @@ export default function AccountsPage() {
                   href={`/api/v1/social/oauth/${p.id}?redirectUrl=/admin/social/accounts${orgId ? `&orgId=${orgId}` : ''}`}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-black font-label text-sm font-medium hover:bg-white/90 transition-colors"
                 >
-                  <span className={`${p.color} text-white text-[10px] px-1.5 py-0.5 rounded font-bold`}>
-                    {p.short}
+                  <span className={`${p.color} text-white w-6 h-6 flex items-center justify-center rounded`}>
+                    {PLATFORM_ICONS[p.id]?.icon}
                   </span>
                   Connect {p.label}
                 </a>
