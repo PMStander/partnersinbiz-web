@@ -26,7 +26,7 @@ export const POST = withAuth('client', withTenant(async (req: NextRequest, user:
 
   const pending = pendingDoc.data()!
   if (pending.orgId !== orgId) return apiError('Not found', 404)
-  if (pending.expiresAt.toDate() < new Date()) return apiError('Pending selection expired', 410)
+  if (pending.expiresAt.toDate() < new Date()) return apiError('Not found', 404)
 
   const platform: string = pending.platform
   const options: any[] = pending.options
@@ -75,7 +75,6 @@ export const POST = withAuth('client', withTenant(async (req: NextRequest, user:
       username: option.username,
       avatarUrl: option.avatarUrl,
       profileUrl: option.profileUrl,
-      accountType: option.accountType,
       subAccountType: option.accountType as 'personal' | 'page',
       isDefault: sel.isDefault ?? false,
       status: 'active',

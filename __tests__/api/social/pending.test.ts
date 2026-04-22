@@ -205,4 +205,28 @@ describe('POST /api/v1/social/accounts/confirm', () => {
     const res = await POST(req, undefined as any)
     expect(res.status).toBe(400)
   })
+
+  it('returns 201 with accountIds on valid selection', async () => {
+    // Universal result satisfies all get() call shapes in the confirm route
+    const universalResult = {
+      exists: true,
+      empty: true,
+      docs: [],
+      ref: { delete: jest.fn() },
+      data: () => pendingDocData,
+    }
+    mockGet.mockResolvedValue(universalResult)
+
+    const req = {
+      json: async () => ({
+        nonce: 'nonce-1',
+        selections: [{ index: 0, isDefault: true }],
+      }),
+    } as any
+    const res = await POST(req, undefined as any)
+    expect(res.status).toBe(201)
+    const body = res.json()
+    expect(Array.isArray(body.data.accountIds)).toBe(true)
+    expect(body.data.accountIds.length).toBeGreaterThan(0)
+  })
 })
