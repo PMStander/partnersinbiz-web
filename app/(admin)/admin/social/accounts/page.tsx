@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import React, { useEffect, useState, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useOrg } from '@/lib/contexts/OrgContext'
 import {
   FaXTwitter, FaLinkedin, FaFacebook, FaInstagram,
@@ -11,10 +11,11 @@ import {
 import { SiThreads, SiBluesky } from 'react-icons/si'
 
 /* ------------------------------------------------------------------ */
-/*  Types & config                                                     */
+/*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
 type AccountStatus = 'active' | 'token_expired' | 'disconnected' | 'rate_limited'
+type SubAccountType = 'personal' | 'page'
 
 interface SocialAccount {
   id: string
@@ -22,23 +23,26 @@ interface SocialAccount {
   displayName: string
   username: string
   status: AccountStatus
+  isDefault?: boolean
+  subAccountType?: SubAccountType
   lastUsedAt: any
   tokenExpiresAt: any
   platformMeta?: Record<string, any>
 }
 
-const PLATFORMS = [
-  { id: 'twitter', label: 'X (Twitter)', color: 'bg-black', oauth: true },
-  { id: 'linkedin', label: 'LinkedIn', color: 'bg-blue-700', oauth: true },
-  { id: 'facebook', label: 'Facebook', color: 'bg-blue-600', oauth: true },
-  { id: 'instagram', label: 'Instagram', color: 'bg-pink-600', oauth: true },
-  { id: 'reddit', label: 'Reddit', color: 'bg-orange-600', oauth: true },
-  { id: 'tiktok', label: 'TikTok', color: 'bg-gray-800', oauth: true },
-  { id: 'pinterest', label: 'Pinterest', color: 'bg-red-700', oauth: true },
-  { id: 'bluesky', label: 'Bluesky', color: 'bg-sky-500', oauth: false, note: 'Uses app password' },
-  { id: 'threads', label: 'Threads', color: 'bg-gray-700', oauth: true },
-  { id: 'youtube', label: 'YouTube', color: 'bg-red-600', oauth: true },
-] as const
+interface PendingOption {
+  index: number
+  displayName: string
+  username: string
+  avatarUrl: string
+  accountType: 'personal' | 'page'
+  platformAccountId: string
+  platformMeta?: Record<string, any>
+}
+
+/* ------------------------------------------------------------------ */
+/*  Platform config                                                    */
+/* ------------------------------------------------------------------ */
 
 const PLATFORM_ICONS: Record<string, { color: string; icon: React.ReactNode }> = {
   twitter:   { color: 'bg-black',      icon: <FaXTwitter size={14} /> },
@@ -53,19 +57,13 @@ const PLATFORM_ICONS: Record<string, { color: string; icon: React.ReactNode }> =
   youtube:   { color: 'bg-red-600',    icon: <FaYoutube size={14} /> },
 }
 
-const STATUS_STYLES: Record<AccountStatus, string> = {
-  active: 'bg-green-900/30 text-green-400',
-  token_expired: 'bg-red-900/30 text-red-400',
-  disconnected: 'bg-surface-container-high text-on-surface-variant',
-  rate_limited: 'bg-yellow-900/30 text-yellow-400',
+const PLATFORM_LABELS: Record<string, string> = {
+  twitter: 'X (Twitter)', linkedin: 'LinkedIn', facebook: 'Facebook',
+  instagram: 'Instagram', reddit: 'Reddit', tiktok: 'TikTok',
+  pinterest: 'Pinterest', bluesky: 'Bluesky', threads: 'Threads', youtube: 'YouTube',
 }
 
-const STATUS_LABELS: Record<AccountStatus, string> = {
-  active: 'Active',
-  token_expired: 'Token Expired',
-  disconnected: 'Disconnected',
-  rate_limited: 'Rate Limited',
-}
+const OAUTH_PLATFORMS = ['twitter','linkedin','facebook','instagram','reddit','tiktok','pinterest','threads','youtube']
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -78,21 +76,10 @@ function tsToDate(ts: any): Date | null {
   return new Date(ts)
 }
 
-function fmtDateTime(ts: any) {
-  const d = tsToDate(ts)
-  return d
-    ? d.toLocaleString('en-ZA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : '—'
-}
-
 function daysUntil(ts: any): number | null {
   const d = tsToDate(ts)
   if (!d) return null
   return Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-}
-
-function platformConfig(id: string) {
-  return PLATFORMS.find((p) => p.id === id)
 }
 
 /* ------------------------------------------------------------------ */
@@ -100,112 +87,284 @@ function platformConfig(id: string) {
 /* ------------------------------------------------------------------ */
 
 function PlatformBadge({ platformId }: { platformId: string }) {
-  const icfg = PLATFORM_ICONS[platformId]
-  if (!icfg) {
-    return <span className="bg-surface-container-high text-on-surface-variant text-[10px] px-2 py-0.5 rounded font-bold uppercase">{platformId.slice(0, 2)}</span>
-  }
-  return (
-    <span className={`${icfg.color} text-white w-7 h-7 flex items-center justify-center rounded`}>
-      {icfg.icon}
-    </span>
-  )
+  const cfg = PLATFORM_ICONS[platformId]
+  if (!cfg) return <span className="bg-surface-container-high text-on-surface-variant text-[10px] px-2 py-0.5 rounded font-bold uppercase">{platformId.slice(0, 2)}</span>
+  return <span className={`${cfg.color} text-white w-7 h-7 flex items-center justify-center rounded`}>{cfg.icon}</span>
 }
 
-function StatusBadge({ status }: { status: AccountStatus }) {
-  return (
-    <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${STATUS_STYLES[status]}`}>
-      {STATUS_LABELS[status]}
-    </span>
-  )
-}
+function SubAccountRow({
+  account,
+  onDisconnect,
+  onSetDefault,
+  disconnecting,
+}: {
+  account: SocialAccount
+  onDisconnect: (id: string) => void
+  onSetDefault: (id: string) => void
+  disconnecting: boolean
+}) {
+  const days = daysUntil(account.tokenExpiresAt)
 
-function TokenExpiryWarning({ tokenExpiresAt }: { tokenExpiresAt: any }) {
-  const days = daysUntil(tokenExpiresAt)
-  if (days === null) return null
-  if (days <= 0) {
-    return <span className="text-[10px] text-red-400 font-medium">Token expired</span>
-  }
-  if (days <= 7) {
-    return <span className="text-[10px] text-yellow-400 font-medium">Expires in {days}d</span>
-  }
-  return <span className="text-[10px] text-on-surface-variant">Expires in {days}d</span>
-}
-
-function SuccessBanner({ platform, onDismiss }: { platform: string; onDismiss: () => void }) {
-  const cfg = platformConfig(platform)
   return (
-    <div className="rounded-xl bg-green-900/20 border border-green-800/40 p-4 flex items-center justify-between">
-      <p className="text-sm text-green-400">
-        Successfully connected <span className="font-semibold">{cfg?.label ?? platform}</span>.
-      </p>
-      <button onClick={onDismiss} className="text-green-400 hover:text-green-300 text-xs font-medium ml-4">
-        Dismiss
+    <div className="flex items-center gap-3 px-4 py-3 border-t border-surface-container-high">
+      <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant text-xs font-semibold">
+        {account.displayName.slice(0, 2).toUpperCase()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-on-surface truncate">{account.displayName}</p>
+        <p className="text-xs text-on-surface-variant truncate">@{account.username}</p>
+        {days !== null && days <= 7 && (
+          <p className={`text-[10px] ${days <= 0 ? 'text-red-400' : 'text-yellow-400'}`}>
+            {days <= 0 ? 'Token expired' : `Expires in ${days}d`}
+          </p>
+        )}
+      </div>
+      {account.subAccountType && (
+        <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+          account.subAccountType === 'personal'
+            ? 'bg-blue-900/30 text-blue-400'
+            : 'bg-green-900/30 text-green-400'
+        }`}>
+          {account.subAccountType.toUpperCase()}
+        </span>
+      )}
+      <button
+        title={account.isDefault ? 'Default account for agents' : 'Set as default'}
+        onClick={() => !account.isDefault && onSetDefault(account.id)}
+        className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-colors ${
+          account.isDefault
+            ? 'bg-indigo-900/40 text-indigo-300 cursor-default'
+            : 'bg-surface-container-high text-on-surface-variant hover:bg-indigo-900/20 hover:text-indigo-300 cursor-pointer'
+        }`}
+      >
+        {account.isDefault ? '★ default' : '☆'}
+      </button>
+      <button
+        onClick={() => onDisconnect(account.id)}
+        disabled={disconnecting}
+        className="text-xs text-red-400 opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
+      >
+        Disconnect
       </button>
     </div>
   )
 }
 
-function AccountCard({
-  account,
+function PlatformCard({
+  platform,
+  accounts,
+  orgId,
   onDisconnect,
-  onRefresh,
-  disconnecting,
+  onSetDefault,
+  disconnectingId,
 }: {
-  account: SocialAccount
+  platform: string
+  accounts: SocialAccount[]
+  orgId: string
   onDisconnect: (id: string) => void
-  onRefresh: (id: string) => void
-  disconnecting: boolean
+  onSetDefault: (id: string) => void
+  disconnectingId: string | null
 }) {
-  const cfg = platformConfig(account.platform)
+  const label = PLATFORM_LABELS[platform] ?? platform
+  const oauthUrl = `/api/v1/social/oauth/${platform}?redirectUrl=/admin/social/accounts${orgId ? `&orgId=${orgId}` : ''}`
 
   return (
-    <div className="rounded-xl bg-surface-container p-5 flex flex-col gap-3">
-      {/* Header row */}
-      <div className="flex items-center gap-3">
-        <PlatformBadge platformId={account.platform} />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-on-surface truncate">{account.displayName}</p>
-          <p className="text-xs text-on-surface-variant truncate">@{account.username}</p>
-        </div>
-        <StatusBadge status={account.status} />
-      </div>
-
-      {/* Meta row */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <div>
-          <span className="text-xs font-medium text-on-surface-variant uppercase tracking-wide">Last used </span>
-          <span className="text-xs text-on-surface-variant">{fmtDateTime(account.lastUsedAt)}</span>
-        </div>
-        {account.tokenExpiresAt && (
-          <TokenExpiryWarning tokenExpiresAt={account.tokenExpiresAt} />
-        )}
-        {cfg && !cfg.oauth && cfg.note && (
-          <span className="text-[10px] text-on-surface-variant/60 italic">{cfg.note}</span>
+    <div className="rounded-xl bg-surface-container overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <PlatformBadge platformId={platform} />
+        <span className="text-sm font-semibold text-on-surface flex-1">{label}</span>
+        <span className="text-xs text-on-surface-variant">{accounts.length} connected</span>
+        {OAUTH_PLATFORMS.includes(platform) && (
+          <a
+            href={oauthUrl}
+            className="text-xs text-on-surface-variant border border-surface-container-high rounded px-2 py-1 hover:bg-surface-container-high transition-colors"
+          >
+            + Add account
+          </a>
         )}
       </div>
+      {accounts.map(acc => (
+        <SubAccountRow
+          key={acc.id}
+          account={acc}
+          onDisconnect={onDisconnect}
+          onSetDefault={onSetDefault}
+          disconnecting={disconnectingId === acc.id}
+        />
+      ))}
+    </div>
+  )
+}
 
-      {/* Actions */}
-      <div className="flex gap-2 mt-1">
-        <button
-          onClick={() => onRefresh(account.id)}
-          className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-label text-sm font-medium hover:bg-surface-container-high transition-colors"
-        >
-          Refresh Token
-        </button>
-        <button
-          onClick={() => onDisconnect(account.id)}
-          disabled={disconnecting}
-          className="px-4 py-2 rounded-lg bg-red-900/30 text-red-400 font-label text-sm font-medium hover:bg-red-900/50 transition-colors disabled:opacity-50"
-        >
-          {disconnecting ? 'Disconnecting...' : 'Disconnect'}
-        </button>
+function PickerModal({
+  nonce,
+  platform,
+  orgId,
+  onConfirm,
+  onSkip,
+}: {
+  nonce: string
+  platform: string
+  orgId: string
+  onConfirm: () => void
+  onSkip: () => void
+}) {
+  const [options, setOptions] = useState<PendingOption[]>([])
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [defaultIndex, setDefaultIndex] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const qs = orgId ? `?orgId=${orgId}` : ''
+    fetch(`/api/v1/social/oauth/pending/${nonce}${qs}`)
+      .then(r => r.json())
+      .then(body => {
+        const opts: PendingOption[] = body.data?.options ?? []
+        setOptions(opts)
+        const all = new Set(opts.map((_: PendingOption, i: number) => i))
+        setSelected(all)
+        if (opts.length > 0) setDefaultIndex(0)
+      })
+      .catch(() => setError('Failed to load account options.'))
+      .finally(() => setLoading(false))
+  }, [nonce, orgId])
+
+  function toggleSelect(index: number) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(index)) {
+        next.delete(index)
+        if (defaultIndex === index) setDefaultIndex(null)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
+  }
+
+  function setAsDefault(index: number) {
+    if (!selected.has(index)) return
+    setDefaultIndex(index)
+  }
+
+  async function handleConfirm() {
+    if (selected.size === 0) return
+    setSaving(true)
+    const qs = orgId ? `?orgId=${orgId}` : ''
+    try {
+      const selections = Array.from(selected).map(i => ({
+        index: i,
+        isDefault: i === defaultIndex,
+      }))
+      const res = await fetch(`/api/v1/social/accounts/confirm${qs}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nonce, selections }),
+      })
+      if (!res.ok) throw new Error(`Failed (${res.status})`)
+      onConfirm()
+    } catch {
+      setError('Failed to save accounts. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const icfg = PLATFORM_ICONS[platform]
+  const label = PLATFORM_LABELS[platform] ?? platform
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-surface-container rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <div className="flex items-center gap-3 mb-2">
+          {icfg && (
+            <span className={`${icfg.color} text-white w-8 h-8 flex items-center justify-center rounded-lg`}>
+              {icfg.icon}
+            </span>
+          )}
+          <h2 className="text-base font-semibold text-on-surface">Choose {label} accounts to connect</h2>
+        </div>
+        <p className="text-xs text-on-surface-variant mb-5">
+          Select all you&apos;d like to connect. Click a selected account to mark it as ★ default for agent auto-posting.
+        </p>
+
+        {loading && <div className="h-24 rounded-xl bg-surface-container-high animate-pulse" />}
+
+        {!loading && error && <p className="text-sm text-red-400">{error}</p>}
+
+        {!loading && !error && (
+          <div className="flex flex-col gap-2 mb-5">
+            {options.map((opt, i) => {
+              const isSelected = selected.has(i)
+              const isDefault = defaultIndex === i
+              return (
+                <div
+                  key={i}
+                  onClick={() => isSelected ? setAsDefault(i) : toggleSelect(i)}
+                  className={`flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors border ${
+                    isSelected
+                      ? isDefault
+                        ? 'border-indigo-500 bg-indigo-900/20'
+                        : 'border-surface-container-high bg-surface-container-high'
+                      : 'border-surface-container-high bg-surface-container opacity-60'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelect(i)}
+                    onClick={e => e.stopPropagation()}
+                    className="w-4 h-4 accent-indigo-500"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-on-surface">{opt.displayName}</p>
+                    <p className="text-xs text-on-surface-variant">@{opt.username}</p>
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                    opt.accountType === 'personal'
+                      ? 'bg-blue-900/30 text-blue-400'
+                      : 'bg-green-900/30 text-green-400'
+                  }`}>
+                    {opt.accountType.toUpperCase()}
+                  </span>
+                  {isSelected && isDefault && (
+                    <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-indigo-900/40 text-indigo-300">
+                      ★ default
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <p className="text-[10px] text-on-surface-variant mb-4">
+          ★ Click a selected account to set it as the default. Agents auto-post to the default unless told otherwise.
+        </p>
+
+        <div className="flex gap-3">
+          <button
+            onClick={handleConfirm}
+            disabled={saving || selected.size === 0}
+            className="flex-1 bg-white text-black rounded-lg py-2.5 text-sm font-semibold hover:bg-white/90 transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Connecting…' : `Connect selected (${selected.size})`}
+          </button>
+          <button
+            onClick={onSkip}
+            className="border border-surface-container-high text-on-surface-variant rounded-lg px-4 py-2.5 text-sm hover:bg-surface-container-high transition-colors"
+          >
+            Skip
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
-function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
-  const { orgId } = useOrg()
+function BlueskyForm({ onSuccess, orgId }: { onSuccess: () => void; orgId: string }) {
   const [handle, setHandle] = useState('')
   const [appPassword, setAppPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -217,7 +376,8 @@ function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch(`/api/v1/social/accounts${orgId ? `?orgId=${orgId}` : ''}`, {
+      const qs = orgId ? `?orgId=${orgId}` : ''
+      const res = await fetch(`/api/v1/social/accounts${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -230,7 +390,7 @@ function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? `Failed (${res.status})`)
+        throw new Error((body as any).error ?? `Failed (${res.status})`)
       }
       setHandle('')
       setAppPassword('')
@@ -247,32 +407,23 @@ function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
       <div className="flex items-center gap-2 mb-1">
         <PlatformBadge platformId="bluesky" />
         <span className="text-sm font-medium text-on-surface">Connect Bluesky</span>
+        <span className="text-xs text-on-surface-variant">(App Password)</span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide block mb-1">
-            Handle
-          </label>
-          <input
-            type="text"
-            placeholder="you.bsky.social"
-            value={handle}
-            onChange={(e) => setHandle(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-surface-container-high text-on-surface text-sm placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-white/20"
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-on-surface-variant uppercase tracking-wide block mb-1">
-            App Password
-          </label>
-          <input
-            type="password"
-            placeholder="xxxx-xxxx-xxxx-xxxx"
-            value={appPassword}
-            onChange={(e) => setAppPassword(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-surface-container-high text-on-surface text-sm placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-white/20"
-          />
-        </div>
+        <input
+          type="text"
+          placeholder="you.bsky.social"
+          value={handle}
+          onChange={e => setHandle(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-surface-container-high text-on-surface text-sm placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-white/20"
+        />
+        <input
+          type="password"
+          placeholder="xxxx-xxxx-xxxx-xxxx"
+          value={appPassword}
+          onChange={e => setAppPassword(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-surface-container-high text-on-surface text-sm placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-white/20"
+        />
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
       <button
@@ -280,7 +431,7 @@ function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
         disabled={submitting || !handle.trim() || !appPassword.trim()}
         className="px-4 py-2 rounded-lg bg-white text-black font-label text-sm font-medium hover:bg-white/90 transition-colors disabled:opacity-50"
       >
-        {submitting ? 'Connecting...' : 'Connect Bluesky'}
+        {submitting ? 'Connecting…' : 'Connect Bluesky'}
       </button>
     </form>
   )
@@ -293,22 +444,19 @@ function BlueskyForm({ onSuccess }: { onSuccess: () => void }) {
 export default function AccountsPage() {
   const { orgId } = useOrg()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [accounts, setAccounts] = useState<SocialAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
-  const [successPlatform, setSuccessPlatform] = useState<string | null>(null)
 
-  /* Show success banner from OAuth redirect */
-  useEffect(() => {
-    if (searchParams.get('status') === 'success' && searchParams.get('platform')) {
-      setSuccessPlatform(searchParams.get('platform'))
-    }
-  }, [searchParams])
+  const pickerNonce = searchParams.get('picker')
+  const pickerPlatform = searchParams.get('platform') ?? ''
 
   const fetchAccounts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/v1/social/accounts${orgId ? `?orgId=${orgId}` : ''}`)
+      const qs = orgId ? `?orgId=${orgId}` : ''
+      const res = await fetch(`/api/v1/social/accounts${qs}`)
       const body = await res.json()
       setAccounts(body.data ?? [])
     } catch {
@@ -318,9 +466,7 @@ export default function AccountsPage() {
     }
   }, [orgId])
 
-  useEffect(() => {
-    fetchAccounts()
-  }, [fetchAccounts])
+  useEffect(() => { fetchAccounts() }, [fetchAccounts])
 
   async function handleDisconnect(id: string) {
     if (!confirm('Disconnect this account? You can reconnect later.')) return
@@ -331,103 +477,115 @@ export default function AccountsPage() {
       if (!res.ok) throw new Error(`Failed (${res.status})`)
       await fetchAccounts()
     } catch {
-      // Silently fail — account will remain in list
+      // silently keep account in list
     } finally {
       setDisconnectingId(null)
     }
   }
 
-  async function handleRefresh(id: string) {
+  async function handleSetDefault(id: string) {
     try {
-      await fetch(`/api/v1/social/accounts/${id}/refresh`, { method: 'POST' })
+      const qs = orgId ? `?orgId=${orgId}` : ''
+      await fetch(`/api/v1/social/accounts/${id}/set-default${qs}`, { method: 'PUT' })
       await fetchAccounts()
-    } catch {
-      // Silently fail — refresh endpoint may not exist yet
-    }
+    } catch { /* silently fail */ }
   }
 
-  const activeAccounts = accounts.filter((a) => a.status !== 'disconnected')
-  /* Compute which platforms are not yet connected */
-  const connectedPlatformIds = new Set(activeAccounts.map((a) => a.platform))
-  const unconnectedOAuth = PLATFORMS.filter((p) => p.oauth && !connectedPlatformIds.has(p.id))
-  const showBlueskyForm = !connectedPlatformIds.has('bluesky')
+  function dismissPicker() {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('picker')
+    params.delete('platform')
+    router.replace(`/admin/social/accounts?${params.toString()}`)
+  }
+
+  function handlePickerConfirm() {
+    dismissPicker()
+    fetchAccounts()
+  }
+
+  const activeAccounts = accounts.filter(a => a.status !== 'disconnected')
+  const grouped = activeAccounts.reduce<Record<string, SocialAccount[]>>((acc, a) => {
+    if (!acc[a.platform]) acc[a.platform] = []
+    acc[a.platform].push(a)
+    return acc
+  }, {})
+
+  const connectedPlatforms = new Set(activeAccounts.map(a => a.platform))
+  const unconnectedOAuth = OAUTH_PLATFORMS.filter(p => !connectedPlatforms.has(p))
+  const showBlueskyForm = !connectedPlatforms.has('bluesky')
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8">
-      {/* Header */}
+      {pickerNonce && (
+        <PickerModal
+          nonce={pickerNonce}
+          platform={pickerPlatform}
+          orgId={orgId ?? ''}
+          onConfirm={handlePickerConfirm}
+          onSkip={dismissPicker}
+        />
+      )}
+
       <div>
         <h1 className="text-2xl font-semibold text-on-surface">Social Accounts</h1>
         <p className="text-sm text-on-surface-variant mt-1">
-          Connect and manage your social media accounts
+          Connect and manage your social media accounts. Click ☆ on any account to set it as the agent default.
         </p>
       </div>
 
-      {/* Success banner */}
-      {successPlatform && (
-        <SuccessBanner platform={successPlatform} onDismiss={() => setSuccessPlatform(null)} />
-      )}
-
-      {/* Connected Accounts */}
       <div>
         <h2 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-3">
           Connected Accounts
         </h2>
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-36 rounded-xl bg-surface-container animate-pulse" />
+          <div className="space-y-3">
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="h-24 rounded-xl bg-surface-container animate-pulse" />
             ))}
           </div>
-        ) : activeAccounts.length === 0 ? (
+        ) : Object.keys(grouped).length === 0 ? (
           <div className="rounded-xl bg-surface-container p-8 text-center">
             <p className="text-sm text-on-surface-variant">No accounts connected yet.</p>
-            <p className="text-xs text-on-surface-variant/60 mt-1">
-              Use the buttons below to connect your first account.
-            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {activeAccounts.map((account) => (
-              <AccountCard
-                key={account.id}
-                account={account}
+          <div className="space-y-3">
+            {Object.entries(grouped).map(([platform, accs]) => (
+              <PlatformCard
+                key={platform}
+                platform={platform}
+                accounts={accs}
+                orgId={orgId ?? ''}
                 onDisconnect={handleDisconnect}
-                onRefresh={handleRefresh}
-                disconnecting={disconnectingId === account.id}
+                onSetDefault={handleSetDefault}
+                disconnectingId={disconnectingId}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* Connect New Accounts */}
       {(unconnectedOAuth.length > 0 || showBlueskyForm) && (
         <div>
           <h2 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-3">
             Connect New Account
           </h2>
-
-          {/* OAuth platforms */}
           {unconnectedOAuth.length > 0 && (
             <div className="flex gap-3 flex-wrap mb-4">
-              {unconnectedOAuth.map((p) => (
+              {unconnectedOAuth.map(p => (
                 <a
-                  key={p.id}
-                  href={`/api/v1/social/oauth/${p.id}?redirectUrl=/admin/social/accounts${orgId ? `&orgId=${orgId}` : ''}`}
+                  key={p}
+                  href={`/api/v1/social/oauth/${p}?redirectUrl=/admin/social/accounts${orgId ? `&orgId=${orgId}` : ''}`}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-black font-label text-sm font-medium hover:bg-white/90 transition-colors"
                 >
-                  <span className={`${p.color} text-white w-6 h-6 flex items-center justify-center rounded`}>
-                    {PLATFORM_ICONS[p.id]?.icon}
+                  <span className={`${PLATFORM_ICONS[p]?.color ?? 'bg-gray-600'} text-white w-6 h-6 flex items-center justify-center rounded`}>
+                    {PLATFORM_ICONS[p]?.icon}
                   </span>
-                  Connect {p.label}
+                  Connect {PLATFORM_LABELS[p] ?? p}
                 </a>
               ))}
             </div>
           )}
-
-          {/* Bluesky inline form */}
-          {showBlueskyForm && <BlueskyForm onSuccess={fetchAccounts} />}
-
+          {showBlueskyForm && <BlueskyForm onSuccess={fetchAccounts} orgId={orgId ?? ''} />}
         </div>
       )}
     </div>
