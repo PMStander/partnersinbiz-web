@@ -40,7 +40,7 @@ export function getOAuthConfig(platform: SocialPlatformType): OAuthConfig | null
         platform: 'instagram',
         authUrl: 'https://www.instagram.com/oauth/authorize',
         tokenUrl: 'https://api.instagram.com/oauth/access_token',
-        scopes: ['instagram_business_basic', 'instagram_business_content_publish', 'instagram_business_manage_comments'],
+        scopes: ['instagram_business_basic', 'instagram_business_manage_messages', 'instagram_business_manage_comments', 'instagram_business_content_publish', 'instagram_business_manage_insights'],
       }
     case 'linkedin':
       return {

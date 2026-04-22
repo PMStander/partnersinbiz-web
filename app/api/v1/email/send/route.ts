@@ -38,7 +38,15 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
   if (!subject?.trim()) return apiError('subject is required')
   if (!bodyText?.trim() && !bodyHtml?.trim()) return apiError('bodyText or bodyHtml is required')
 
-  const finalBodyHtml = bodyHtml?.trim() || plainTextToHtml(bodyText)
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://partnersinbiz.online'
+  const unsubscribeUrl = contactId ? `${BASE_URL}/api/unsubscribe?token=${contactId}` : undefined
+
+  const unsubscribeFooter = unsubscribeUrl
+    ? `<p style="font-size:11px;color:#666;text-align:center;margin-top:24px;">Don't want these emails? <a href="${unsubscribeUrl}" style="color:#888;">Unsubscribe</a></p>`
+    : ''
+
+  const rawHtml = bodyHtml?.trim() || plainTextToHtml(bodyText)
+  const finalBodyHtml = unsubscribeFooter ? rawHtml + unsubscribeFooter : rawHtml
   const finalBodyText = bodyText?.trim() || htmlToPlainText(bodyHtml)
 
   // 1. Create draft doc first so we have an id for the activity log

@@ -1,6 +1,11 @@
 // lib/email/templates.ts
 
-function baseTemplate(title: string, content: string): string {
+function unsubscribeFooter(url?: string): string {
+  if (!url) return ''
+  return `<p style="font-size:11px;color:#666;text-align:center;margin-top:24px;">Don't want these emails? <a href="${url}" style="color:#888;">Unsubscribe</a></p>`
+}
+
+function baseTemplate(title: string, content: string, unsubscribeUrl?: string): string {
   return `
     <!DOCTYPE html>
     <html>
@@ -17,13 +22,14 @@ function baseTemplate(title: string, content: string): string {
         <div style="text-align:center; margin-top:24px;">
           <span style="color:rgba(255,255,255,0.3); font-size:12px;">partnersinbiz.online</span>
         </div>
+        ${unsubscribeFooter(unsubscribeUrl)}
       </div>
     </body>
     </html>
   `
 }
 
-export function approvalNeededEmail(postContent: string, orgName: string, portalUrl: string): string {
+export function approvalNeededEmail(postContent: string, orgName: string, portalUrl: string, unsubscribeUrl?: string): string {
   return baseTemplate(
     'Social post ready for your review',
     `<p style="color:rgba(255,255,255,0.6); font-size:14px; line-height:1.6; margin:0 0 16px 0;">
@@ -34,11 +40,12 @@ export function approvalNeededEmail(postContent: string, orgName: string, portal
     </div>
     <a href="${portalUrl}" style="display:inline-block; background:#F59E0B; color:#1A1A1A; padding:10px 20px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600;">
       Review & Approve
-    </a>`
+    </a>`,
+    unsubscribeUrl
   )
 }
 
-export function newCommentEmail(commentText: string, commenterName: string, context: string, viewUrl: string): string {
+export function newCommentEmail(commentText: string, commenterName: string, context: string, viewUrl: string, unsubscribeUrl?: string): string {
   // context is like "on task 'Fix homepage bug'" or "on social post for ClientName"
   return baseTemplate(
     `New comment ${context}`,
@@ -50,11 +57,12 @@ export function newCommentEmail(commentText: string, commenterName: string, cont
     </div>
     <a href="${viewUrl}" style="display:inline-block; background:#F59E0B; color:#1A1A1A; padding:10px 20px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600;">
       View & Reply
-    </a>`
+    </a>`,
+    unsubscribeUrl
   )
 }
 
-export function invoiceSentEmail(invoiceNumber: string, total: string, dueDate: string, orgName: string, viewUrl: string): string {
+export function invoiceSentEmail(invoiceNumber: string, total: string, dueDate: string, orgName: string, viewUrl: string, unsubscribeUrl?: string): string {
   return baseTemplate(
     `Invoice ${invoiceNumber}`,
     `<p style="color:rgba(255,255,255,0.6); font-size:14px; line-height:1.6; margin:0 0 16px 0;">
@@ -67,6 +75,7 @@ export function invoiceSentEmail(invoiceNumber: string, total: string, dueDate: 
     </table>
     <a href="${viewUrl}" style="display:inline-block; background:#F59E0B; color:#1A1A1A; padding:10px 20px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600;">
       View Invoice
-    </a>`
+    </a>`,
+    unsubscribeUrl
   )
 }

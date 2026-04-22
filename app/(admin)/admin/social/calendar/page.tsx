@@ -30,6 +30,15 @@ interface SocialPost {
   createdBy: string
   createdAt: any
   updatedAt: any
+  media?: Array<{
+    id?: string
+    url: string
+    thumbnailUrl?: string
+    type: 'image' | 'video' | 'gif'
+    altText?: string
+    width?: number
+    height?: number
+  }>
 }
 
 /* ------------------------------------------------------------------ */
@@ -208,6 +217,33 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
             <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-1">Content</p>
             <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap">{text}</p>
           </div>
+
+          {/* Media Attachments */}
+          {post.media && post.media.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wide mb-2">Media ({post.media.length})</p>
+              <div className="grid grid-cols-2 gap-2">
+                {post.media.map((m, index) => (
+                  <div key={m.id || index} className="relative group">
+                    <img
+                      src={m.thumbnailUrl || m.url}
+                      alt={m.altText || `Media ${index + 1}`}
+                      className="w-full aspect-square object-cover rounded border border-outline-variant hover:border-accent-v2 transition-colors"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Media';
+                      }}
+                    />
+                    {m.altText && (
+                      <p className="text-[10px] text-on-surface-variant mt-1 line-clamp-2 text-center">{m.altText}</p>
+                    )}
+                    <div className="absolute top-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
+                      {m.type}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {schedDate && (
             <div>

@@ -1,0 +1,82 @@
+<h2>Accounts page — multi-sub-account card</h2>
+<p class="subtitle">One card per platform, listing all connected sub-accounts inside it</p>
+
+<div class="mockup">
+  <div class="mockup-header">/admin/social/accounts — Connected Accounts</div>
+  <div class="mockup-body" style="background:#0f1117;padding:24px;display:flex;flex-direction:column;gap:14px;">
+
+    <!-- LinkedIn card (multi-account) -->
+    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;overflow:hidden;">
+      <!-- Platform header -->
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #1f2237;">
+        <span style="background:#0077b5;color:white;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;">in</span>
+        <span style="color:#f9fafb;font-weight:600;font-size:14px;">LinkedIn</span>
+        <span style="margin-left:auto;color:#6b7280;font-size:11px;">2 accounts connected</span>
+        <button style="background:transparent;border:1px solid #374151;color:#6b7280;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">+ Add account</button>
+      </div>
+      <!-- Sub-accounts -->
+      <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #1a1d27;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#374151;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;font-weight:600;">PS</div>
+        <div style="flex:1;">
+          <div style="color:#f9fafb;font-size:13px;font-weight:500;">Peet Stander</div>
+          <div style="color:#6b7280;font-size:11px;">Personal · @peetstander</div>
+        </div>
+        <span style="background:#1e3a5f;color:#60a5fa;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">PERSONAL</span>
+        <span style="background:#1e2d1e;color:#4b5563;font-size:10px;padding:2px 7px;border-radius:4px;">active</span>
+        <button style="background:transparent;border:none;color:#ef4444;font-size:11px;cursor:pointer;opacity:0.6;">Disconnect</button>
+      </div>
+      <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#1e3a5f;display:flex;align-items:center;justify-content:center;color:#60a5fa;font-size:12px;font-weight:600;">PiB</div>
+        <div style="flex:1;">
+          <div style="color:#f9fafb;font-size:13px;font-weight:500;">Partners in Biz</div>
+          <div style="color:#6b7280;font-size:11px;">Page · @partnersinbiz</div>
+        </div>
+        <span style="background:#1a2e1a;color:#22c55e;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">PAGE</span>
+        <span style="background:#312e81;color:#a5b4fc;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">★ default</span>
+        <button style="background:transparent;border:none;color:#ef4444;font-size:11px;cursor:pointer;opacity:0.6;">Disconnect</button>
+      </div>
+    </div>
+
+    <!-- Facebook card (single — Omni Platform) -->
+    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #1f2237;">
+        <span style="background:#1877f2;color:white;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">f</span>
+        <span style="color:#f9fafb;font-weight:600;font-size:14px;">Facebook</span>
+        <span style="margin-left:auto;color:#6b7280;font-size:11px;">1 account connected</span>
+        <button style="background:transparent;border:1px solid #374151;color:#6b7280;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">+ Add account</button>
+      </div>
+      <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#1e3a5f;display:flex;align-items:center;justify-content:center;color:#60a5fa;font-size:12px;font-weight:600;">OP</div>
+        <div style="flex:1;">
+          <div style="color:#f9fafb;font-size:13px;font-weight:500;">Omni Platform</div>
+          <div style="color:#6b7280;font-size:11px;">Page · @omniplatform</div>
+        </div>
+        <span style="background:#1a2e1a;color:#22c55e;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">PAGE</span>
+        <span style="background:#312e81;color:#a5b4fc;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">★ default</span>
+        <button style="background:transparent;border:none;color:#ef4444;font-size:11px;cursor:pointer;opacity:0.6;">Disconnect</button>
+      </div>
+    </div>
+
+    <!-- X (single account, unchanged) -->
+    <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:12px;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #1f2237;">
+        <span style="background:#000;color:white;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;">𝕏</span>
+        <span style="color:#f9fafb;font-weight:600;font-size:14px;">X (Twitter)</span>
+        <span style="margin-left:auto;color:#6b7280;font-size:11px;">1 account connected</span>
+        <button style="background:transparent;border:1px solid #374151;color:#6b7280;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">+ Add account</button>
+      </div>
+      <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#374151;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px;font-weight:600;">@P</div>
+        <div style="flex:1;">
+          <div style="color:#f9fafb;font-size:13px;font-weight:500;">PeetStander</div>
+          <div style="color:#6b7280;font-size:11px;">@PeetStander</div>
+        </div>
+        <span style="background:#312e81;color:#a5b4fc;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">★ default</span>
+        <button style="background:transparent;border:none;color:#ef4444;font-size:11px;cursor:pointer;opacity:0.6;">Disconnect</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Does this card layout work? Note the "+ Add account" button lets them reconnect OAuth to pick more sub-accounts for the same platform.</p>

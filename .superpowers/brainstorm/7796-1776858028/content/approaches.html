@@ -1,0 +1,40 @@
+<h2>Three approaches to the account picker</h2>
+<p class="subtitle">Pick the one that feels right — trade-offs are below each option</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Pending + Modal on accounts page <span style="font-size:11px;background:#22c55e22;color:#22c55e;padding:2px 7px;border-radius:4px;margin-left:6px;">Recommended</span></h3>
+      <p>OAuth callback saves all available options (pages + personal) to a temporary <code>social_oauth_pending</code> Firestore doc, then redirects to accounts page with <code>?picker=nonce</code>. The accounts page detects this and shows a modal. User picks multiple, one is set as default. Each selection becomes its own <code>social_accounts</code> doc. One card per platform on accounts page, separate entries on compose.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Fits existing architecture perfectly</li><li>No new pages to route</li><li>Each sub-account has its own accountId (compose page just works)</li><li>Account-resolver already handles multiple docs per platform</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Pending doc needs cleanup if user abandons</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Separate picker page</h3>
+      <p>OAuth callback redirects to <code>/admin/social/accounts/pick?token=nonce</code> — a dedicated page showing the options. User picks, submits, then lands on accounts page. Cleaner separation of concerns but adds a new route.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Clean URL-driven flow</li><li>Easy to deep-link or revisit</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Extra page to build and route</li><li>Back button can cause confusion</li><li>More code for essentially the same UI</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Sub-accounts array inside one doc</h3>
+      <p>Store all sub-accounts inside a single <code>social_accounts</code> doc as a <code>subAccounts[]</code> array. Compose page references <code>accountId + subAccountIndex</code>. One doc per platform always.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>Pros</h4><ul><li>Fewest Firestore docs</li><li>Natural grouping by platform</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Breaks existing account-resolver (built around one doc = one account)</li><li>Compose page references become more complex</li><li>Scheduled posts need updating when sub-accounts change</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,77 @@
+<h2>Account picker modal — accounts page</h2>
+<p class="subtitle">Shown automatically when the user returns from LinkedIn or Facebook OAuth. Does this feel right?</p>
+
+<div class="mockup">
+  <div class="mockup-header">/admin/social/accounts — after LinkedIn OAuth</div>
+  <div class="mockup-body" style="background:#0f1117;padding:0;position:relative;min-height:420px;">
+
+    <!-- Blurred background accounts page -->
+    <div style="padding:24px;filter:blur(2px);opacity:0.4;">
+      <div style="color:#9ca3af;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px;">Connected Accounts</div>
+      <div style="background:#1a1d27;border-radius:10px;padding:16px;color:#e5e7eb;font-size:13px;">Omni Platform · Facebook · Active</div>
+    </div>
+
+    <!-- Modal overlay -->
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);border-radius:8px;">
+      <div style="background:#1a1d27;border:1px solid #2d3148;border-radius:14px;width:420px;padding:28px;">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+          <span style="background:#0077b5;color:white;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;">in</span>
+          <span style="color:#f9fafb;font-weight:600;font-size:16px;">Choose LinkedIn accounts to connect</span>
+        </div>
+        <p style="color:#6b7280;font-size:12px;margin-bottom:20px;">Select all you'd like to connect. Mark one as default for agent auto-posting.</p>
+
+        <!-- Options -->
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+
+          <!-- Personal -->
+          <label style="display:flex;align-items:center;gap:12px;background:#111827;border:1px solid #374151;border-radius:10px;padding:14px;cursor:pointer;">
+            <input type="checkbox" checked style="width:16px;height:16px;accent-color:#6366f1;" />
+            <div style="flex:1;">
+              <div style="color:#f9fafb;font-size:13px;font-weight:500;">Peet Stander</div>
+              <div style="color:#6b7280;font-size:11px;">Personal profile · @peetstander</div>
+            </div>
+            <span style="background:#1e3a5f;color:#60a5fa;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;">PERSONAL</span>
+          </label>
+
+          <!-- Org page 1 -->
+          <label style="display:flex;align-items:center;gap:12px;background:#111827;border:2px solid #6366f1;border-radius:10px;padding:14px;cursor:pointer;">
+            <input type="checkbox" checked style="width:16px;height:16px;accent-color:#6366f1;" />
+            <div style="flex:1;">
+              <div style="color:#f9fafb;font-size:13px;font-weight:500;">Partners in Biz</div>
+              <div style="color:#6b7280;font-size:11px;">Company page · @partnersinbiz</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="background:#1a2e1a;color:#22c55e;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;">PAGE</span>
+              <span style="background:#312e81;color:#a5b4fc;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;">★ DEFAULT</span>
+            </div>
+          </label>
+
+          <!-- Org page 2 -->
+          <label style="display:flex;align-items:center;gap:12px;background:#111827;border:1px solid #374151;border-radius:10px;padding:14px;cursor:pointer;opacity:0.7;">
+            <input type="checkbox" style="width:16px;height:16px;accent-color:#6366f1;" />
+            <div style="flex:1;">
+              <div style="color:#f9fafb;font-size:13px;font-weight:500;">Omni Platform</div>
+              <div style="color:#6b7280;font-size:11px;">Company page · @omniplatform</div>
+            </div>
+            <span style="background:#1a2e1a;color:#22c55e;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;">PAGE</span>
+          </label>
+
+        </div>
+
+        <!-- Default hint -->
+        <p style="color:#4b5563;font-size:11px;margin-bottom:16px;">★ Click any selected account to set it as the default for agent auto-posting.</p>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:10px;">
+          <button style="flex:1;background:#6366f1;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">Connect selected (2)</button>
+          <button style="background:transparent;color:#6b7280;border:1px solid #374151;border-radius:8px;padding:10px 16px;font-size:13px;cursor:pointer;">Skip</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Check the preview — does the modal flow feel right? Any changes to layout or labels?</p>
