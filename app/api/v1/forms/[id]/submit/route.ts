@@ -26,7 +26,7 @@ import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 export const dynamic = 'force-dynamic'
 
-type RouteContext = { params: Promise<{ slug: string }> }
+type RouteContext = { params: Promise<{ id: string }> }
 
 function getClientIp(req: NextRequest): string {
   const fwd = req.headers.get('x-forwarded-for')
@@ -128,7 +128,7 @@ export async function POST(
   req: NextRequest,
   context: RouteContext,
 ): Promise<NextResponse> {
-  const { slug } = await context.params
+  const { id: slug } = await context.params
   const { searchParams } = new URL(req.url)
   const orgId = searchParams.get('orgId')
   if (!orgId) return apiError('orgId is required; pass it as ?orgId=', 400)
