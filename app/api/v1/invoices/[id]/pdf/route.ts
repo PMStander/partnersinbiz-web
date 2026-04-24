@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
 import { apiError } from '@/lib/api/response'
 import { generateInvoiceHtml } from '@/lib/invoices/html-generator'
 
@@ -8,14 +7,9 @@ export const dynamic = 'force-dynamic'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
-/**
- * GET /api/v1/invoices/[id]/pdf
- *
- * Returns a printable HTML invoice that can be saved as PDF via browser.
- * Authentication: admin or client role required
- */
-export const GET = withAuth('admin', async (req, user, ctx) => {
-  const { id } = await (ctx as RouteContext).params
+// Public endpoint — anyone with the URL can view/download the invoice PDF
+export async function GET(req: NextRequest, ctx: RouteContext) {
+  const { id } = await ctx.params
 
   try {
     // Fetch invoice document
@@ -55,4 +49,4 @@ export const GET = withAuth('admin', async (req, user, ctx) => {
     console.error('[invoices/pdf] Error:', error)
     return apiError('Failed to generate invoice PDF', 500)
   }
-})
+}
