@@ -1,217 +1,436 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import Image from 'next/image'
+import { SITE, STATS, TECH_STACK } from '@/lib/seo/site'
+import { JsonLd, breadcrumbSchema } from '@/lib/seo/schema'
+import { Reveal } from '@/components/marketing/Reveal'
+import { CountUp } from '@/components/marketing/CountUp'
 
 export const metadata: Metadata = {
-  title: 'About Us | PiB',
-  description: 'Learn about Partners in Biz — our mission, team, and values.',
+  title: 'About — Founder-led software studio in Cape Town',
+  description:
+    'Partners in Biz is a Cape Town–based studio led by Peet Stander. We build websites, web apps, mobile apps, and AI integrations that ship — and keep working.',
+  alternates: { canonical: '/about' },
+  openGraph: {
+    title: 'About Partners in Biz',
+    description:
+      'Founder-led software studio in Cape Town. Boring tooling, brave decisions. EFT-first, no vendor lock-in.',
+    url: `${SITE.url}/about`,
+    type: 'profile',
+    images: ['/images/portrait-1.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'About Partners in Biz',
+    description: 'Founder-led software studio in Cape Town.',
+  },
 }
 
+const MANIFESTO = [
+  {
+    n: '01',
+    title: 'Real code, not stubs.',
+    body:
+      'No "we\'ll fix it in v2." Every commit is production-grade from day one. If a feature is in the scope, it works in the scope — typed, tested, and live on a Vercel preview before you see it.',
+  },
+  {
+    n: '02',
+    title: 'Yours, not ours.',
+    body:
+      'Your GitHub, your Vercel, your Firebase, your domains. We don\'t white-label our infrastructure or rent you back your own product. The day after launch, you can fire us and nothing breaks.',
+  },
+  {
+    n: '03',
+    title: 'EFT-first.',
+    body:
+      'South African banking works. We invoice in ZAR, accept EFT as the default, and only reach for PayPal or international cards when the client is offshore. We don\'t add a 3% card-processing tax to local invoices.',
+  },
+  {
+    n: '04',
+    title: 'Boring tooling, brave decisions.',
+    body:
+      'Next.js, Tailwind, Postgres, Firebase. Tools that will still be supported in five years. Then we go big on the things that actually matter — AI integrations, novel UX, real product strategy.',
+  },
+  {
+    n: '05',
+    title: 'The same person from quote to launch.',
+    body:
+      'No bait-and-switch from a sales lead to a junior dev. The person who scopes the work writes the code, sends the invoice, and answers the WhatsApp. There is no "account team" because there is no account team.',
+  },
+] as const
+
+const BTS = [
+  { src: '/images/team-marcus.png', label: 'Writing the brief', caption: 'Week 0 — discovery and scope' },
+  { src: '/images/team-julian.png', label: 'Design review', caption: 'Figma, in-context, with you' },
+  { src: '/images/team-elena.png', label: 'Deploying', caption: 'Preview URLs for every PR' },
+  { src: '/images/portrait-2.png', label: 'Launch day', caption: 'DNS, analytics, monitoring — live' },
+] as const
+
+const ENGAGEMENTS = [
+  {
+    name: 'Project',
+    blurb: 'Fixed scope, fixed price, fixed launch date.',
+    body:
+      'You know what you need built. We scope it, ship it, and hand it over. EFT 50/50 — half on signature, half on launch. Most engagements: 4–12 weeks.',
+    badge: 'From R35k',
+  },
+  {
+    name: 'Retainer',
+    blurb: 'Ongoing engineering on tap.',
+    body:
+      'For teams who already shipped v1 and need someone to keep shipping. Monthly retainer covering hosting, monitoring, and 8–20 hours of dev work. Cancel any month.',
+    badge: 'From R15k/mo',
+  },
+  {
+    name: 'Advisory',
+    blurb: 'For when you have a team but need a brain.',
+    body:
+      'Architecture review, AI feature design, hiring loops, vendor selection. Hourly or per-engagement. We slot in alongside your existing team without owning the codebase.',
+    badge: 'From R950/hr',
+  },
+] as const
+
 export default function AboutPage() {
+  const breadcrumbs = breadcrumbSchema([
+    { name: 'Home', url: '/' },
+    { name: 'About', url: '/about' },
+  ])
+
   return (
-    <main>
-      {/* Hero Section */}
-      <header className="relative min-h-screen flex flex-col justify-center px-8 md:px-16 pt-32 pb-20 overflow-hidden">
-        {/* Abstract background elements */}
-        <div className="absolute top-1/4 -right-1/4 w-96 h-96 bg-white/5 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-1/4 -left-1/4 w-64 h-64 bg-white/10 rounded-full blur-[100px]"></div>
-        <div className="max-w-6xl relative z-10">
-          <p className="font-label text-[0.6875rem] uppercase tracking-widest text-white/40 mb-6">Introduction</p>
-          <h1 className="font-headline text-6xl md:text-[6.5rem] leading-[0.9] font-bold tracking-tighter mb-10">
-            THE ARCHITECTS OF<br />PERFORMANCE
-          </h1>
-          <p className="font-body text-xl md:text-2xl text-white/60 max-w-2xl font-light leading-relaxed">
-            We engineer digital ecosystems for the next generation of industry leaders. Driven by precision, powered by innovation.
-          </p>
-        </div>
-      </header>
+    <main className="bg-[var(--color-pib-bg)] text-[var(--color-pib-text)]">
+      <JsonLd data={breadcrumbs} />
 
-      {/* Mission & Values */}
-      <section className="px-8 md:px-16 py-24 md:py-48">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-12">
-          <div className="md:col-span-4">
-            <p className="font-label text-[0.6875rem] uppercase tracking-widest text-white/40 mb-4">The Foundation</p>
-            <h2 className="font-headline text-4xl font-bold tracking-tight">Our Identity</h2>
+      {/* HERO */}
+      <section className="relative pt-32 md:pt-44 pb-20 md:pb-28 overflow-hidden">
+        <div className="absolute inset-0 pib-mesh pointer-events-none" aria-hidden />
+        <div className="absolute inset-0 pib-grid-bg pointer-events-none opacity-60" aria-hidden />
+        <div className="container-pib relative">
+          <Reveal>
+            <p className="eyebrow mb-6">About — est. {SITE.founded}</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h1 className="h-display text-balance max-w-5xl">
+              We build software the way it should be built. Boring, on-time, and yours.
+            </h1>
+          </Reveal>
+          <Reveal delay={160}>
+            <p className="mt-8 text-lg md:text-xl text-[var(--color-pib-text-muted)] max-w-2xl text-pretty leading-relaxed">
+              Partners in Biz is a Cape Town–based studio led by Peet Stander. We make websites,
+              web apps, mobile apps, and AI integrations that ship — and keep working.
+            </p>
+          </Reveal>
+          <Reveal delay={240}>
+            <div className="mt-10 flex flex-wrap items-center gap-3">
+              <Link href="/work" className="btn-pib-primary">
+                See the work
+                <span className="material-symbols-outlined text-base">arrow_outward</span>
+              </Link>
+              <Link href="/start-a-project" className="btn-pib-secondary">
+                Start a project
+              </Link>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* FOUNDER */}
+      <section id="founder" className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16">
+          <div className="lg:col-span-5">
+            <Reveal>
+              <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[20px] border border-[var(--color-pib-line)] bg-[var(--color-pib-surface)]">
+                <Image
+                  src="/images/portrait-1.png"
+                  alt="Peet Stander, Founder of Partners in Biz"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 40vw"
+                  className="object-cover grayscale-[15%]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between">
+                  <div>
+                    <p className="font-display text-2xl leading-none">{SITE.founder.name}</p>
+                    <p className="eyebrow mt-2">{SITE.founder.role}</p>
+                  </div>
+                  <span className="pill pill-accent">Cape Town</span>
+                </div>
+              </div>
+            </Reveal>
           </div>
-          <div className="md:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="glass-card p-8 rounded-2xl flex flex-col h-full">
-              <span className="material-symbols-outlined text-3xl mb-12 opacity-80">target</span>
-              <h3 className="font-headline text-xl font-bold mb-4 uppercase">Precision</h3>
-              <p className="font-body text-sm text-white/50 leading-relaxed">Absolute clarity in execution. We believe that marginal gains in engineering lead to exponential results in performance.</p>
-            </div>
-            <div className="glass-card p-8 rounded-2xl flex flex-col h-full">
-              <span className="material-symbols-outlined text-3xl mb-12 opacity-80">lightbulb</span>
-              <h3 className="font-headline text-xl font-bold mb-4 uppercase">Innovation</h3>
-              <p className="font-body text-sm text-white/50 leading-relaxed">Constant iteration of the status quo. We don&apos;t just use technology; we redefine its application for complex problems.</p>
-            </div>
-            <div className="glass-card p-8 rounded-2xl flex flex-col h-full">
-              <span className="material-symbols-outlined text-3xl mb-12 opacity-80">rocket_launch</span>
-              <h3 className="font-headline text-xl font-bold mb-4 uppercase">Boundary-pushing</h3>
-              <p className="font-body text-sm text-white/50 leading-relaxed">The &apos;P-i-B&apos; philosophy. We operate at the absolute edge of what&apos;s possible, ensuring our partners are always ahead.</p>
+
+          <div className="lg:col-span-7">
+            <Reveal delay={80}>
+              <p className="eyebrow mb-5">A note from the founder</p>
+            </Reveal>
+            <Reveal delay={120}>
+              <h2 className="h-display text-balance">
+                I started this so I could send the invoice and answer the WhatsApp.
+              </h2>
+            </Reveal>
+
+            <div className="mt-10 space-y-7 text-lg leading-relaxed text-[var(--color-pib-text-muted)] text-pretty max-w-2xl">
+              <Reveal delay={160}>
+                <p>
+                  I started Partners in Biz because most agency engagements I&apos;d seen were
+                  either too expensive, too slow, or too detached from the actual business
+                  outcome. Three-month discovery phases. Junior devs with a senior price tag.
+                  Status decks instead of working software.
+                </p>
+              </Reveal>
+
+              <Reveal delay={200}>
+                <blockquote className="font-display italic text-2xl md:text-3xl leading-snug text-[var(--color-pib-text)] border-l-2 border-[var(--color-pib-accent)] pl-6 my-10">
+                  &ldquo;The promise is simple. I write the code, I send the invoice, I answer
+                  the WhatsApp. The same person, from the first call to the launch announcement.&rdquo;
+                </blockquote>
+              </Reveal>
+
+              <Reveal delay={240}>
+                <p>
+                  We&apos;re built around a deliberate wedge: based in South Africa, working at
+                  a global standard, invoicing EFT-first because local banking works just fine.
+                  No Stripe-tax on local clients, no vendor lock-in, no hand-off from sales to
+                  a stranger.
+                </p>
+              </Reveal>
+
+              <Reveal delay={280}>
+                <p>
+                  The work I take on is the work I can stand behind. If a project isn&apos;t the
+                  right fit — for budget, for timeline, for outcome — I&apos;ll tell you on the
+                  first call and recommend someone better. The goal isn&apos;t to win the brief.
+                  The goal is to ship something that earns its keep.
+                </p>
+              </Reveal>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Expertise (Bento Grid) */}
-      <section className="px-8 md:px-16 py-24 bg-black">
-        <div className="mb-20">
-          <p className="font-label text-[0.6875rem] uppercase tracking-widest text-white/40 mb-4">Core Competencies</p>
-          <h2 className="font-headline text-4xl font-bold tracking-tight">Technical Mastery</h2>
+      {/* MANIFESTO */}
+      <section className="section border-t border-[var(--color-pib-line)] bg-[var(--color-pib-surface)]/30">
+        <div className="container-pib">
+          <div className="max-w-3xl mb-16 md:mb-20">
+            <Reveal>
+              <p className="eyebrow mb-5">What we believe</p>
+            </Reveal>
+            <Reveal delay={80}>
+              <h2 className="h-display text-balance">
+                Five things we won&apos;t compromise on.
+              </h2>
+            </Reveal>
+          </div>
+
+          <ol className="divide-y divide-[var(--color-pib-line)] border-y border-[var(--color-pib-line)]">
+            {MANIFESTO.map((item, i) => (
+              <Reveal key={item.n} delay={i * 60} as="li">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10 py-10 md:py-14">
+                  <div className="md:col-span-2">
+                    <span className="font-display text-5xl md:text-6xl text-[var(--color-pib-accent)] leading-none">
+                      {item.n}
+                    </span>
+                  </div>
+                  <div className="md:col-span-10 max-w-3xl">
+                    <h3 className="font-display text-3xl md:text-4xl leading-tight text-balance">
+                      {item.title}
+                    </h3>
+                    <p className="mt-4 text-lg text-[var(--color-pib-text-muted)] leading-relaxed text-pretty">
+                      {item.body}
+                    </p>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </ol>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 auto-rows-[280px]">
-          <div className="md:col-span-2 md:row-span-2 glass-card rounded-2xl p-10 flex flex-col justify-between group overflow-hidden relative">
-            <div className="relative z-10">
-              <h3 className="font-headline text-3xl font-bold mb-4">Strategic Architecture</h3>
-              <p className="font-body text-white/60 max-w-sm">Designing scalable foundations that support hyper-growth and complex data orchestration.</p>
-            </div>
-            <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-white/[0.02] rounded-full border border-white/10 group-hover:scale-110 transition-transform duration-700"></div>
-            <span className="material-symbols-outlined text-5xl opacity-20 self-end relative z-10">architecture</span>
+      </section>
+
+      {/* STATS BAND */}
+      <section className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib">
+          <div className="max-w-2xl mb-14">
+            <Reveal>
+              <p className="eyebrow mb-5">By the numbers</p>
+            </Reveal>
+            <Reveal delay={80}>
+              <h2 className="h-display text-balance">
+                Small studio. Real receipts.
+              </h2>
+            </Reveal>
           </div>
-          <div className="md:col-span-2 glass-card rounded-2xl p-10 flex items-center justify-between group">
-            <div>
-              <h3 className="font-headline text-2xl font-bold mb-2">High-Fidelity Engineering</h3>
-              <p className="font-body text-sm text-white/60">Crafting code with surgical precision.</p>
-            </div>
-            <span className="material-symbols-outlined text-4xl opacity-40 group-hover:translate-x-2 transition-transform">developer_mode</span>
-          </div>
-          <div className="md:col-span-2 glass-card rounded-2xl p-10 flex items-center justify-between group">
-            <div>
-              <h3 className="font-headline text-2xl font-bold mb-2">AI Optimization</h3>
-              <p className="font-body text-sm text-white/60">Integrating intelligence into every workflow.</p>
-            </div>
-            <span className="material-symbols-outlined text-4xl opacity-40 group-hover:rotate-12 transition-transform">psychology</span>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-[var(--color-pib-line)] border border-[var(--color-pib-line)] rounded-[20px] overflow-hidden">
+            {STATS.map((s, i) => {
+              const num = parseFloat(s.value)
+              const decimals = s.value.includes('.') ? 1 : 0
+              return (
+                <Reveal key={s.label} delay={i * 80}>
+                  <div className="bg-[var(--color-pib-bg)] p-8 md:p-10 h-full flex flex-col justify-between min-h-[180px]">
+                    <span className="font-display text-5xl md:text-6xl tracking-tight text-[var(--color-pib-text)]">
+                      <CountUp to={num} decimals={decimals} suffix={s.suffix} />
+                    </span>
+                    <p className="mt-6 text-sm text-[var(--color-pib-text-muted)] uppercase tracking-wider font-mono">
+                      {s.label}
+                    </p>
+                  </div>
+                </Reveal>
+              )
+            })}
           </div>
         </div>
       </section>
 
-      {/* Timeline Section */}
-      <section className="px-8 md:px-16 py-24 md:py-48 bg-black">
-        <div className="max-w-4xl mx-auto">
-          <p className="font-label text-[0.6875rem] uppercase tracking-widest text-white/40 mb-12 text-center">Evolution</p>
-          <div className="space-y-0 relative">
-            {/* Vertical line indicator */}
-            <div className="absolute left-0 md:left-1/2 top-0 bottom-0 w-[1px] bg-white/10 -translate-x-1/2"></div>
-
-            <div className="relative flex flex-col md:flex-row items-start md:items-center py-16 group">
-              <div className="md:w-1/2 md:pr-24 md:text-right pl-8 md:pl-0">
-                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2010</span>
-                <h4 className="font-headline text-xl font-bold mt-2">The Beginning</h4>
-                <p className="font-body text-sm text-white/40 mt-2">Started coding — driven by a relentless need to build things that actually work at scale.</p>
-              </div>
-              <div className="absolute left-0 md:left-1/2 w-3 h-3 rounded-full bg-white -translate-x-1/2 z-10 border-4 border-black"></div>
+      {/* TECH WE TRUST */}
+      <section className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-start">
+            <div className="lg:col-span-5">
+              <Reveal>
+                <p className="eyebrow mb-5">Tech we trust</p>
+              </Reveal>
+              <Reveal delay={80}>
+                <h2 className="h-display text-balance">
+                  Boring tools. Battle-tested.
+                </h2>
+              </Reveal>
+              <Reveal delay={160}>
+                <p className="mt-6 text-lg text-[var(--color-pib-text-muted)] leading-relaxed text-pretty max-w-md">
+                  We pick stacks for what they look like in five years, not what&apos;s on Hacker
+                  News this week. Then we go brave on the parts that actually move the needle.
+                </p>
+              </Reveal>
             </div>
-
-            <div className="relative flex flex-col md:flex-row-reverse items-start md:items-center py-16 group">
-              <div className="md:w-1/2 md:pl-24 pl-8">
-                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2015</span>
-                <h4 className="font-headline text-xl font-bold mt-2">Going Deep</h4>
-                <p className="font-body text-sm text-white/40 mt-2">Mastered full-stack engineering across multiple industries — from fintech to SaaS to consumer platforms.</p>
-              </div>
-              <div className="absolute left-0 md:left-1/2 w-3 h-3 rounded-full bg-white -translate-x-1/2 z-10 border-4 border-black"></div>
-            </div>
-
-            <div className="relative flex flex-col md:flex-row items-start md:items-center py-16 group">
-              <div className="md:w-1/2 md:pr-24 md:text-right pl-8 md:pl-0">
-                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2022</span>
-                <h4 className="font-headline text-xl font-bold mt-2">AI&#8209;Native</h4>
-                <p className="font-body text-sm text-white/40 mt-2">Early adopter of AI-integrated development — rebuilt the entire engineering workflow around intelligent automation.</p>
-              </div>
-              <div className="absolute left-0 md:left-1/2 w-3 h-3 rounded-full bg-white -translate-x-1/2 z-10 border-4 border-black"></div>
-            </div>
-
-            <div className="relative flex flex-col md:flex-row-reverse items-start md:items-center py-16 group">
-              <div className="md:w-1/2 md:pl-24 pl-8">
-                <span className="font-headline text-4xl font-bold text-white/20 group-hover:text-white transition-colors duration-500">2026</span>
-                <h4 className="font-headline text-xl font-bold mt-2">Partners in Biz</h4>
-                <p className="font-body text-sm text-white/40 mt-2">Launched PiB to bring senior-level engineering directly to ambitious brands — without the agency overhead.</p>
-              </div>
-              <div className="absolute left-0 md:left-1/2 w-3 h-3 rounded-full bg-white -translate-x-1/2 z-10 border-4 border-black shadow-[0_0_15px_rgba(255,255,255,0.5)]"></div>
+            <div className="lg:col-span-7">
+              <Reveal delay={120}>
+                <div className="flex flex-wrap gap-2.5">
+                  {TECH_STACK.map((tech) => (
+                    <span key={tech} className="pill text-sm px-4 py-2">
+                      {tech}
+                    </span>
+                  ))}
+                </div>
+              </Reveal>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Capabilities */}
-      <section className="px-8 md:px-16 py-24 md:py-48 overflow-hidden">
-        <div className="flex flex-col md:flex-row justify-between items-end mb-20 gap-8">
-          <div className="max-w-xl">
-            <p className="font-label text-[0.6875rem] uppercase tracking-widest text-white/40 mb-4">Capabilities</p>
-            <h2 className="font-headline text-6xl font-bold tracking-tighter">OUR DNA</h2>
+      {/* BEHIND THE SCENES */}
+      <section className="section border-t border-[var(--color-pib-line)] bg-[var(--color-pib-surface)]/30">
+        <div className="container-pib">
+          <div className="max-w-3xl mb-14">
+            <Reveal>
+              <p className="eyebrow mb-5">How we work</p>
+            </Reveal>
+            <Reveal delay={80}>
+              <h2 className="h-display text-balance">
+                Behind the scenes, every week.
+              </h2>
+            </Reveal>
+            <Reveal delay={160}>
+              <p className="mt-6 text-lg text-[var(--color-pib-text-muted)] leading-relaxed text-pretty">
+                No black box. You get a Linear board you can read, Vercel preview URLs for every
+                pull request, a Loom video every week, and a WhatsApp channel for the things
+                that don&apos;t need a meeting.
+              </p>
+            </Reveal>
           </div>
-          <p className="font-body text-white/50 max-w-sm mb-2">Four disciplines, one standard — every engagement draws on the full depth of what we do.</p>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+            {BTS.map((tile, i) => (
+              <Reveal key={tile.label} delay={i * 80}>
+                <figure className="group">
+                  <div className="relative aspect-[4/5] overflow-hidden rounded-[16px] border border-[var(--color-pib-line)] bg-[var(--color-pib-surface)]">
+                    <Image
+                      src={tile.src}
+                      alt={tile.label}
+                      fill
+                      sizes="(max-width: 768px) 50vw, 25vw"
+                      className="object-cover grayscale group-hover:grayscale-0 transition-all duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <p className="font-display text-xl text-white leading-tight">{tile.label}</p>
+                    </div>
+                  </div>
+                  <figcaption className="mt-3 text-xs uppercase tracking-wider font-mono text-[var(--color-pib-text-muted)]">
+                    {tile.caption}
+                  </figcaption>
+                </figure>
+              </Reveal>
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Strategy */}
-          <div className="aspect-[3/4] rounded-2xl overflow-hidden glass-card relative group">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/3 to-transparent group-hover:from-white/15 transition-all duration-1000" />
-            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-1000"
-              style={{ backgroundImage: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.15) 0%, transparent 60%), radial-gradient(circle at 80% 80%, rgba(255,255,255,0.08) 0%, transparent 50%)' }} />
-            <div className="absolute top-8 left-8 right-8">
-              <span className="font-headline text-7xl font-bold text-white/8 select-none">01</span>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center p-8">
-              <p className="font-headline text-2xl font-bold text-white/70 text-center leading-tight group-hover:text-white/90 transition-colors duration-700">
-                Clarity<br />before<br />commitment.
-              </p>
-            </div>
-            <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
-              <p className="font-headline font-bold text-lg">Strategy</p>
-              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">We map the path before we move</p>
-            </div>
+      </section>
+
+      {/* WORKING TOGETHER */}
+      <section className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib">
+          <div className="max-w-3xl mb-14">
+            <Reveal>
+              <p className="eyebrow mb-5">Working together</p>
+            </Reveal>
+            <Reveal delay={80}>
+              <h2 className="h-display text-balance">
+                Three ways the relationship works.
+              </h2>
+            </Reveal>
           </div>
-          {/* Engineering */}
-          <div className="aspect-[3/4] rounded-2xl overflow-hidden glass-card relative group mt-8">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-white/2 to-transparent group-hover:from-white/13 transition-all duration-1000" />
-            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-1000"
-              style={{ backgroundImage: 'radial-gradient(circle at 70% 30%, rgba(255,255,255,0.12) 0%, transparent 55%), radial-gradient(circle at 20% 75%, rgba(255,255,255,0.1) 0%, transparent 50%)' }} />
-            <div className="absolute top-8 left-8 right-8">
-              <span className="font-headline text-7xl font-bold text-white/8 select-none">02</span>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center p-8">
-              <p className="font-headline text-2xl font-bold text-white/70 text-center leading-tight group-hover:text-white/90 transition-colors duration-700">
-                Systems that<br />outlast<br />the trend.
-              </p>
-            </div>
-            <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
-              <p className="font-headline font-bold text-lg">Engineering</p>
-              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">Built to last, designed to scale</p>
-            </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {ENGAGEMENTS.map((mode, i) => (
+              <Reveal key={mode.name} delay={i * 80}>
+                <div className="bento-card h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-display text-3xl">{mode.name}</h3>
+                    <span className="pill pill-accent">{mode.badge}</span>
+                  </div>
+                  <p className="text-[var(--color-pib-text)] font-medium text-lg leading-snug mb-3">
+                    {mode.blurb}
+                  </p>
+                  <p className="text-[var(--color-pib-text-muted)] leading-relaxed text-pretty">
+                    {mode.body}
+                  </p>
+                  <div className="mt-8 pt-6 border-t border-[var(--color-pib-line)]">
+                    <Link href="/start-a-project" className="pib-link-underline text-sm font-medium">
+                      Start with {mode.name.toLowerCase()} →
+                    </Link>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
           </div>
-          {/* Design */}
-          <div className="aspect-[3/4] rounded-2xl overflow-hidden glass-card relative group">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-white/3 to-transparent group-hover:from-white/15 transition-all duration-1000" />
-            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-1000"
-              style={{ backgroundImage: 'radial-gradient(circle at 50% 25%, rgba(255,255,255,0.15) 0%, transparent 60%), radial-gradient(circle at 85% 70%, rgba(255,255,255,0.07) 0%, transparent 45%)' }} />
-            <div className="absolute top-8 left-8 right-8">
-              <span className="font-headline text-7xl font-bold text-white/8 select-none">03</span>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="section border-t border-[var(--color-pib-line)] relative overflow-hidden">
+        <div className="absolute inset-0 pib-mesh pointer-events-none" aria-hidden />
+        <div className="container-pib relative text-center">
+          <Reveal>
+            <p className="eyebrow mb-6">Last thing</p>
+          </Reveal>
+          <Reveal delay={80}>
+            <h2 className="h-display text-balance max-w-4xl mx-auto">
+              Want to build something together?
+            </h2>
+          </Reveal>
+          <Reveal delay={160}>
+            <p className="mt-6 text-lg text-[var(--color-pib-text-muted)] max-w-xl mx-auto text-pretty">
+              Send a one-paragraph brief. You&apos;ll hear back from me — not an inbox — within
+              one business day.
+            </p>
+          </Reveal>
+          <Reveal delay={240}>
+            <div className="mt-10 flex flex-wrap justify-center items-center gap-3">
+              <Link href="/start-a-project" className="btn-pib-accent">
+                Start a project
+                <span className="material-symbols-outlined text-base">arrow_outward</span>
+              </Link>
+              <Link href={SITE.cal.url} className="btn-pib-secondary">
+                Book a 20-min intro
+              </Link>
             </div>
-            <div className="absolute inset-0 flex items-center justify-center p-8">
-              <p className="font-headline text-2xl font-bold text-white/70 text-center leading-tight group-hover:text-white/90 transition-colors duration-700">
-                Form follows<br />function<br />follows feeling.
-              </p>
-            </div>
-            <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
-              <p className="font-headline font-bold text-lg">Design</p>
-              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">Interfaces that earn trust instantly</p>
-            </div>
-          </div>
-          {/* Growth */}
-          <div className="aspect-[3/4] rounded-2xl overflow-hidden glass-card relative group mt-8">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-white/2 to-transparent group-hover:from-white/13 transition-all duration-1000" />
-            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity duration-1000"
-              style={{ backgroundImage: 'radial-gradient(circle at 25% 40%, rgba(255,255,255,0.12) 0%, transparent 55%), radial-gradient(circle at 75% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)' }} />
-            <div className="absolute top-8 left-8 right-8">
-              <span className="font-headline text-7xl font-bold text-white/8 select-none">04</span>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center p-8">
-              <p className="font-headline text-2xl font-bold text-white/70 text-center leading-tight group-hover:text-white/90 transition-colors duration-700">
-                Earned<br />momentum,<br />not metrics.
-              </p>
-            </div>
-            <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-black/80 to-transparent">
-              <p className="font-headline font-bold text-lg">Growth</p>
-              <p className="font-label text-[0.6rem] uppercase tracking-widest text-white/60">Sustainable traction, not vanity metrics</p>
-            </div>
-          </div>
+          </Reveal>
         </div>
       </section>
     </main>

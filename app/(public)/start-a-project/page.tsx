@@ -1,74 +1,185 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import { SITE, TESTIMONIALS } from '@/lib/seo/site'
+import { JsonLd, breadcrumbSchema } from '@/lib/seo/schema'
+import { Reveal } from '@/components/marketing/Reveal'
 import StartProjectForm from './StartProjectForm'
 
 export const metadata: Metadata = {
-  title: 'Start a Project | PiB',
-  description: "Tell us about your ambition. We'll build the machine to reach it.",
+  title: 'Start a project',
+  description:
+    'Tell us what you are building. Four quick questions, ninety seconds. We reply within one business day.',
+  alternates: { canonical: '/start-a-project' },
+  openGraph: {
+    title: 'Start a project — Partners in Biz',
+    description:
+      'Four quick questions. Ninety seconds. We reply within one business day with a 3-paragraph summary.',
+    url: `${SITE.url}/start-a-project`,
+    type: 'website',
+  },
 }
 
+const NEXT_STEPS = [
+  'We reply within one business day.',
+  'We send a 3-paragraph summary of what we heard.',
+  'We book a 20-min intro call.',
+  'You get a fixed-scope estimate within 3 working days.',
+]
+
+const TRUST = [
+  'EFT, PayPal, international cards',
+  'Reply within 1 business day',
+  'Cape Town–based, working globally',
+  '100% of clients still operating',
+]
+
 export default function StartProjectPage() {
+  const waLink = `https://wa.me/${SITE.whatsapp.replace(/\D/g, '')}`
+  const breadcrumb = breadcrumbSchema([
+    { name: 'Home', url: '/' },
+    { name: 'Start a project', url: '/start-a-project' },
+  ])
+  const contactPoint = {
+    '@context': 'https://schema.org',
+    '@type': 'ContactPoint',
+    contactType: 'sales',
+    email: SITE.email,
+    telephone: SITE.phone,
+    areaServed: ['ZA', 'GB', 'US', 'EU'],
+    availableLanguage: ['English'],
+    url: `${SITE.url}/start-a-project`,
+  }
+  const testimonial = TESTIMONIALS[0]
+
   return (
-    <>
-      {/* Background Video */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute top-1/2 left-1/2 min-w-full min-h-full -translate-x-1/2 -translate-y-1/2 object-cover brightness-[0.25]"
-        >
-          <source
-            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260302_141646_a5156969-0608-4d43-9e34-90f4716d1f32.mp4"
-            type="video/mp4"
-          />
-        </video>
-        <div className="absolute inset-0 bg-black/40" />
-      </div>
+    <main className="relative">
+      <JsonLd data={breadcrumb} />
+      <JsonLd data={contactPoint} />
 
-      <main className="relative z-10 pt-32 pb-24 px-8 md:px-16 min-h-screen flex flex-col items-center">
-        {/* Hero */}
-        <header className="w-full max-w-5xl mb-20 text-center">
-          <div className="inline-block px-3 py-1 mb-6 border border-white/20 rounded-full">
-            <span className="font-label text-[0.6rem] uppercase tracking-[0.3em] text-white/50">
-              Project Inquiry Portal v2.0
-            </span>
-          </div>
-          <h1 className="font-headline text-5xl md:text-8xl font-bold tracking-tighter mb-8 leading-none">
-            Start a Project
-          </h1>
-          <p className="font-body text-xl md:text-2xl text-white/60 max-w-2xl mx-auto font-light leading-relaxed">
-            Tell us about your ambition. We&apos;ll build the machine to reach it.
-          </p>
-        </header>
+      <section className="section relative overflow-hidden">
+        <div className="pib-mesh absolute inset-0 -z-10 opacity-70" />
+        <div className="container-pib">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-start">
+            {/* LEFT — sticky form */}
+            <div className="lg:col-span-7 order-2 lg:order-1">
+              <div className="lg:sticky lg:top-28">
+                <StartProjectForm />
+              </div>
+            </div>
 
-        <StartProjectForm />
+            {/* RIGHT — page content */}
+            <div className="lg:col-span-5 order-1 lg:order-2">
+              <Reveal>
+                <p className="eyebrow mb-6">Start a project</p>
+              </Reveal>
+              <Reveal delay={80}>
+                <h1 className="h-display text-balance" style={{ fontSize: 'clamp(2.5rem, 5vw, 4.5rem)' }}>
+                  Tell us what you&rsquo;re building.
+                </h1>
+              </Reveal>
+              <Reveal delay={160}>
+                <p className="mt-6 text-lg text-[var(--color-pib-text-muted)] text-pretty">
+                  Four quick questions. Ninety seconds. We reply within one business day.
+                </p>
+              </Reveal>
 
-        {/* Bottom info section */}
-        <div className="w-full max-w-4xl mt-24 grid grid-cols-1 md:grid-cols-3 gap-12 px-4">
-          <div className="space-y-4">
-            <span className="material-symbols-outlined text-white/20 text-3xl">precision_manufacturing</span>
-            <h3 className="font-headline text-lg uppercase tracking-tight">Technical Audit</h3>
-            <p className="text-white/40 text-sm leading-relaxed">
-              Every project begins with a deep architectural audit to ensure scalability from day zero.
-            </p>
-          </div>
-          <div className="space-y-4">
-            <span className="material-symbols-outlined text-white/20 text-3xl">speed</span>
-            <h3 className="font-headline text-lg uppercase tracking-tight">Rapid Prototyping</h3>
-            <p className="text-white/40 text-sm leading-relaxed">
-              We bypass the fluff and move straight into functional engineering to validate your core thesis.
-            </p>
-          </div>
-          <div className="space-y-4">
-            <span className="material-symbols-outlined text-white/20 text-3xl">verified</span>
-            <h3 className="font-headline text-lg uppercase tracking-tight">Guaranteed Impact</h3>
-            <p className="text-white/40 text-sm leading-relaxed">
-              Engineered solutions measured by performance metrics, not just aesthetic appeal.
-            </p>
+              {/* What happens next */}
+              <Reveal delay={240}>
+                <div className="mt-10 bento-card p-6">
+                  <p className="eyebrow mb-4">What happens next</p>
+                  <ol className="space-y-3">
+                    {NEXT_STEPS.map((s, i) => (
+                      <li key={s} className="flex gap-3 text-sm text-[var(--color-pib-text)]">
+                        <span className="font-mono text-[var(--color-pib-accent)] shrink-0">
+                          0{i + 1}
+                        </span>
+                        <span className="text-pretty">{s}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </Reveal>
+
+              {/* Prefer something else */}
+              <Reveal delay={320}>
+                <div className="mt-6 bento-card p-6">
+                  <p className="eyebrow mb-4">Prefer something else?</p>
+                  <ul className="space-y-3">
+                    <li>
+                      <a
+                        href={`mailto:${SITE.email}`}
+                        className="flex items-center gap-3 text-sm text-[var(--color-pib-text)] hover:text-[var(--color-pib-accent)] transition"
+                      >
+                        <span className="material-symbols-outlined text-base">mail</span>
+                        {SITE.email}
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        href={waLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-3 text-sm text-[var(--color-pib-text)] hover:text-[var(--color-pib-accent)] transition"
+                      >
+                        <span className="material-symbols-outlined text-base">chat</span>
+                        WhatsApp us
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        href={SITE.cal.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-3 text-sm text-[var(--color-pib-text)] hover:text-[var(--color-pib-accent)] transition"
+                      >
+                        <span className="material-symbols-outlined text-base">event</span>
+                        Book a 20-min call
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+              </Reveal>
+
+              {/* Testimonial */}
+              <Reveal delay={400}>
+                <figure className="mt-6 bento-card p-6">
+                  <span
+                    className="material-symbols-outlined text-[var(--color-pib-accent)] mb-3 block"
+                    style={{ fontSize: '28px' }}
+                  >
+                    format_quote
+                  </span>
+                  <blockquote className="font-display text-xl leading-snug text-[var(--color-pib-text)] text-pretty">
+                    &ldquo;{testimonial.quote}&rdquo;
+                  </blockquote>
+                  <figcaption className="mt-4 text-sm text-[var(--color-pib-text-muted)]">
+                    <span className="text-[var(--color-pib-text)]">{testimonial.author}</span>
+                    {' · '}
+                    {testimonial.role}
+                  </figcaption>
+                </figure>
+              </Reveal>
+
+              {/* Trust band */}
+              <Reveal delay={480}>
+                <ul className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {TRUST.map((t) => (
+                    <li
+                      key={t}
+                      className="flex items-center gap-2 text-xs text-[var(--color-pib-text-muted)]"
+                    >
+                      <span className="material-symbols-outlined text-sm text-[var(--color-pib-accent)]">
+                        check
+                      </span>
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </Reveal>
+            </div>
           </div>
         </div>
-      </main>
-    </>
+      </section>
+    </main>
   )
 }

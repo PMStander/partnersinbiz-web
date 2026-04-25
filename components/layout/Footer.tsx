@@ -1,41 +1,133 @@
 import Link from 'next/link'
+import { SITE, SERVICES } from '@/lib/seo/site'
 
 export default function Footer() {
   return (
-    <footer className="relative z-10 bg-black w-full py-20 border-t border-white/[0.1] font-body text-sm tracking-wide">
-      <div className="max-w-7xl mx-auto px-8 md:px-16 grid grid-cols-1 md:grid-cols-4 gap-12">
-        <div className="col-span-1 md:col-span-2">
-          <div className="text-2xl font-bold tracking-tighter text-white font-headline mb-6">PiB</div>
-          <p className="text-white/40 max-w-xs mb-8">
-            Partners in Biz. Engineering digital dominance for the next generation of industry leaders.
-          </p>
-          <div className="flex gap-6">
-            <a href="#" className="text-white/40 hover:text-white transition-opacity">Twitter</a>
-            <a href="#" className="text-white/40 hover:text-white transition-opacity">LinkedIn</a>
-            <a href="#" className="text-white/40 hover:text-white transition-opacity">Instagram</a>
+    <footer className="relative border-t border-[var(--color-pib-line)] mt-32" aria-labelledby="footer-heading">
+      <h2 id="footer-heading" className="sr-only">Footer</h2>
+
+      {/* Big editorial CTA band */}
+      <section className="relative overflow-hidden border-b border-[var(--color-pib-line)]">
+        <div className="absolute inset-0 pib-mesh pointer-events-none" />
+        <div className="container-pib relative py-24 md:py-36 text-center">
+          <p className="eyebrow mb-8">Ready when you are</p>
+          <h3 className="h-display text-balance max-w-4xl mx-auto">
+            Let&rsquo;s build something <em className="text-[var(--color-pib-accent)] not-italic">your competitors will copy.</em>
+          </h3>
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
+            <Link href="/start-a-project" className="btn-pib-accent">
+              Start a project
+              <span className="material-symbols-outlined text-base">arrow_outward</span>
+            </Link>
+            <a
+              href={SITE.cal.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-pib-secondary"
+            >
+              Book a 20-min intro
+              <span className="material-symbols-outlined text-base">calendar_month</span>
+            </a>
+          </div>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm text-[var(--color-pib-text-muted)]">
+            <a href={`mailto:${SITE.email}`} className="hover:text-[var(--color-pib-text)] transition-colors flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">mail</span>
+              {SITE.email}
+            </a>
+            <a
+              href={`https://wa.me/${SITE.whatsapp.replace(/\D/g, '')}`}
+              className="hover:text-[var(--color-pib-text)] transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-base">chat</span>
+              WhatsApp
+            </a>
           </div>
         </div>
-        <div>
-          <h5 className="text-white font-bold mb-6">Company</h5>
-          <ul className="space-y-4">
-            <li><Link href="/our-process" className="text-white/40 hover:text-white transition-opacity">Services</Link></li>
-            <li><Link href="/discover" className="text-white/40 hover:text-white transition-opacity">Work</Link></li>
-            <li><Link href="/products" className="text-white/40 hover:text-white transition-opacity">Products</Link></li>
-            <li><Link href="/about" className="text-white/40 hover:text-white transition-opacity">About</Link></li>
-            <li><a href="#" className="text-white/40 hover:text-white transition-opacity">Careers</a></li>
-          </ul>
+      </section>
+
+      <div className="container-pib py-16">
+        <div className="grid grid-cols-2 md:grid-cols-12 gap-8 md:gap-10">
+          <div className="col-span-2 md:col-span-4">
+            <Link href="/" className="flex items-center gap-2.5 mb-5">
+              <span className="grid place-items-center w-8 h-8 rounded-lg bg-[var(--color-pib-text)] text-black font-bold text-sm font-mono">P</span>
+              <span className="font-display text-xl">Partners <span className="text-[var(--color-pib-text-muted)]">in</span> Biz</span>
+            </Link>
+            <p className="text-sm text-[var(--color-pib-text-muted)] max-w-xs leading-relaxed">
+              {SITE.description}
+            </p>
+            <address className="not-italic mt-6 text-sm text-[var(--color-pib-text-muted)] space-y-1">
+              <div>{SITE.address.addressLocality}, {SITE.address.addressRegion}</div>
+              <div>{SITE.address.addressCountry}</div>
+            </address>
+          </div>
+
+          <div className="md:col-span-2">
+            <h4 className="eyebrow mb-5">Services</h4>
+            <ul className="space-y-3 text-sm">
+              {SERVICES.map((s) => (
+                <li key={s.slug}>
+                  <Link href={`/services/${s.slug}`} className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">
+                    {s.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="md:col-span-2">
+            <h4 className="eyebrow mb-5">Studio</h4>
+            <ul className="space-y-3 text-sm">
+              <li><Link href="/work" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">Work</Link></li>
+              <li><Link href="/about" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">About</Link></li>
+              <li><Link href="/our-process" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">Process</Link></li>
+              <li><Link href="/insights" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">Insights</Link></li>
+              <li><Link href="/pricing" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">Pricing</Link></li>
+              <li><Link href="/products" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">Products</Link></li>
+            </ul>
+          </div>
+
+          <div className="md:col-span-2">
+            <h4 className="eyebrow mb-5">Connect</h4>
+            <ul className="space-y-3 text-sm">
+              <li><a href={SITE.social.linkedin} target="_blank" rel="noopener noreferrer" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">LinkedIn</a></li>
+              <li><a href={SITE.social.twitter} target="_blank" rel="noopener noreferrer" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">X / Twitter</a></li>
+              <li><a href={SITE.social.github} target="_blank" rel="noopener noreferrer" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">GitHub</a></li>
+              <li><a href={SITE.social.instagram} target="_blank" rel="noopener noreferrer" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">Instagram</a></li>
+            </ul>
+          </div>
+
+          <div className="col-span-2 md:col-span-2">
+            <h4 className="eyebrow mb-5">Newsletter</h4>
+            <p className="text-sm text-[var(--color-pib-text-muted)] mb-3">Build notes, case studies, and the occasional opinion. Monthly.</p>
+            <form action="/api/newsletter" method="post" className="flex gap-2">
+              <label htmlFor="footer-email" className="sr-only">Email address</label>
+              <input
+                id="footer-email"
+                type="email"
+                name="email"
+                required
+                placeholder="you@company.com"
+                className="flex-1 min-w-0 bg-transparent border border-[var(--color-pib-line-strong)] rounded-full px-4 py-2 text-sm focus:outline-none focus:border-[var(--color-pib-accent)]"
+              />
+              <button type="submit" className="rounded-full bg-[var(--color-pib-text)] text-black px-3 py-2 text-sm font-medium hover:bg-[var(--color-pib-accent)] transition-colors">
+                <span className="material-symbols-outlined text-base">arrow_forward</span>
+              </button>
+            </form>
+          </div>
         </div>
-        <div>
-          <h5 className="text-white font-bold mb-6">Support</h5>
-          <ul className="space-y-4">
-            <li><Link href="/start-a-project" className="text-white/40 hover:text-white transition-opacity">Contact</Link></li>
-            <li><Link href="/privacy-policy" className="text-white/40 hover:text-white transition-opacity">Privacy Policy</Link></li>
-            <li><Link href="/terms-of-service" className="text-white/40 hover:text-white transition-opacity">Terms of Service</Link></li>
-          </ul>
+
+        <div className="mt-16 pt-8 hairline flex flex-col md:flex-row gap-4 md:items-center md:justify-between text-xs text-[var(--color-pib-text-faint)]">
+          <p className="font-mono">
+            © {new Date().getFullYear()} Partners in Biz · All rights reserved.
+          </p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <Link href="/privacy-policy" className="hover:text-[var(--color-pib-text-muted)] transition-colors">Privacy</Link>
+            <Link href="/terms-of-service" className="hover:text-[var(--color-pib-text-muted)] transition-colors">Terms</Link>
+            <Link href="/llms.txt" className="hover:text-[var(--color-pib-text-muted)] transition-colors">llms.txt</Link>
+            <Link href="/sitemap.xml" className="hover:text-[var(--color-pib-text-muted)] transition-colors">Sitemap</Link>
+            <span className="font-mono">v2026.04 · Made in Cape Town</span>
+          </div>
         </div>
-      </div>
-      <div className="max-w-7xl mx-auto px-8 md:px-16 mt-20 pt-8 border-t border-white/[0.05]">
-        <p className="text-white/20 text-xs">© 2026 Partners in Biz. Digital Excellence Engineered.</p>
       </div>
     </footer>
   )

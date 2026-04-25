@@ -1,6 +1,26 @@
 @import "tailwindcss";
 
 @theme {
+  /* === PiB 2026 marketing palette === */
+  --color-pib-bg: #0A0A0B;
+  --color-pib-surface: #141416;
+  --color-pib-surface-2: #1C1C20;
+  --color-pib-text: #EDEDED;
+  --color-pib-text-muted: #8B8B92;
+  --color-pib-text-faint: #4A4A52;
+  --color-pib-line: rgba(255, 255, 255, 0.08);
+  --color-pib-line-strong: rgba(255, 255, 255, 0.16);
+  --color-pib-accent: #F5A623;
+  --color-pib-accent-hover: #FFB840;
+  --color-pib-accent-soft: rgba(245, 166, 35, 0.12);
+  --color-pib-violet: #7C5CFF;
+  --color-pib-success: #4ADE80;
+
+  /* Editorial alt theme (off-white) — used on selected sections */
+  --color-pib-cream: #F0EEE6;
+  --color-pib-ink: #181818;
+
+  /* Legacy admin palette — kept for the admin/portal areas */
   --color-surface-container: #1f1f1f;
   --color-surface-container-highest: #353535;
   --color-on-secondary-container: #e2e2e2;
@@ -50,29 +70,28 @@
   --color-tertiary-fixed: #5d5f5f;
   --color-accent: #C0392B;
   --color-sidebar: #111111;
-
-  /* v2 accent — amber replaces red for primary actions */
   --color-accent-v2: #F59E0B;
   --color-accent-hover: #D97706;
   --color-accent-subtle: rgba(245, 158, 11, 0.10);
   --color-accent-text: #FCD34D;
-
-  /* Card system */
   --color-card: #0A0A0A;
   --color-card-border: rgba(255, 255, 255, 0.06);
   --color-card-hover: rgba(255, 255, 255, 0.03);
   --color-row-hover: rgba(255, 255, 255, 0.04);
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
 
-  /* Updated border radius — more rounded than current 0.25rem */
-  --radius-btn: 0.5rem;
-  --radius-card: 0.75rem;
-  --radius-lg-card: 1rem;
-
+  /* === Type === */
+  --font-sans: var(--font-sans), 'Inter', system-ui, sans-serif;
+  --font-mono: var(--font-mono), 'JetBrains Mono', monospace;
+  --font-display: var(--font-display), 'Instrument Serif', Georgia, serif;
   --font-headline: var(--font-space-grotesk), sans-serif;
   --font-body: var(--font-inter), sans-serif;
   --font-label: var(--font-inter), sans-serif;
 
+  /* === Radii === */
+  --radius-btn: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-lg-card: 1rem;
   --radius: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 0.75rem;
@@ -83,26 +102,245 @@
 @layer base {
   html {
     color-scheme: dark;
+    scroll-behavior: smooth;
   }
   body {
-    @apply bg-black text-white;
-    font-family: var(--font-body);
+    background: var(--color-pib-bg);
+    color: var(--color-pib-text);
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
   ::selection {
-    @apply bg-white text-black;
+    background: var(--color-pib-accent);
+    color: #000;
+  }
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
 @layer utilities {
   .text-huge { font-size: clamp(4rem, 15vw, 12rem); }
   .text-mega { font-size: clamp(3rem, 10vw, 9rem); }
+  .text-display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.015em; }
+
+  /* Section + page rhythm */
+  .container-pib { @apply max-w-[1320px] mx-auto px-6 md:px-10 lg:px-14; }
+
+  /* Editorial display heading clamp */
+  .h-display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 0.95;
+    font-size: clamp(2.75rem, 7vw, 6.5rem);
+  }
+
+  /* Eyebrow label */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--color-pib-text-muted);
+  }
+
+  /* Hairline divider */
+  .hairline { border-top: 1px solid var(--color-pib-line); }
+
+  /* Section padding */
+  .section { @apply py-20 md:py-32; }
+
+  /* Animated gradient mesh background */
+  .pib-mesh {
+    background-image:
+      radial-gradient(at 20% 20%, rgba(245, 166, 35, 0.10) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, rgba(124, 92, 255, 0.10) 0px, transparent 55%),
+      radial-gradient(at 0% 100%, rgba(245, 166, 35, 0.08) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(74, 222, 128, 0.05) 0px, transparent 50%);
+  }
+
+  /* Subtle grid background */
+  .pib-grid-bg {
+    background-image:
+      linear-gradient(var(--color-pib-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-pib-line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+  }
+
+  /* Marquee */
+  @keyframes pib-marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  .pib-marquee {
+    animation: pib-marquee 40s linear infinite;
+  }
+  .pib-marquee:hover { animation-play-state: paused; }
+
   @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
   }
+
+  /* Fade in on view */
+  @keyframes pib-fade-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .pib-fade-up { animation: pib-fade-up 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  /* Number count-up shimmer */
+  @keyframes pib-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
 }
 
 @layer components {
+  /* === PiB 2026 marketing primitives === */
+
+  .pib-link-underline {
+    position: relative;
+    display: inline-block;
+  }
+  .pib-link-underline::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -2px;
+    height: 1px;
+    background: currentColor;
+    transform-origin: right;
+    transform: scaleX(0);
+    transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .pib-link-underline:hover::after {
+    transform-origin: left;
+    transform: scaleX(1);
+  }
+
+  /* Marketing button — primary */
+  .btn-pib-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-pib-text);
+    color: #000;
+    padding: 0.85rem 1.4rem;
+    border-radius: 9999px;
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
+    border: 1px solid transparent;
+  }
+  .btn-pib-primary:hover {
+    background: var(--color-pib-accent);
+    transform: translateY(-1px);
+  }
+  .btn-pib-primary:active { transform: translateY(0) scale(0.98); }
+
+  .btn-pib-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    color: var(--color-pib-text);
+    padding: 0.85rem 1.4rem;
+    border-radius: 9999px;
+    font-weight: 500;
+    font-size: 0.95rem;
+    border: 1px solid var(--color-pib-line-strong);
+    transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .btn-pib-secondary:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.30);
+  }
+  .btn-pib-secondary:active { transform: scale(0.98); }
+
+  .btn-pib-accent {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-pib-accent);
+    color: #000;
+    padding: 0.95rem 1.5rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .btn-pib-accent:hover {
+    background: var(--color-pib-accent-hover);
+    transform: translateY(-1px);
+  }
+
+  /* Bento card */
+  .bento-card {
+    position: relative;
+    background: var(--color-pib-surface);
+    border: 1px solid var(--color-pib-line);
+    border-radius: 18px;
+    padding: 1.75rem;
+    transition: all 250ms cubic-bezier(0.22, 1, 0.36, 1);
+    overflow: hidden;
+  }
+  .bento-card:hover {
+    border-color: var(--color-pib-line-strong);
+    background: var(--color-pib-surface-2);
+    transform: translateY(-2px);
+  }
+  .bento-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top right, var(--color-pib-accent-soft), transparent 50%);
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: none;
+  }
+  .bento-card:hover::before { opacity: 1; }
+
+  /* Tag pill */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 9999px;
+    border: 1px solid var(--color-pib-line);
+    background: var(--color-pib-surface);
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--color-pib-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .pill-accent {
+    border-color: rgba(245, 166, 35, 0.35);
+    background: var(--color-pib-accent-soft);
+    color: var(--color-pib-accent-hover);
+  }
+
+  /* Section eyebrow row */
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 3rem;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  /* === Legacy components — keep for /admin and /portal === */
   .glass-card {
     background: rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(40px) saturate(1.8);
@@ -118,8 +356,6 @@
                       linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
     background-size: 100px 100px;
   }
-
-  /* Card component */
   .pib-card {
     background: var(--color-card);
     border: 1px solid var(--color-card-border);
@@ -133,11 +369,9 @@
   .pib-card-hover:hover {
     background: color-mix(in srgb, var(--color-card) 100%, white 3%);
   }
-
-  /* Amber accent button */
   .pib-btn-primary {
     background: var(--color-accent-v2);
-    color: #000000;
+    color: #000;
     font-weight: 500;
     border-radius: var(--radius-btn);
     padding: 0.5rem 1rem;
@@ -146,14 +380,8 @@
     align-items: center;
     gap: 0.5rem;
   }
-  .pib-btn-primary:hover {
-    background: var(--color-accent-hover);
-  }
-  .pib-btn-primary:active {
-    transform: scale(0.97);
-  }
-
-  /* Secondary button */
+  .pib-btn-primary:hover { background: var(--color-accent-hover); }
+  .pib-btn-primary:active { transform: scale(0.97); }
   .pib-btn-secondary {
     border: 1px solid var(--color-outline-variant);
     color: var(--color-on-surface);
@@ -164,14 +392,8 @@
     align-items: center;
     gap: 0.5rem;
   }
-  .pib-btn-secondary:hover {
-    background: var(--color-surface-container);
-  }
-  .pib-btn-secondary:active {
-    transform: scale(0.97);
-  }
-
-  /* Skeleton shimmer */
+  .pib-btn-secondary:hover { background: var(--color-surface-container); }
+  .pib-btn-secondary:active { transform: scale(0.97); }
   .pib-skeleton {
     background: linear-gradient(90deg, var(--color-surface-container) 25%, var(--color-surface-container-high) 50%, var(--color-surface-container) 75%);
     background-size: 200% 100%;
@@ -182,8 +404,6 @@
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
   }
-
-  /* Stat card with subtle glow */
   .pib-stat-card {
     background: var(--color-card);
     border: 1px solid var(--color-card-border);
@@ -196,15 +416,11 @@
   .pib-stat-card::after {
     content: '';
     position: absolute;
-    top: 0;
-    right: 0;
-    width: 120px;
-    height: 120px;
+    top: 0; right: 0;
+    width: 120px; height: 120px;
     background: radial-gradient(circle at top right, rgba(245, 158, 11, 0.06), transparent 70%);
     pointer-events: none;
   }
-
-  /* Card section — grouped settings/info block */
   .pib-card-section {
     background: var(--color-card);
     border: 1px solid var(--color-card-border);
@@ -223,11 +439,7 @@
     padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--color-card-border);
   }
-  .pib-card-section-row:last-child {
-    border-bottom: none;
-  }
-
-  /* Form inputs */
+  .pib-card-section-row:last-child { border-bottom: none; }
   .pib-input {
     width: 100%;
     background: var(--color-surface-container-low);
@@ -238,16 +450,12 @@
     color: var(--color-on-surface);
     transition: border-color 150ms ease, box-shadow 150ms ease;
   }
-  .pib-input::placeholder {
-    color: var(--color-on-surface-variant);
-    opacity: 0.5;
-  }
+  .pib-input::placeholder { color: var(--color-on-surface-variant); opacity: 0.5; }
   .pib-input:focus {
     outline: none;
     border-color: var(--color-accent-v2);
     box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
   }
-
   .pib-select {
     width: 100%;
     background: var(--color-surface-container-low);
@@ -268,7 +476,6 @@
     border-color: var(--color-accent-v2);
     box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
   }
-
   .pib-label {
     display: block;
     font-size: 0.75rem;
@@ -276,7 +483,6 @@
     color: var(--color-on-surface-variant);
     margin-bottom: 0.375rem;
   }
-
   .pib-textarea {
     width: 100%;
     background: var(--color-surface-container-low);
@@ -293,8 +499,6 @@
     border-color: var(--color-accent-v2);
     box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
   }
-
-  /* Active nav indicator */
   .pib-nav-active {
     background: var(--color-accent-subtle);
     color: var(--color-accent-text);
@@ -304,13 +508,12 @@
     border-left: 3px solid transparent;
     transition: background-color 150ms ease, color 150ms ease;
   }
-  .pib-nav-item:hover:not(.pib-nav-active) {
-    background: var(--color-surface-container);
-  }
+  .pib-nav-item:hover:not(.pib-nav-active) { background: var(--color-surface-container); }
 }
 
 @layer base {
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: #000; }
-  ::-webkit-scrollbar-thumb { background: #333; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.10); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); }
 }

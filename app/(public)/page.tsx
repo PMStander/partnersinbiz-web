@@ -1,222 +1,442 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import Image from 'next/image'
+import { SITE, SERVICES, CASE_STUDIES, TESTIMONIALS, STATS, TECH_STACK, PROCESS, FAQ_HOMEPAGE } from '@/lib/seo/site'
+import { JsonLd, breadcrumbSchema, faqSchema } from '@/lib/seo/schema'
+import { Reveal } from '@/components/marketing/Reveal'
+import { CountUp } from '@/components/marketing/CountUp'
+import { Marquee } from '@/components/marketing/Marquee'
+import { FAQ } from '@/components/marketing/FAQ'
+import { SectionHead } from '@/components/marketing/SectionHead'
 
 export const metadata: Metadata = {
-  title: 'PiB | Digital Excellence Engineered',
-  description:
-    'We engineer high-performance digital instruments for brands that demand absolute precision and technical superiority.',
+  title: 'Web, AI & Growth Studio for Ambitious SMEs',
+  description: SITE.description,
+  alternates: { canonical: '/' },
+  openGraph: { url: '/', images: ['/og/default.png'] },
 }
+
+const CLIENT_LOGOS = [
+  'Athleet', 'Loyalty Plus', 'AHS Law', 'Scrolled Brain',
+  'Lumen', 'Velox', 'Covalonic', 'Nexus',
+]
 
 export default function HomePage() {
   return (
     <>
-      {/* Background Video Layer */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute top-1/2 left-1/2 min-w-full min-h-full -translate-x-1/2 -translate-y-1/2 object-cover brightness-[0.7]"
-        >
-          <source
-            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260302_141646_a5156969-0608-4d43-9e34-90f4716d1f32.mp4"
-            type="video/mp4"
-          />
-        </video>
-        <div className="absolute inset-0 bg-black/40" />
-      </div>
+      <JsonLd data={breadcrumbSchema([{ name: 'Home', url: '/' }])} />
+      <JsonLd data={faqSchema([...FAQ_HOMEPAGE])} />
 
-      {/* Main page content */}
-      <main className="relative z-10 px-8 md:px-16">
-        {/* Hero Section */}
-        <section className="pt-[256px] pb-32 flex flex-col items-center text-center">
-          <span className="uppercase text-xs tracking-[0.3em] text-white/60 font-medium mb-8">
-            DIGITAL EXCELLENCE ENGINEERED
-          </span>
-          <h1 className="font-headline font-bold leading-[0.85] tracking-tighter uppercase text-huge text-white">
-            PiB
-          </h1>
-          <p className="max-w-md mt-10 text-sm font-light text-white/70 leading-relaxed">
-            We engineer high-performance digital instruments for brands that demand absolute
-            precision and technical superiority.
-          </p>
-        </section>
+      {/* HERO */}
+      <section className="relative pt-28 md:pt-40 pb-20 md:pb-28 overflow-hidden">
+        <div className="absolute inset-0 pib-mesh pointer-events-none" />
+        <div className="absolute inset-0 pib-grid-bg pointer-events-none opacity-40" />
 
-        {/* Info Cards Grid */}
-        <section className="py-24 grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Card 1 */}
-          <div className="glass-card min-h-[220px] p-10 rounded-2xl flex flex-col justify-between group hover:border-white/30 transition-all">
-            <span className="material-symbols-outlined text-3xl opacity-40">code_blocks</span>
-            <div>
-              <h3 className="text-4xl font-bold text-white mb-2">15+</h3>
-              <p className="text-white/50 text-sm mb-4">Years of engineering</p>
-              <div className="flex items-center gap-2 text-xs uppercase tracking-widest font-semibold text-white">
-                <span
-                  className="material-symbols-outlined text-sm"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  check_circle
-                </span>
-                Senior-level precision
-              </div>
+        <div className="container-pib relative">
+          <Reveal>
+            <div className="flex items-center gap-2.5 mb-8">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inset-0 rounded-full bg-[var(--color-pib-success)] opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--color-pib-success)]" />
+              </span>
+              <span className="eyebrow text-[var(--color-pib-text-muted)]">Open for new work · April 2026</span>
             </div>
-          </div>
+          </Reveal>
 
-          {/* Card 2 */}
-          <div className="flex flex-col justify-between py-6">
-            <h2 className="text-3xl md:text-5xl font-headline font-bold leading-tight tracking-tight">
-              Precision / <br /> development
-            </h2>
-            <div className="mt-8">
-              <div className="text-white/40 font-mono text-sm mb-6">(0.3%) Post-launch issues</div>
+          <Reveal delay={80}>
+            <h1 className="h-display text-balance max-w-[18ch]">
+              Software your competitors will <em className="not-italic text-[var(--color-pib-accent)]">copy.</em>
+            </h1>
+          </Reveal>
+
+          <Reveal delay={160}>
+            <p className="mt-8 text-xl md:text-2xl text-[var(--color-pib-text-muted)] max-w-2xl text-pretty leading-snug">
+              Partners in Biz is a Cape Town–based studio. We build websites, web apps, mobile apps, and AI integrations
+              that ship in weeks — and keep working long after.
+            </p>
+          </Reveal>
+
+          <Reveal delay={240}>
+            <div className="mt-10 flex flex-wrap items-center gap-3">
+              <Link href="/start-a-project" className="btn-pib-accent">
+                Start a project
+                <span className="material-symbols-outlined text-base">arrow_outward</span>
+              </Link>
+              <Link href="/work" className="btn-pib-secondary">
+                See the work
+              </Link>
+            </div>
+          </Reveal>
+
+          {/* Hero bento — 4 work tiles forming the proof block */}
+          <Reveal delay={320}>
+            <div className="mt-20 md:mt-28 grid grid-cols-12 gap-3 md:gap-4">
+              {/* Big featured work tile */}
               <Link
-                className="inline-flex items-center gap-2 group text-white font-medium hover:gap-4 transition-all"
-                href="/our-process"
+                href={CASE_STUDIES[0].href}
+                className="col-span-12 md:col-span-7 row-span-2 group bento-card !p-0 aspect-[4/3] md:aspect-auto md:min-h-[420px] relative overflow-hidden"
               >
-                See our process
-                <span className="material-symbols-outlined">arrow_outward</span>
+                <Image
+                  src={CASE_STUDIES[0].cover}
+                  alt={`${CASE_STUDIES[0].client} case study cover`}
+                  fill
+                  sizes="(min-width: 768px) 60vw, 100vw"
+                  priority
+                  className="object-cover opacity-70 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-700"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-pib-bg)] via-[var(--color-pib-bg)]/40 to-transparent" />
+                <div className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="pill pill-accent">Featured · {CASE_STUDIES[0].industry}</span>
+                  </div>
+                  <div>
+                    <p className="font-mono text-xs text-[var(--color-pib-text-muted)] mb-2">{CASE_STUDIES[0].client}</p>
+                    <p className="font-display text-2xl md:text-3xl text-balance leading-tight">
+                      {CASE_STUDIES[0].headline}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {CASE_STUDIES[0].metrics.slice(0, 3).map((m) => (
+                        <span key={m.label} className="pill text-[var(--color-pib-text)]">
+                          <strong className="text-[var(--color-pib-accent)]">{m.value}</strong> {m.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </Link>
-            </div>
-          </div>
-        </section>
 
-        {/* Scalable Section */}
-        <section className="py-32 grid grid-cols-1 lg:grid-cols-12 gap-16 items-end">
-          <div className="lg:col-span-8">
-            <h2 className="font-headline font-bold leading-[0.85] tracking-tighter uppercase text-mega">
-              Simple / <br /> Smart / <br /> <span className="text-white">Scalable</span>
-            </h2>
-            <div className="mt-16 flex flex-wrap gap-8 items-center">
-              <div className="glass-card p-8 rounded-2xl max-w-xs">
-                <div className="text-5xl font-bold mb-2">340%</div>
-                <p className="text-xs uppercase tracking-widest text-white/50">
-                  Performance boost
-                </p>
-              </div>
-              <Link href="/our-process">
-                <button className="bg-white text-black px-10 py-5 rounded-md font-bold text-sm uppercase tracking-widest hover:scale-105 transition-transform">
-                  Learn more
-                </button>
-              </Link>
-            </div>
-          </div>
-          <div className="lg:col-span-4 relative">
-            <div className="absolute -top-32 right-0 w-32 h-32 glass-card rounded-full flex items-center justify-center text-center p-4 border-dashed border-white/20">
-              <span className="text-[10px] uppercase tracking-tighter font-bold leading-tight">
-                AI&#8209;Native <br /> Engineering
-              </span>
-            </div>
-            <ul className="space-y-8">
-              <li className="text-white/30 text-2xl font-headline transition-colors hover:text-white">
-                Strategy
-              </li>
-              <li className="text-white text-2xl font-headline flex items-center gap-4">
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
+              {/* 3 smaller tiles */}
+              {CASE_STUDIES.slice(1, 4).map((c) => (
+                <Link
+                  key={c.slug}
+                  href={c.href}
+                  className="col-span-6 md:col-span-5 group bento-card !p-0 aspect-[5/3] relative overflow-hidden md:aspect-auto md:min-h-[200px]"
+                  style={{ gridColumn: 'span 6 / span 6' }}
                 >
-                  check_circle
-                </span>
-                Design
-              </li>
-              <li className="text-white/30 text-2xl font-headline transition-colors hover:text-white">
-                Develop
-              </li>
-              <li className="text-white/30 text-2xl font-headline transition-colors hover:text-white">
-                Scale
-              </li>
-            </ul>
-          </div>
-        </section>
+                  <Image
+                    src={c.cover}
+                    alt={`${c.client} cover`}
+                    fill
+                    sizes="(min-width: 768px) 35vw, 50vw"
+                    className="object-cover opacity-50 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-700"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-pib-bg)]/95 via-[var(--color-pib-bg)]/60 to-transparent" />
+                  <div className="absolute inset-0 p-5 flex flex-col justify-end">
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-[var(--color-pib-text-muted)]">{c.industry}</p>
+                    <p className="font-display text-lg md:text-xl mt-1 text-balance leading-tight">{c.client}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
 
-        {/* The Process Grid */}
-        <section className="py-32">
-          <div className="mb-20">
-            <span className="text-xs uppercase tracking-[0.3em] text-white/40">Our Process</span>
-            <h2 className="text-4xl md:text-6xl font-headline font-bold mt-4">
-              From idea / to impact
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Step 01 */}
-            <div className="glass-card p-8 rounded-2xl border-t-2 border-t-white group hover:bg-white/[0.06] transition-all">
-              <span className="text-sm font-mono text-white/30 mb-12 block">01</span>
-              <h4 className="text-xl font-bold mb-4 uppercase tracking-tight">Discover</h4>
-              <p className="text-sm text-white/50 leading-relaxed">
-                Deep architectural analysis of your goals and user requirements.
-              </p>
+      {/* LOGO MARQUEE */}
+      <section className="py-16 border-y border-[var(--color-pib-line)]">
+        <div className="container-pib mb-8">
+          <p className="eyebrow text-center">Trusted by founders shipping things that matter</p>
+        </div>
+        <Marquee>
+          {CLIENT_LOGOS.map((name) => (
+            <div key={name} className="flex items-center gap-3 text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">
+              <span className="material-symbols-outlined text-2xl text-[var(--color-pib-accent)]/60">stars</span>
+              <span className="font-display text-2xl md:text-3xl whitespace-nowrap">{name}</span>
             </div>
-            {/* Step 02 */}
-            <div className="glass-card p-8 rounded-2xl border-t-2 border-t-white group hover:bg-white/[0.06] transition-all">
-              <span className="text-sm font-mono text-white/30 mb-12 block">02</span>
-              <h4 className="text-xl font-bold mb-4 uppercase tracking-tight">Design</h4>
-              <p className="text-sm text-white/50 leading-relaxed">
-                Crafting high-fidelity prototypes with absolute visual clarity.
-              </p>
-            </div>
-            {/* Step 03 */}
-            <div className="glass-card p-8 rounded-2xl border-t-2 border-t-white group hover:bg-white/[0.06] transition-all">
-              <span className="text-sm font-mono text-white/30 mb-12 block">03</span>
-              <h4 className="text-xl font-bold mb-4 uppercase tracking-tight">Develop</h4>
-              <p className="text-sm text-white/50 leading-relaxed">
-                Engineering scalable solutions with production-grade code.
-              </p>
-            </div>
-            {/* Step 04 */}
-            <div className="glass-card p-8 rounded-2xl border-t-2 border-t-white group hover:bg-white/[0.06] transition-all">
-              <span className="text-sm font-mono text-white/30 mb-12 block">04</span>
-              <h4 className="text-xl font-bold mb-4 uppercase tracking-tight">Deploy</h4>
-              <p className="text-sm text-white/50 leading-relaxed">
-                Launching and optimizing for peak performance at scale.
-              </p>
-            </div>
-          </div>
-        </section>
+          ))}
+        </Marquee>
+      </section>
 
-        {/* Stats Grid */}
-        <section className="py-32 border-y border-white/10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
-            <div className="space-y-2">
-              <div className="text-5xl md:text-7xl font-bold tracking-tighter">3.8x</div>
-              <p className="text-[10px] uppercase tracking-widest text-white/40">Average ROI</p>
-            </div>
-            <div className="space-y-2">
-              <div className="text-5xl md:text-7xl font-bold tracking-tighter">42ms</div>
-              <p className="text-[10px] uppercase tracking-widest text-white/40">Load Time</p>
-            </div>
-            <div className="space-y-2">
-              <div className="text-5xl md:text-7xl font-bold tracking-tighter">15+</div>
-              <p className="text-[10px] uppercase tracking-widest text-white/40">Years Experience</p>
-            </div>
-            <div className="space-y-2">
-              <div className="text-5xl md:text-7xl font-bold tracking-tighter">98.7%</div>
-              <p className="text-[10px] uppercase tracking-widest text-white/40">Satisfaction</p>
-            </div>
-          </div>
-        </section>
+      {/* SERVICES */}
+      <section className="section">
+        <div className="container-pib">
+          <SectionHead
+            eyebrow="Services"
+            title={<>Six ways we work with you.</>}
+            subtitle="From a 4-week marketing site to a multi-quarter AI platform build. We pick the right shape, not the most billable one."
+            href="/services"
+            cta="All services"
+          />
 
-        {/* CTA Section */}
-        <section className="py-48 text-center flex flex-col items-center">
-          <span className="text-xs uppercase tracking-[0.4em] mb-12 text-white/60">
-            Ready to level up?
-          </span>
-          <h2 className="font-headline font-bold leading-[0.85] tracking-tighter uppercase text-mega max-w-5xl">
-            Let&apos;s build / <br /> the future
-          </h2>
-          <div className="mt-20 flex flex-wrap items-center justify-center gap-4">
-            <Link href="/start-a-project" className="group flex items-center gap-6 bg-white text-black px-12 py-6 rounded-md font-bold text-lg uppercase tracking-widest hover:pr-16 transition-all">
-              Get in touch
-              <span className="material-symbols-outlined text-3xl group-hover:translate-x-2 transition-transform">
-                arrow_outward
+          <div className="grid md:grid-cols-3 gap-4 md:gap-5">
+            {SERVICES.map((s, i) => (
+              <Reveal key={s.slug} delay={i * 60}>
+                <Link
+                  href={`/services/${s.slug}`}
+                  className={`bento-card flex flex-col h-full ${i === 0 || i === 4 ? 'md:col-span-1' : ''}`}
+                >
+                  <span className="material-symbols-outlined text-4xl text-[var(--color-pib-accent)] mb-6">{s.icon}</span>
+                  <h3 className="font-display text-2xl mb-2">{s.name}</h3>
+                  <p className="text-sm text-[var(--color-pib-text-muted)] mb-4">{s.short}</p>
+                  <p className="text-[var(--color-pib-text)] flex-1 text-pretty">{s.outcome}</p>
+                  <div className="mt-6 pt-6 border-t border-[var(--color-pib-line)] flex items-center justify-between">
+                    <div className="flex flex-wrap gap-1.5">
+                      {s.keywords.slice(0, 2).map((k) => (
+                        <span key={k} className="pill !text-[10px] !py-1 !px-2">{k}</span>
+                      ))}
+                    </div>
+                    <span className="text-xs text-[var(--color-pib-text-muted)] flex items-center gap-1 group-hover:text-[var(--color-pib-accent)]">
+                      Learn
+                      <span className="material-symbols-outlined text-sm">arrow_outward</span>
+                    </span>
+                  </div>
+                </Link>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURED WORK — alternating rows */}
+      <section className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib">
+          <SectionHead
+            eyebrow="Selected work"
+            title={<>Recent builds.</>}
+            subtitle="Real production code shipped to real businesses. Pick one to see the brief, the build, and the metrics."
+            href="/work"
+            cta="All work"
+          />
+
+          <div className="space-y-12 md:space-y-24">
+            {CASE_STUDIES.slice(0, 3).map((c, i) => (
+              <Reveal key={c.slug}>
+                <Link
+                  href={c.href}
+                  className={`group grid md:grid-cols-12 gap-6 md:gap-12 items-center ${
+                    i % 2 === 1 ? 'md:[&>*:first-child]:order-2' : ''
+                  }`}
+                >
+                  <div className="md:col-span-7 relative aspect-[16/10] rounded-2xl overflow-hidden border border-[var(--color-pib-line)]">
+                    <Image
+                      src={c.cover}
+                      alt={`${c.client} — ${c.headline}`}
+                      fill
+                      sizes="(min-width: 768px) 55vw, 100vw"
+                      className="object-cover opacity-90 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-pib-bg)]/40 to-transparent" />
+                  </div>
+                  <div className="md:col-span-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="pill">{c.industry}</span>
+                      <span className="pill">{c.year}</span>
+                    </div>
+                    <h3 className="font-display text-3xl md:text-4xl text-balance leading-[1.05] mb-4 group-hover:text-[var(--color-pib-accent)] transition-colors">
+                      {c.headline}
+                    </h3>
+                    <p className="text-[var(--color-pib-text-muted)] text-pretty mb-6">{c.summary}</p>
+                    <div className="grid grid-cols-3 gap-3 mb-6">
+                      {c.metrics.map((m) => (
+                        <div key={m.label} className="border-l border-[var(--color-pib-line-strong)] pl-3">
+                          <div className="font-display text-2xl text-[var(--color-pib-accent)]">{m.value}</div>
+                          <div className="text-xs text-[var(--color-pib-text-muted)] leading-tight mt-1">{m.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <span className="inline-flex items-center gap-2 text-sm font-medium pib-link-underline">
+                      Read the case study
+                      <span className="material-symbols-outlined text-base group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                    </span>
+                  </div>
+                </Link>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PROCESS */}
+      <section className="section border-t border-[var(--color-pib-line)] relative overflow-hidden">
+        <div className="absolute inset-0 pib-mesh opacity-50" />
+        <div className="container-pib relative">
+          <SectionHead
+            eyebrow="How we work"
+            title={<>From idea to live in five steps.</>}
+            subtitle="Real artefacts at every phase. Daily Loom updates. Linear board you can read. No nine-month discovery."
+            href="/our-process"
+            cta="Read the full process"
+          />
+
+          <div className="grid md:grid-cols-5 gap-4">
+            {PROCESS.map((p, i) => (
+              <Reveal key={p.step} delay={i * 80}>
+                <div className="bento-card h-full">
+                  <div className="font-mono text-xs text-[var(--color-pib-accent)] mb-4">{p.step}</div>
+                  <h3 className="font-display text-2xl mb-3">{p.name}</h3>
+                  <p className="text-sm text-[var(--color-pib-text-muted)] text-pretty mb-5">{p.blurb}</p>
+                  <ul className="space-y-1.5">
+                    {p.deliverables.slice(0, 3).map((d) => (
+                      <li key={d} className="text-xs text-[var(--color-pib-text-muted)] flex items-start gap-1.5">
+                        <span className="text-[var(--color-pib-accent)] mt-0.5">→</span>
+                        {d}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TECH STACK */}
+      <section className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib">
+          <SectionHead
+            eyebrow="Stack"
+            title={<>The boring tools that ship.</>}
+            subtitle="Battle-tested, well-documented, hireable. We pick what your future team can maintain — not what's trending on Hacker News."
+          />
+          <div className="flex flex-wrap gap-2.5">
+            {TECH_STACK.map((t) => (
+              <span key={t} className="pill !py-2 !px-4 !text-sm">
+                {t}
               </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* STATS */}
+      <section className="section border-t border-[var(--color-pib-line)] relative">
+        <div className="container-pib">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[var(--color-pib-line)] border border-[var(--color-pib-line)] rounded-2xl overflow-hidden">
+            {STATS.map((s) => {
+              const numeric = parseFloat(s.value)
+              const decimals = s.value.includes('.') ? 1 : 0
+              return (
+                <div key={s.label} className="bg-[var(--color-pib-bg)] p-8 md:p-10">
+                  <div className="font-display text-5xl md:text-6xl lg:text-7xl text-[var(--color-pib-text)]">
+                    <CountUp to={numeric} decimals={decimals} suffix={s.suffix} />
+                  </div>
+                  <div className="mt-3 text-sm text-[var(--color-pib-text-muted)]">{s.label}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* TESTIMONIALS */}
+      <section className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib">
+          <SectionHead
+            eyebrow="What clients say"
+            title={<>Words from people who paid us money.</>}
+          />
+          <div className="grid md:grid-cols-12 gap-4 md:gap-5">
+            <div className="md:col-span-7 bento-card relative">
+              <span className="font-display text-7xl absolute top-4 left-6 text-[var(--color-pib-accent)]/40">&ldquo;</span>
+              <blockquote className="font-display text-2xl md:text-3xl leading-snug text-balance pt-12 px-4">
+                {TESTIMONIALS[0].quote}
+              </blockquote>
+              <footer className="mt-8 pt-6 border-t border-[var(--color-pib-line)] flex items-center gap-4">
+                <Image src={TESTIMONIALS[0].avatar} alt="" width={48} height={48} className="rounded-full object-cover" />
+                <div>
+                  <div className="font-medium">{TESTIMONIALS[0].author}</div>
+                  <div className="text-sm text-[var(--color-pib-text-muted)]">{TESTIMONIALS[0].role}</div>
+                </div>
+              </footer>
+            </div>
+            <div className="md:col-span-5 grid gap-4 md:gap-5">
+              {TESTIMONIALS.slice(1).map((t) => (
+                <div key={t.author} className="bento-card">
+                  <p className="text-[var(--color-pib-text)] text-pretty">&ldquo;{t.quote}&rdquo;</p>
+                  <footer className="mt-4 pt-4 border-t border-[var(--color-pib-line)] flex items-center gap-3 text-sm">
+                    <Image src={t.avatar} alt="" width={32} height={32} className="rounded-full object-cover" />
+                    <div>
+                      <div className="font-medium">{t.author}</div>
+                      <div className="text-[var(--color-pib-text-muted)] text-xs">{t.role}</div>
+                    </div>
+                  </footer>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* PRICING TEASER */}
+      <section className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib">
+          <SectionHead
+            eyebrow="Pricing"
+            title={<>Honest numbers. No &ldquo;let&rsquo;s talk&rdquo; gatekeeping.</>}
+            subtitle="Most projects fall into one of three shapes. Bespoke builds get scoped within three working days."
+            href="/pricing"
+            cta="See full pricing"
+          />
+          <div className="grid md:grid-cols-3 gap-4 md:gap-5">
+            <Link href="/pricing" className="bento-card group">
+              <p className="eyebrow mb-4">Marketing site</p>
+              <p className="font-display text-4xl text-[var(--color-pib-text)]">From R35k</p>
+              <p className="mt-3 text-sm text-[var(--color-pib-text-muted)]">2–4 weeks. Built to be found, built to convert.</p>
             </Link>
-            <Link href="/login" className="flex items-center gap-3 border border-white/30 text-white px-10 py-6 rounded-md font-bold text-lg uppercase tracking-widest hover:border-white hover:bg-white/5 transition-all">
-              Client Login
+            <Link href="/pricing" className="bento-card relative group" style={{ borderColor: 'rgba(245,166,35,0.4)' }}>
+              <span className="absolute -top-2 right-4 pill pill-accent !text-[10px]">Most popular</span>
+              <p className="eyebrow mb-4 text-[var(--color-pib-accent)]">Web application</p>
+              <p className="font-display text-4xl text-[var(--color-pib-text)]">From R120k</p>
+              <p className="mt-3 text-sm text-[var(--color-pib-text-muted)]">6–12 weeks. Custom platforms, internal tools, SaaS.</p>
+            </Link>
+            <Link href="/pricing" className="bento-card group">
+              <p className="eyebrow mb-4">Bespoke build</p>
+              <p className="font-display text-4xl text-[var(--color-pib-text)]">Let&rsquo;s scope it</p>
+              <p className="mt-3 text-sm text-[var(--color-pib-text-muted)]">Strategic engagement. Equity, retainer, or fixed-scope.</p>
             </Link>
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
+
+      {/* INSIGHTS TEASER */}
+      <section className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib">
+          <SectionHead
+            eyebrow="Insights"
+            title={<>Build notes &amp; opinions.</>}
+            subtitle="Long-form posts on what we learn shipping production software."
+            href="/insights"
+            cta="All insights"
+          />
+          <div className="grid md:grid-cols-3 gap-4 md:gap-5">
+            <Link href="/insights/next-js-16-for-business-websites" className="bento-card group">
+              <span className="pill mb-4 inline-block">Build Notes</span>
+              <h3 className="font-display text-2xl mb-3 group-hover:text-[var(--color-pib-accent)] transition-colors text-balance">
+                Next.js 16 for business websites: what actually matters
+              </h3>
+              <p className="text-sm text-[var(--color-pib-text-muted)] text-pretty">A practical look at the Next.js 16 features that move the needle for marketing sites and SaaS.</p>
+              <p className="mt-4 font-mono text-xs text-[var(--color-pib-text-faint)]">8 min · 2026-04-12</p>
+            </Link>
+            <Link href="/insights/building-an-ai-agent-that-bills" className="bento-card group">
+              <span className="pill mb-4 inline-block">Build Notes</span>
+              <h3 className="font-display text-2xl mb-3 group-hover:text-[var(--color-pib-accent)] transition-colors text-balance">
+                Building an AI agent that actually bills clients
+              </h3>
+              <p className="text-sm text-[var(--color-pib-text-muted)] text-pretty">How we wired Claude into a South African EFT-first invoicing flow — with proof-of-payment, PayPal fallback, and zero hallucinations.</p>
+              <p className="mt-4 font-mono text-xs text-[var(--color-pib-text-faint)]">11 min · 2026-04-02</p>
+            </Link>
+            <Link href="/insights/south-african-website-cost-2026" className="bento-card group">
+              <span className="pill mb-4 inline-block">Industry POV</span>
+              <h3 className="font-display text-2xl mb-3 group-hover:text-[var(--color-pib-accent)] transition-colors text-balance">
+                How much does a custom website cost in South Africa in 2026?
+              </h3>
+              <p className="text-sm text-[var(--color-pib-text-muted)] text-pretty">Honest pricing for marketing sites, web apps, and AI features — with real ZAR ranges.</p>
+              <p className="mt-4 font-mono text-xs text-[var(--color-pib-text-faint)]">9 min · 2026-03-21</p>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="section border-t border-[var(--color-pib-line)]">
+        <div className="container-pib max-w-5xl">
+          <SectionHead
+            eyebrow="Frequently asked"
+            title={<>Questions buyers actually ask.</>}
+          />
+          <FAQ items={FAQ_HOMEPAGE} />
+        </div>
+      </section>
     </>
   )
 }

@@ -2,115 +2,132 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
-
-const links = [
-  { href: '/', label: 'Home' },
-  { href: '/our-process', label: 'Services' },
-  { href: '/discover', label: 'Work' },
-  { href: '/products', label: 'Products' },
-  { href: '/about', label: 'About' },
-  { href: '/start-a-project', label: 'Contact' },
-]
-
-const mobileLinks = [...links, { href: '/login', label: 'Client Login' }]
+import { NAV } from '@/lib/seo/site'
 
 export default function Navbar() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
 
-  // Close sidebar on route change
-  useEffect(() => {
-    setOpen(false)
-  }, [pathname])
+  useEffect(() => { setOpen(false) }, [pathname])
 
-  // Prevent body scroll when sidebar is open
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [open])
 
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 16)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  const isActive = (href: string) => pathname === href || (href !== '/' && pathname.startsWith(href))
+
   return (
     <>
-      <nav className="fixed top-0 w-full border-b border-white/[0.15] bg-black/20 backdrop-blur-2xl flex justify-between items-center px-8 md:px-16 h-20 z-50 font-headline font-medium tracking-tight">
-        <Link href="/" className="text-2xl font-bold tracking-tighter text-white">PiB</Link>
+      <header
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+          scrolled
+            ? 'bg-[var(--color-pib-bg)]/85 backdrop-blur-xl border-b border-[var(--color-pib-line)]'
+            : 'bg-transparent'
+        }`}
+      >
+        <nav
+          aria-label="Primary"
+          className="container-pib flex items-center justify-between h-16 md:h-20"
+        >
+          <Link href="/" aria-label="Partners in Biz home" className="flex items-center gap-2.5 group">
+            <span className="relative grid place-items-center w-8 h-8 rounded-lg bg-[var(--color-pib-text)] text-black font-bold text-sm font-mono">
+              P
+            </span>
+            <span className="font-display text-xl tracking-tight hidden sm:inline">
+              Partners <span className="text-[var(--color-pib-text-muted)]">in</span> Biz
+            </span>
+          </Link>
 
-        {/* Desktop nav */}
-        <div className="hidden md:flex items-center gap-12">
-          {links.map(({ href, label }) => (
+          <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
+            {NAV.map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className={`px-4 py-2 rounded-full text-sm transition-colors ${
+                  isActive(href)
+                    ? 'text-[var(--color-pib-text)] bg-white/[0.06]'
+                    : 'text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)]'
+                }`}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
             <Link
-              key={href}
-              href={href}
-              className={`transition-colors duration-300 ${
-                pathname === href
-                  ? 'text-white border-b border-white pb-1'
-                  : 'text-white/60 hover:text-white'
-              }`}
+              href="/login"
+              className="hidden lg:inline-flex text-sm text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] px-3 py-2 transition-colors"
             >
-              {label}
+              Client login
             </Link>
-          ))}
-        </div>
+            <Link href="/start-a-project" className="btn-pib-primary text-sm hidden sm:inline-flex">
+              Start a project
+              <span className="material-symbols-outlined text-base">arrow_outward</span>
+            </Link>
+            <button
+              onClick={() => setOpen((v) => !v)}
+              aria-label={open ? 'Close menu' : 'Open menu'}
+              aria-expanded={open}
+              className="md:hidden flex flex-col justify-center items-center w-10 h-10 gap-[5px] rounded-full hover:bg-white/[0.06] transition-colors"
+            >
+              <span className={`block w-5 h-px bg-current transition-all duration-300 origin-center ${open ? 'rotate-45 translate-y-[3px]' : ''}`} />
+              <span className={`block w-5 h-px bg-current transition-all duration-300 origin-center ${open ? '-rotate-45 -translate-y-[3px]' : ''}`} />
+            </button>
+          </div>
+        </nav>
+      </header>
 
-        {/* Right side: CTA + burger */}
-        <div className="flex items-center gap-3">
-          <Link
-            href="/start-a-project"
-            className="rounded-full bg-white/[0.08] hover:bg-white/[0.15] px-6 py-2 text-sm font-medium transition-all active:scale-95 text-white"
-          >
-            Start a Project
-          </Link>
-          <Link
-            href="/login"
-            className="hidden md:inline-flex rounded-full border border-white/[0.2] hover:border-white/[0.4] hover:bg-white/[0.05] px-6 py-2 text-sm font-medium transition-all active:scale-95 text-white"
-          >
-            Client Login
-          </Link>
-
-          {/* Burger — mobile only */}
-          <button
-            onClick={() => setOpen((v) => !v)}
-            aria-label={open ? 'Close menu' : 'Open menu'}
-            aria-expanded={open}
-            className="md:hidden flex flex-col justify-center items-center w-10 h-10 gap-[5px] rounded-full hover:bg-white/[0.08] transition-colors"
-          >
-            <span className={`block w-5 h-[1.5px] bg-white transition-all duration-300 origin-center ${open ? 'rotate-45 translate-y-[6.5px]' : ''}`} />
-            <span className={`block w-5 h-[1.5px] bg-white transition-all duration-300 ${open ? 'opacity-0 scale-x-0' : ''}`} />
-            <span className={`block w-5 h-[1.5px] bg-white transition-all duration-300 origin-center ${open ? '-rotate-45 -translate-y-[6.5px]' : ''}`} />
-          </button>
-        </div>
-      </nav>
-
-      {/* Backdrop */}
+      {/* Mobile sidebar */}
       <div
         onClick={() => setOpen(false)}
-        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
+        className={`fixed inset-0 z-40 bg-black/70 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
       />
-
-      {/* Sidebar */}
       <aside
-        className={`fixed top-0 right-0 h-full w-72 z-50 bg-black border-l border-white/[0.1] flex flex-col pt-24 pb-12 px-8 transition-transform duration-300 ease-in-out md:hidden ${
+        className={`fixed top-0 right-0 h-full w-[88%] max-w-sm z-50 bg-[var(--color-pib-bg)] border-l border-[var(--color-pib-line)] flex flex-col pt-24 pb-12 px-8 transition-transform duration-300 ease-out md:hidden ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         <nav className="flex flex-col gap-1 flex-1">
-          {mobileLinks.map(({ href, label }) => (
+          {NAV.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
-              className={`font-headline text-2xl font-bold tracking-tight py-3 border-b border-white/[0.06] transition-colors duration-200 ${
-                pathname === href ? 'text-white' : 'text-white/40 hover:text-white'
+              className={`font-display text-3xl py-4 border-b border-[var(--color-pib-line)] transition-colors ${
+                isActive(href) ? 'text-[var(--color-pib-text)]' : 'text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)]'
               }`}
             >
               {label}
             </Link>
           ))}
+          <Link
+            href="/login"
+            className="font-display text-3xl py-4 border-b border-[var(--color-pib-line)] text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors"
+          >
+            Client login
+          </Link>
         </nav>
 
-        <p className="font-body text-xs text-white/20 tracking-wide">
-          © 2026 Partners in Biz
-        </p>
+        <div className="space-y-4">
+          <Link href="/start-a-project" className="btn-pib-primary w-full justify-center">
+            Start a project
+            <span className="material-symbols-outlined text-base">arrow_outward</span>
+          </Link>
+          <p className="font-mono text-xs text-[var(--color-pib-text-faint)] tracking-wide">
+            © {new Date().getFullYear()} Partners in Biz · Cape Town
+          </p>
+        </div>
       </aside>
     </>
   )
