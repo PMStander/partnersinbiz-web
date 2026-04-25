@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminAuth, adminDb } from '@/lib/firebase/admin'
-import { apiError } from './response'
+import { apiError, apiErrorFromException } from './response'
 import type { ApiRole, ApiUser } from './types'
 
 type RouteHandler = (req: NextRequest, user: ApiUser, context?: Record<string, unknown>) => Promise<NextResponse>
@@ -18,21 +18,26 @@ type RouteHandler = (req: NextRequest, user: ApiUser, context?: Record<string, u
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function withAuth(requiredRole: 'admin' | 'client', handler: RouteHandler): any {
   return async (req: NextRequest, context?: Record<string, unknown>): Promise<NextResponse> => {
+    let user: ApiUser | null
     try {
-      const user = await _resolveUser(req)
-      if (!user) return apiError('Unauthorized', 401)
-
-      // ai and admin satisfy any role; client only satisfies "client"
-      const roleOk =
-        user.role === 'ai' ||
-        user.role === 'admin' ||
-        (requiredRole === 'client' && user.role === 'client')
-
-      if (!roleOk) return apiError('Forbidden', 403)
-
-      return handler(req, user, context)
+      user = await _resolveUser(req)
     } catch {
       return apiError('Unauthorized', 401)
+    }
+    if (!user) return apiError('Unauthorized', 401)
+
+    // ai and admin satisfy any role; client only satisfies "client"
+    const roleOk =
+      user.role === 'ai' ||
+      user.role === 'admin' ||
+      (requiredRole === 'client' && user.role === 'client')
+
+    if (!roleOk) return apiError('Forbidden', 403)
+
+    try {
+      return await handler(req, user, context)
+    } catch (err) {
+      return apiErrorFromException(err)
     }
   }
 }
