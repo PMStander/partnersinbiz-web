@@ -1,0 +1,30 @@
+// POST /api/v1/properties/:id/connections/:provider/pull
+// Manual one-shot pull for an integration. Useful for backfill, debugging,
+// and the admin "Refresh now" button.
+
+import { NextRequest, NextResponse } from 'next/server'
+import { withAuth } from '@/lib/api/auth'
+import { dispatchOne } from '@/lib/integrations/dispatch'
+import { getConnection } from '@/lib/integrations/connections'
+import '@/lib/integrations/bootstrap'
+import { ALL_PROVIDERS, type IntegrationProvider } from '@/lib/integrations/types'
+
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
+type RouteContext = { params: Promise<{ id: string; provider: string }> }
+
+function isProvider(v: string): v is IntegrationProvider {
+  return (ALL_PROVIDERS as string[]).includes(v)
+}
+
+export const POST = withAuth('admin', async (_req: NextRequest, _user, ctx) => {
+  const { id, provider } = await (ctx as RouteContext).params
+  if (!isProvider(provider)) {
+    return NextResponse.json({ error: 'Unknown provider' }, { status: 400 })
+  }
+  const conn = await getConnection({ propertyId: id, provider })
+  if (!conn) return NextResponse.json({ error: 'Not connected' }, { status: 404 })
+  const summary = await dispatchOne(conn)
+  return NextResponse.json({ ok: true, ...summary })
+})

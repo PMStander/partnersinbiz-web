@@ -8,10 +8,13 @@ import { logout } from '@/lib/firebase/auth'
 
 const NAV_LINKS = [
   { href: '/portal/dashboard', label: 'Dashboard' },
+  { href: '/portal/properties', label: 'Properties' },
+  { href: '/portal/reports', label: 'Reports' },
   { href: '/portal/project', label: 'Project' },
   { href: '/portal/social', label: 'Social' },
   { href: '/portal/messages', label: 'Messages' },
   { href: '/portal/payments', label: 'Payments' },
+  { href: '/portal/data', label: 'Data' },
 ]
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {

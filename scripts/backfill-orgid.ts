@@ -163,6 +163,106 @@ async function main() {
   }
   console.log(`  deals: wrote ${dealsWritten} (${dealsInferred} inferred from contact, ${dealsWritten - dealsInferred} defaulted)`)
 
+  // --- Activities, Tasks, Quotes ---
+  // For each, prefer inheriting orgId from the linked record (contactId/dealId/projectId)
+  // before falling back to default. Same batched pattern as deals.
+
+  const inferOrgFromContact = (contactId?: string): string =>
+    (contactId && contactOrgMap.get(contactId)) || orgId
+  const dealOrgMap = new Map<string, string>()
+  for (const doc of dealsSnap.docs) {
+    const data = doc.data() as { orgId?: string }
+    if (data.orgId) dealOrgMap.set(doc.id, data.orgId)
+    else dealOrgMap.set(doc.id, orgId)
+  }
+
+  // activities: { contactId?, dealId?, orgId? }
+  const activitiesSnap = await db.collection('activities').get()
+  const activitiesMissing = activitiesSnap.docs.filter((d: any) => !d.data().orgId)
+  console.log(`Activities: ${activitiesSnap.size} total, ${activitiesMissing.length} missing orgId`)
+  let actBatch = db.batch()
+  let actInBatch = 0
+  let actWritten = 0
+  let actInferred = 0
+  for (const doc of activitiesMissing) {
+    const data = doc.data() as { contactId?: string; dealId?: string }
+    const fromContact = data.contactId ? contactOrgMap.get(data.contactId) : undefined
+    const fromDeal = data.dealId ? dealOrgMap.get(data.dealId) : undefined
+    const inferred = fromContact ?? fromDeal
+    const chosen = inferred ?? orgId
+    if (inferred) actInferred++
+    actBatch.update(doc.ref, { orgId: chosen, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    actInBatch++
+    if (actInBatch === 400) {
+      await actBatch.commit()
+      actWritten += actInBatch
+      console.log(`  activities: committed ${actWritten}/${activitiesMissing.length}`)
+      actBatch = db.batch()
+      actInBatch = 0
+    }
+  }
+  if (actInBatch > 0) {
+    await actBatch.commit()
+    actWritten += actInBatch
+  }
+  console.log(`  activities: wrote ${actWritten} (${actInferred} inferred, ${actWritten - actInferred} defaulted)`)
+
+  // tasks: top-level + project subcollection. Top-level only here; subcollection
+  // tasks live under projects/{id}/tasks and inherit projectOrgId at write time.
+  const tasksSnap = await db.collection('tasks').get()
+  const tasksMissing = tasksSnap.docs.filter((d: any) => !d.data().orgId)
+  console.log(`Tasks (top-level): ${tasksSnap.size} total, ${tasksMissing.length} missing orgId`)
+  let taskBatch = db.batch()
+  let taskInBatch = 0
+  let taskWritten = 0
+  for (const doc of tasksMissing) {
+    taskBatch.update(doc.ref, { orgId, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    taskInBatch++
+    if (taskInBatch === 400) {
+      await taskBatch.commit()
+      taskWritten += taskInBatch
+      console.log(`  tasks: committed ${taskWritten}/${tasksMissing.length}`)
+      taskBatch = db.batch()
+      taskInBatch = 0
+    }
+  }
+  if (taskInBatch > 0) {
+    await taskBatch.commit()
+    taskWritten += taskInBatch
+  }
+  console.log(`  tasks: wrote ${taskWritten}`)
+
+  // quotes: { contactId?, dealId?, orgId? }
+  const quotesSnap = await db.collection('quotes').get()
+  const quotesMissing = quotesSnap.docs.filter((d: any) => !d.data().orgId)
+  console.log(`Quotes: ${quotesSnap.size} total, ${quotesMissing.length} missing orgId`)
+  let quoteBatch = db.batch()
+  let quoteInBatch = 0
+  let quoteWritten = 0
+  let quoteInferred = 0
+  for (const doc of quotesMissing) {
+    const data = doc.data() as { contactId?: string; dealId?: string }
+    const fromContact = data.contactId ? contactOrgMap.get(data.contactId) : undefined
+    const fromDeal = data.dealId ? dealOrgMap.get(data.dealId) : undefined
+    const inferred = fromContact ?? fromDeal
+    const chosen = inferred ?? orgId
+    if (inferred) quoteInferred++
+    quoteBatch.update(doc.ref, { orgId: chosen, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    quoteInBatch++
+    if (quoteInBatch === 400) {
+      await quoteBatch.commit()
+      quoteWritten += quoteInBatch
+      console.log(`  quotes: committed ${quoteWritten}/${quotesMissing.length}`)
+      quoteBatch = db.batch()
+      quoteInBatch = 0
+    }
+  }
+  if (quoteInBatch > 0) {
+    await quoteBatch.commit()
+    quoteWritten += quoteInBatch
+  }
+  console.log(`  quotes: wrote ${quoteWritten} (${quoteInferred} inferred, ${quoteWritten - quoteInferred} defaulted)`)
+
   console.log('\nBackfill complete.')
 }
 
