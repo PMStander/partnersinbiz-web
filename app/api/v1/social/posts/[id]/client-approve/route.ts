@@ -1,0 +1,110 @@
+/**
+ * POST /api/v1/social/posts/:id/client-approve — client approves the post.
+ *
+ * Transitions: client_review (or legacy pending_approval) -> approved/scheduled/vaulted
+ * depending on deliveryMode and whether scheduledAt is set.
+ *
+ * Creates a queue entry when the post becomes "scheduled".
+ */
+import { FieldValue } from 'firebase-admin/firestore'
+import { adminDb } from '@/lib/firebase/admin'
+import { withAuth } from '@/lib/api/auth'
+import { withTenant } from '@/lib/api/tenant'
+import { apiSuccess, apiError } from '@/lib/api/response'
+import { logAudit } from '@/lib/social/audit'
+import {
+  getOrgApprovalSettings,
+  resolveAfterFinalApproval,
+  validateTransition,
+} from '@/lib/social/approval'
+import type { DeliveryMode, PostStatus } from '@/lib/social/providers'
+
+export const dynamic = 'force-dynamic'
+
+type Params = { params: Promise<{ id: string }> }
+
+export const POST = withAuth('client', withTenant(async (req, user, orgId, context) => {
+  const { id } = await (context as Params).params
+
+  const ref = adminDb.collection('social_posts').doc(id)
+  const snap = await ref.get()
+  if (!snap.exists) return apiError('Post not found', 404)
+
+  const post = snap.data()!
+  if (post.orgId && post.orgId !== orgId) return apiError('Post not found', 404)
+
+  const currentStatus = post.status as PostStatus
+  const transitionError = validateTransition(currentStatus, 'client_approve')
+  if (transitionError) return apiError(transitionError, 400)
+
+  const orgSettings = await getOrgApprovalSettings(orgId)
+  const deliveryMode = (post.deliveryMode as DeliveryMode | undefined) ?? orgSettings.defaultDeliveryMode
+
+  const newStatus = resolveAfterFinalApproval({
+    deliveryMode,
+    hasScheduledAt: !!post.scheduledAt,
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updateData: Record<string, any> = {
+    status: newStatus,
+    'approval.clientApprovedBy': user.uid,
+    'approval.clientApprovedAt': FieldValue.serverTimestamp(),
+    // Keep legacy approval fields populated for back-compat.
+    approvedBy: user.uid,
+    approvedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }
+
+  await ref.update(updateData)
+
+  // Create a queue entry if we just landed on "scheduled".
+  if (newStatus === 'scheduled' && post.scheduledAt) {
+    await adminDb.collection('social_queue').doc(id).set({
+      orgId,
+      postId: id,
+      scheduledAt: post.scheduledAt,
+      status: 'pending',
+      priority: 0,
+      attempts: 0,
+      maxAttempts: 5,
+      lastAttemptAt: null,
+      nextRetryAt: null,
+      backoffSeconds: 60,
+      lockedBy: null,
+      lockedAt: null,
+      startedAt: null,
+      completedAt: null,
+      error: null,
+      createdAt: FieldValue.serverTimestamp(),
+    })
+  }
+
+  const role = user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client'
+
+  // Primary audit entry.
+  await logAudit({
+    orgId,
+    action: 'post.client_approved',
+    entityType: 'post',
+    entityId: id,
+    performedBy: user.uid,
+    performedByRole: role,
+    details: { from: currentStatus, to: newStatus },
+    ip: req.headers.get('x-forwarded-for'),
+  })
+
+  // Legacy back-compat audit entry — older consumers expect post.approved.
+  await logAudit({
+    orgId,
+    action: 'post.approved',
+    entityType: 'post',
+    entityId: id,
+    performedBy: user.uid,
+    performedByRole: role,
+    details: { stage: 'client', to: newStatus },
+    ip: req.headers.get('x-forwarded-for'),
+  })
+
+  return apiSuccess({ id, status: newStatus })
+}))

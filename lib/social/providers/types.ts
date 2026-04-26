@@ -74,8 +74,12 @@ export interface EncryptedTokenBlock {
 
 export type PostStatus =
   | 'draft'
+  | 'qa_review'
+  | 'client_review'
+  | 'regenerating'
   | 'pending_approval'
   | 'approved'
+  | 'vaulted'
   | 'scheduled'
   | 'publishing'
   | 'published'
@@ -84,6 +88,31 @@ export type PostStatus =
   | 'cancelled'
 
 export type PostSource = 'ui' | 'api' | 'ai_agent' | 'rss' | 'bulk_import'
+
+export type DeliveryMode = 'auto_publish' | 'download_only' | 'both'
+
+export type RejectionStage = 'qa' | 'client'
+
+export interface RejectionRecord {
+  stage: RejectionStage
+  reason: string
+  rejectedBy: string
+  rejectedByName: string
+  rejectedAt: Timestamp
+  resolved: boolean
+}
+
+export interface ApprovalState {
+  qaApprovedBy: string | null
+  qaApprovedAt: Timestamp | null
+  clientApprovedBy: string | null
+  clientApprovedAt: Timestamp | null
+  rejectionCount: number
+  regenerationCount: number
+  lastRejectionStage: RejectionStage | null
+  lastRejectedAt: Timestamp | null
+  history: RejectionRecord[]
+}
 
 export interface PlatformOverride {
   text?: string
@@ -115,12 +144,18 @@ export interface PlatformResult {
   retryCount: number
 }
 
+export type CommentKind = 'note' | 'qa_rejection' | 'client_rejection' | 'agent_handoff'
+
 export interface PostComment {
   id: string
   userId: string
   userName: string
   text: string
   createdAt: Timestamp
+  userRole?: 'admin' | 'client' | 'ai'
+  kind?: CommentKind
+  agentPickedUp?: boolean
+  agentPickedUpAt?: Timestamp | null
 }
 
 export interface EnhancedSocialPost {
@@ -144,6 +179,10 @@ export interface EnhancedSocialPost {
   assignedTo: string | null
   approvedBy: string | null
   approvedAt: Timestamp | null
+  requiresApproval: boolean
+  deliveryMode: DeliveryMode
+  approval: ApprovalState
+  originalContent: string | null
   comments: PostComment[]
   source: PostSource
   // Legacy compatibility
@@ -231,6 +270,14 @@ export type AuditAction =
   | 'post.cancelled'
   | 'post.approved'
   | 'post.rejected'
+  | 'post.submitted'
+  | 'post.qa_approved'
+  | 'post.qa_rejected'
+  | 'post.client_approved'
+  | 'post.client_rejected'
+  | 'post.regenerated'
+  | 'post.vaulted'
+  | 'post.downloaded'
   | 'account.connected'
   | 'account.disconnected'
   | 'account.token_refreshed'

@@ -392,6 +392,12 @@ export default function PortalSocialDashboard() {
           Compose Post
         </Link>
         <Link
+          href="/portal/social/vault"
+          className="pib-btn-secondary"
+        >
+          Vault
+        </Link>
+        <Link
           href="/portal/social/history"
           className="pib-btn-secondary"
         >
