@@ -12,12 +12,12 @@ export const SITE = {
   whatsapp: '+27000000000', // PLACEHOLDER — digits only
   address: {
     streetAddress: 'Remote-first', // PLACEHOLDER
-    addressLocality: 'Cape Town',
-    addressRegion: 'Western Cape',
-    postalCode: '8001',
+    addressLocality: 'Pretoria',
+    addressRegion: 'Gauteng',
+    postalCode: '0001',
     addressCountry: 'ZA',
   },
-  geo: { latitude: -33.9249, longitude: 18.4241 },
+  geo: { latitude: -25.7461, longitude: 28.1881 },
   founder: {
     name: 'Peet Stander',
     role: 'Founder & Principal Engineer',
@@ -266,7 +266,7 @@ export const FAQ_HOMEPAGE = [
   },
   {
     q: 'Are you South African?',
-    a: 'Yes — based in Cape Town, working with clients across South Africa, the UK, and the US. We invoice in ZAR (with USD/EUR available) and accept EFT, PayPal, and international cards.',
+    a: 'Yes — based in Pretoria, working with clients across South Africa, the UK, and the US. We invoice in ZAR (with USD/EUR available) and accept EFT, PayPal, and international cards.',
   },
   {
     q: 'What stack do you build with?',

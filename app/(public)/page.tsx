@@ -51,7 +51,7 @@ export default function HomePage() {
 
           <Reveal delay={160}>
             <p className="mt-8 text-xl md:text-2xl text-[var(--color-pib-text-muted)] max-w-2xl text-pretty leading-snug">
-              Partners in Biz is a Cape Town–based studio. We build websites, web apps, mobile apps, and AI integrations
+              Partners in Biz is a Pretoria-based studio. We build websites, web apps, mobile apps, and AI integrations
               that ship in weeks — and keep working long after.
             </p>
           </Reveal>

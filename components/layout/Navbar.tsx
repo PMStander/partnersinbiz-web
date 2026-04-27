@@ -125,7 +125,7 @@ export default function Navbar() {
             <span className="material-symbols-outlined text-base">arrow_outward</span>
           </Link>
           <p className="font-mono text-xs text-[var(--color-pib-text-faint)] tracking-wide">
-            © {new Date().getFullYear()} Partners in Biz · Cape Town
+            © {new Date().getFullYear()} Partners in Biz · Pretoria
           </p>
         </div>
       </aside>

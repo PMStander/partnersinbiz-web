@@ -28,7 +28,7 @@ export function GET() {
             Software your competitors will copy.
           </div>
           <div style={{ fontSize: 28, color: '#8B8B92' }}>
-            Web · AI · Growth · Cape Town
+            Web · AI · Growth · Pretoria
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 24, color: '#8B8B92' }}>

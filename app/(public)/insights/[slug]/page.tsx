@@ -193,7 +193,7 @@ export default async function InsightPostPage({ params }: Params) {
                   {SITE.founder.role}
                 </p>
                 <p className="mt-3 text-[var(--color-pib-text-muted)] leading-relaxed text-pretty">
-                  Writes the build notes, ships the code, answers the email. Based in Cape Town,
+                  Writes the build notes, ships the code, answers the email. Based in Pretoria,
                   working with clients globally.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">

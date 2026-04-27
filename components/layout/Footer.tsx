@@ -112,7 +112,7 @@ export default function Footer() {
             <Link href="/terms-of-service" className="hover:text-[var(--color-pib-text-muted)] transition-colors">Terms</Link>
             <Link href="/llms.txt" className="hover:text-[var(--color-pib-text-muted)] transition-colors">llms.txt</Link>
             <Link href="/sitemap.xml" className="hover:text-[var(--color-pib-text-muted)] transition-colors">Sitemap</Link>
-            <span className="font-mono">v2026.04 · Made in Cape Town</span>
+            <span className="font-mono">v2026.04 · Made in Pretoria</span>
           </div>
         </div>
       </div>

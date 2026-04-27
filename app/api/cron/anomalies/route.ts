@@ -89,5 +89,5 @@ export async function GET(req: NextRequest) {
     if (sent) summary.emailsSent += 1
   }
 
-  return NextResponse.json({ ok: true, ...summary })
+  return NextResponse.json({ ...summary, ok: true })
 }

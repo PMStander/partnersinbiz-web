@@ -29,7 +29,7 @@ const NEXT_STEPS = [
 const TRUST = [
   'EFT, PayPal, international cards',
   'Reply within 1 business day',
-  'Cape Town–based, working globally',
+  'Pretoria-based, working globally',
   '100% of clients still operating',
 ]
 

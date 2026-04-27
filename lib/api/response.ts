@@ -33,7 +33,7 @@ export function apiError(
 export function apiErrorFromException(err: any): NextResponse<ApiResponse<never>> {
   const isDev = process.env.NODE_ENV !== 'production'
   const message: string = (err?.message ?? String(err)) || 'Internal Server Error'
-  const code: string | undefined = err?.code
+  const code: string | number | undefined = err?.code
 
   // Firestore missing composite index
   const isMissingIndex =

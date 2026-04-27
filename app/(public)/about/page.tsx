@@ -7,22 +7,22 @@ import { Reveal } from '@/components/marketing/Reveal'
 import { CountUp } from '@/components/marketing/CountUp'
 
 export const metadata: Metadata = {
-  title: 'About — Founder-led software studio in Cape Town',
+  title: 'About — Founder-led software studio in Pretoria',
   description:
-    'Partners in Biz is a Cape Town–based studio led by Peet Stander. We build websites, web apps, mobile apps, and AI integrations that ship — and keep working.',
+    'Partners in Biz is a Pretoria-based studio led by Peet Stander. We build websites, web apps, mobile apps, and AI integrations that ship — and keep working.',
   alternates: { canonical: '/about' },
   openGraph: {
     title: 'About Partners in Biz',
     description:
-      'Founder-led software studio in Cape Town. Boring tooling, brave decisions. EFT-first, no vendor lock-in.',
+      'Founder-led software studio in Pretoria. Boring tooling, brave decisions. EFT-first, no vendor lock-in.',
     url: `${SITE.url}/about`,
     type: 'profile',
-    images: ['/images/portrait-1.png'],
+    images: ['/images/peet-stander.jpg'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'About Partners in Biz',
-    description: 'Founder-led software studio in Cape Town.',
+    description: 'Founder-led software studio in Pretoria.',
   },
 }
 
@@ -115,7 +115,7 @@ export default function AboutPage() {
           </Reveal>
           <Reveal delay={160}>
             <p className="mt-8 text-lg md:text-xl text-[var(--color-pib-text-muted)] max-w-2xl text-pretty leading-relaxed">
-              Partners in Biz is a Cape Town–based studio led by Peet Stander. We make websites,
+              Partners in Biz is a Pretoria-based studio led by Peet Stander. We make websites,
               web apps, mobile apps, and AI integrations that ship — and keep working.
             </p>
           </Reveal>
@@ -140,7 +140,7 @@ export default function AboutPage() {
             <Reveal>
               <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[20px] border border-[var(--color-pib-line)] bg-[var(--color-pib-surface)]">
                 <Image
-                  src="/images/portrait-1.png"
+                  src="/images/peet-stander.jpg"
                   alt="Peet Stander, Founder of Partners in Biz"
                   fill
                   sizes="(max-width: 1024px) 100vw, 40vw"
@@ -152,7 +152,7 @@ export default function AboutPage() {
                     <p className="font-display text-2xl leading-none">{SITE.founder.name}</p>
                     <p className="eyebrow mt-2">{SITE.founder.role}</p>
                   </div>
-                  <span className="pill pill-accent">Cape Town</span>
+                  <span className="pill pill-accent">Pretoria</span>
                 </div>
               </div>
             </Reveal>

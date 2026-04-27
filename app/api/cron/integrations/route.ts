@@ -23,8 +23,8 @@ export async function GET(req: NextRequest) {
   const summary = await dispatchAll({ today, concurrency: 4 })
 
   return NextResponse.json({
-    ok: true,
     today,
     ...summary,
+    ok: true,
   })
 }

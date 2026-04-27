@@ -59,5 +59,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, ...summary })
+  return NextResponse.json({ ...summary, ok: true })
 }

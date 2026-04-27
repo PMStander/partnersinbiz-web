@@ -26,5 +26,5 @@ export const POST = withAuth('admin', async (_req: NextRequest, _user, ctx) => {
   const conn = await getConnection({ propertyId: id, provider })
   if (!conn) return NextResponse.json({ error: 'Not connected' }, { status: 404 })
   const summary = await dispatchOne(conn)
-  return NextResponse.json({ ok: true, ...summary })
+  return NextResponse.json({ ...summary, ok: true })
 })

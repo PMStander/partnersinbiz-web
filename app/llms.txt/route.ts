@@ -21,7 +21,7 @@ export function GET() {
 
 > ${SITE.description}
 
-Partners in Biz is a Cape Town–based web development and AI integration studio led by ${SITE.founder.name}. We build production Next.js websites, custom internal platforms, mobile apps, AI agents, and growth automation for ambitious small and medium businesses across South Africa, the UK, and the US.
+Partners in Biz is a Pretoria-based web development and AI integration studio led by ${SITE.founder.name}. We build production Next.js websites, custom internal platforms, mobile apps, AI agents, and growth automation for ambitious small and medium businesses across South Africa, the UK, and the US.
 
 We specialise in: Next.js 16, React 19, Tailwind CSS v4, TypeScript, Vercel, Firebase, Supabase, Anthropic Claude, OpenAI, Resend, and Cal.com. We build with boring, battle-tested tooling — not whatever trended on Hacker News this week.
 

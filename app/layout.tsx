@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     'web development South Africa',
     'Next.js development agency',
     'AI integration consultancy',
-    'custom software development Cape Town',
+    'custom software development Pretoria',
     'website design South Africa',
     'AI agent development',
     'Vercel deployment partner',
