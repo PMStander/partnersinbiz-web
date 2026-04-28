@@ -3,7 +3,7 @@
  * POST /api/v1/organizations/[id]/members — add a member by email
  */
 import { NextRequest } from 'next/server'
-import { FieldValue } from 'firebase-admin/firestore'
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
@@ -99,7 +99,7 @@ export const POST = withAuth('admin', async (req, user, ctx) => {
   const newMember: OrgMember = {
     userId,
     role: role as any,
-    joinedAt: FieldValue.serverTimestamp() as any,
+    joinedAt: Timestamp.now() as any,
     invitedBy: user.uid,
   }
 

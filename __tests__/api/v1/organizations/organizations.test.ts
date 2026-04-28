@@ -3,9 +3,19 @@ import { NextRequest } from 'next/server'
 import { GET, POST } from '@/app/api/v1/organizations/route'
 import { GET as getById, PUT, DELETE } from '@/app/api/v1/organizations/[id]/route'
 import { POST as addMember } from '@/app/api/v1/organizations/[id]/members/route'
+import { POST as createLogin } from '@/app/api/v1/organizations/[id]/create-login/route'
 import { DELETE as removeMember } from '@/app/api/v1/organizations/[id]/members/[userId]/route'
 import { POST as linkClient } from '@/app/api/v1/organizations/[id]/link-client/route'
 import { GET as getOrgAccounts } from '@/app/api/v1/organizations/[id]/accounts/route'
+
+jest.mock('firebase-admin/firestore', () => ({
+  FieldValue: {
+    serverTimestamp: () => '__SERVER_TS__',
+  },
+  Timestamp: {
+    now: () => '__NOW_TS__',
+  },
+}))
 
 const AI_KEY = 'test-ai-key'
 process.env.AI_API_KEY = AI_KEY
@@ -21,6 +31,9 @@ jest.mock('@/lib/firebase/admin', () => ({
   adminAuth: {
     verifyIdToken: jest.fn(),
     verifySessionCookie: jest.fn(),
+    getUserByEmail: jest.fn(),
+    createUser: jest.fn(),
+    generatePasswordResetLink: jest.fn(),
   },
   adminDb: { collection: (...args: unknown[]) => mockCollection(...args) },
 }))
@@ -237,6 +250,8 @@ describe('POST /api/v1/organizations/[id]/members', () => {
   const mockDocGet = jest.fn()
   const mockDoc = jest.fn()
   const mockUpdate = jest.fn()
+  const mockUserQueryGet = jest.fn()
+  const mockUserWhere = jest.fn()
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -251,17 +266,29 @@ describe('POST /api/v1/organizations/[id]/members', () => {
     })
     mockUpdate.mockResolvedValue(undefined)
     mockDoc.mockReturnValue({ get: mockDocGet, update: mockUpdate })
-    mockCollection.mockReturnValue({ doc: mockDoc })
+    mockUserQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [{ id: 'new-user', data: () => ({ displayName: 'New User', email: 'new@example.com', photoURL: null }) }],
+    })
+    mockUserWhere.mockReturnValue({ get: mockUserQueryGet })
+    mockCollection.mockImplementation((collName: string) => {
+      if (collName === 'organizations') return { doc: mockDoc }
+      if (collName === 'users') return { where: mockUserWhere }
+      throw new Error(`Unexpected collection: ${collName}`)
+    })
   })
 
   it('adds a member and returns 201', async () => {
     const res = await addMember(
-      adminReq('POST', { userId: 'new-user', role: 'member' }),
+      adminReq('POST', { email: 'new@example.com', role: 'member' }),
       { params: Promise.resolve({ id: 'org-1' }) } as any,
     )
     expect(res.status).toBe(201)
     const body = await res.json()
-    expect(body.data.added).toBe(true)
+    expect(body.data.userId).toBe('new-user')
+    expect(body.data.email).toBe('new@example.com')
+    expect(body.data.joinedAt).toBe('__NOW_TS__')
+    expect(mockUserWhere).toHaveBeenCalledWith('email', '==', 'new@example.com')
     expect(body.data.userId).toBe('new-user')
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
       members: expect.anything(),
@@ -270,14 +297,18 @@ describe('POST /api/v1/organizations/[id]/members', () => {
   })
 
   it('returns 409 when user is already a member', async () => {
+    mockUserQueryGet.mockResolvedValue({
+      empty: false,
+      docs: [{ id: 'ai-agent', data: () => ({ displayName: 'Pip', email: 'owner@example.com' }) }],
+    })
     const res = await addMember(
-      adminReq('POST', { userId: 'ai-agent', role: 'member' }),
+      adminReq('POST', { email: 'owner@example.com', role: 'member' }),
       { params: Promise.resolve({ id: 'org-1' }) } as any,
     )
     expect(res.status).toBe(409)
   })
 
-  it('returns 400 when userId is missing', async () => {
+  it('returns 400 when email is missing', async () => {
     const res = await addMember(
       adminReq('POST', {}),
       { params: Promise.resolve({ id: 'org-1' }) } as any,
@@ -285,13 +316,110 @@ describe('POST /api/v1/organizations/[id]/members', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 404 when user email does not exist', async () => {
+    mockUserQueryGet.mockResolvedValue({ empty: true, docs: [] })
+    const res = await addMember(
+      adminReq('POST', { email: 'ghost@example.com', role: 'member' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+    expect(res.status).toBe(404)
+  })
+
   it('returns 404 when org does not exist', async () => {
     mockDocGet.mockResolvedValue({ exists: false })
     const res = await addMember(
-      adminReq('POST', { userId: 'new-user' }),
+      adminReq('POST', { email: 'new@example.com' }),
       { params: Promise.resolve({ id: 'ghost' }) } as any,
     )
     expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /api/v1/organizations/[id]/create-login', () => {
+  const mockOrgGet = jest.fn()
+  const mockOrgUpdate = jest.fn()
+  const mockOrgDoc = jest.fn()
+  const mockUserSet = jest.fn()
+  const mockUserDoc = jest.fn()
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    const { adminAuth } = require('@/lib/firebase/admin')
+
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'ai-agent', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    mockOrgUpdate.mockResolvedValue(undefined)
+    mockOrgDoc.mockReturnValue({ get: mockOrgGet, update: mockOrgUpdate })
+    mockUserSet.mockResolvedValue(undefined)
+    mockUserDoc.mockReturnValue({ set: mockUserSet })
+
+    ;(adminAuth.getUserByEmail as jest.Mock).mockRejectedValue({ code: 'auth/user-not-found' })
+    ;(adminAuth.createUser as jest.Mock).mockResolvedValue({ uid: 'new-client-uid' })
+    ;(adminAuth.generatePasswordResetLink as jest.Mock).mockResolvedValue('https://reset.example.com/link')
+
+    mockCollection.mockImplementation((collName: string) => {
+      if (collName === 'organizations') return { doc: mockOrgDoc }
+      if (collName === 'users') return { doc: mockUserDoc }
+      throw new Error(`Unexpected collection: ${collName}`)
+    })
+  })
+
+  it('creates a client login, stores the user, and appends a member with a concrete timestamp', async () => {
+    const res = await createLogin(
+      adminReq('POST', { email: 'client@example.com', name: 'Client User', role: 'viewer' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.data.uid).toBe('new-client-uid')
+    expect(body.data.email).toBe('client@example.com')
+    expect(body.data.setupLink).toBe('https://reset.example.com/link')
+    expect(mockUserSet).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'client@example.com',
+      displayName: 'Client User',
+      role: 'client',
+      createdAt: '__SERVER_TS__',
+    }))
+    expect(mockOrgUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      members: expect.arrayContaining([
+        expect.objectContaining({
+          userId: 'new-client-uid',
+          role: 'viewer',
+          joinedAt: '__NOW_TS__',
+          invitedBy: 'ai-agent',
+        }),
+      ]),
+      updatedAt: '__SERVER_TS__',
+    }))
+  })
+
+  it('returns 409 when the auth user already belongs to the organisation', async () => {
+    const { adminAuth } = require('@/lib/firebase/admin')
+    mockOrgGet.mockResolvedValue({
+      exists: true,
+      id: 'org-1',
+      data: () => ({
+        name: 'Lumen', slug: 'lumen', active: true,
+        members: [{ userId: 'existing-uid', role: 'owner' }],
+        description: '', logoUrl: '', website: '', createdBy: 'ai-agent', linkedClientId: '',
+      }),
+    })
+    ;(adminAuth.getUserByEmail as jest.Mock).mockResolvedValue({ uid: 'existing-uid' })
+
+    const res = await createLogin(
+      adminReq('POST', { email: 'owner@example.com', name: 'Existing User', role: 'member' }),
+      { params: Promise.resolve({ id: 'org-1' }) } as any,
+    )
+
+    expect(res.status).toBe(409)
   })
 })
 

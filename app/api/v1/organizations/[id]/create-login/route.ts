@@ -6,7 +6,7 @@
  * password-setup link the admin can forward to the client.
  */
 import { NextRequest } from 'next/server'
-import { FieldValue } from 'firebase-admin/firestore'
+import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
@@ -65,7 +65,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user, ctx) => {
   const newMember: OrgMember = {
     userId: uid,
     role: role as any,
-    joinedAt: FieldValue.serverTimestamp() as any,
+    joinedAt: Timestamp.now() as any,
     invitedBy: user.uid,
   }
   await adminDb.collection('organizations').doc(id).update({
