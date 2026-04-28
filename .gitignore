@@ -64,3 +64,6 @@ service-account.json
 stitch/
 client-secret.json
 .env*.local
+
+# Sentry Config File
+.env.sentry-build-plugin
