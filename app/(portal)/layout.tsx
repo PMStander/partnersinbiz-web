@@ -52,7 +52,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       {/* Portal top nav */}
       <header className="border-b border-[var(--color-outline-variant)] px-8 h-16 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-8">
-          <Link href="/portal/dashboard" className="font-headline font-bold tracking-tighter text-lg text-[var(--color-accent-v2)]">
+          <Link href="/portal/dashboard" className="flex items-center gap-2 font-headline font-bold tracking-tighter text-lg text-[var(--color-accent-v2)]">
+            <img src="/pib-logo-512.png" alt="Partners in Biz" className="w-7 h-7 rounded-lg object-contain" />
             PiB Portal
           </Link>
           <nav className="hidden md:flex items-center gap-1">

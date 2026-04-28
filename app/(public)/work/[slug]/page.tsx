@@ -29,9 +29,9 @@ const CONTENT: Record<Slug, CaseContent> = {
         'Pip and the team rebuilt our entire platform in 6 weeks. We shipped what our last vendor took 9 months to half-finish — and our coaches actually use it.',
       author: 'Daniel Roux',
       role: 'Co-founder, Athleet',
-      avatar: '/images/portrait-1.png',
+      avatar: '/images/case-athleet-cover.jpg',
     },
-    visuals: ['/images/our-process-design.png', '/images/our-process-hero.png'],
+    visuals: ['/images/case-athleet-ops.jpg', '/images/case-athleet-cover.jpg'],
     brief:
       'Athleet came to us with a problem most growing sports clubs share but rarely articulate well: their administrative spine was held together with WhatsApp groups, a scattering of Google Sheets, and the occasional PDF emailed at 11pm. Coaches were re-typing rosters. Parents were asking the same questions every week. Membership numbers had quietly tripled in eighteen months and the cracks were now structural. They had tried two off-the-shelf club platforms before us — both built for North-American leagues with rigid season models that did not match how a South African club actually runs. The brief was deceptively simple: build the system we should have started with three years ago, and make it boring enough that admins trust it on day one.',
     insight:
@@ -57,9 +57,9 @@ const CONTENT: Record<Slug, CaseContent> = {
         'They write code like grown-ups. No stubs, no "we will fix it in v2", no surprises in the invoice. The cutover happened on a Wednesday afternoon and nobody noticed except our analytics dashboard.',
       author: 'Sarah van Niekerk',
       role: 'Head of Product, Loyalty Plus',
-      avatar: '/images/portrait-3.png',
+      avatar: '/images/case-loyaltyplus-cover.jpg',
     },
-    visuals: ['/images/our-process-hero.png', '/images/our-process-design.png'],
+    visuals: ['/images/case-loyaltyplus-mobile.jpg', '/images/case-loyaltyplus-cover.jpg'],
     brief:
       'Loyalty Plus runs the loyalty programmes for a portfolio of aviation clients — airlines, MROs, and ground service providers across three continents. Their platform was ten years old and showing every one of those years. The original Angular 4 codebase had been patched, forked, half-migrated to Angular 8, then frozen. Initial page loads averaged eight seconds on cellular, the iOS Cordova wrapper crashed on long lists, and any new feature took six weeks of cautious archaeology before code could be written. The brief was unambiguous: modernise the front-end without touching the data layer their enterprise customers had built integrations against, and do it without a single minute of customer-facing downtime.',
     insight:
@@ -85,9 +85,9 @@ const CONTENT: Record<Slug, CaseContent> = {
         'Within two months we were ranking number one for our primary practice area in Cape Town, and our paralegals stopped spending half their week chasing document signatures. The portal alone paid for the project.',
       author: 'Adv. Hendrik Steyn',
       role: 'Director, AHS Law',
-      avatar: '/images/portrait-2.png',
+      avatar: '/images/case-ahs-law-cover.jpg',
     },
-    visuals: ['/images/our-process-design.png', '/images/our-process-hero.png'],
+    visuals: ['/images/case-ahs-law-portal.jpg', '/images/case-ahs-law-cover.jpg'],
     brief:
       'AHS Law is a boutique commercial litigation and corporate advisory firm in Cape Town. They came to us with two problems that turned out to be the same problem. The marketing site, built years earlier on a generic WordPress theme, was ranking nowhere — competitors with half the credentials sat above them on every primary search term. And client document exchange happened via email, with the inevitable 30MB PDFs bouncing off Gmail limits and partners having no audit trail of what had been signed when. The directors did not want a brochure refresh. They wanted measurable inbound and a client experience that matched the standard of work they delivered.',
     insight:
@@ -113,9 +113,9 @@ const CONTENT: Record<Slug, CaseContent> = {
         'Day one in production we had funnel data nobody else in the speed-reading category has. Day thirty we had answers I would have been guessing at for six months on the old stack.',
       author: 'Marcus Lin',
       role: 'Founder, Scrolled Brain',
-      avatar: '/images/team-marcus.png',
+      avatar: '/images/case-scrolledbrain-cover.jpg',
     },
-    visuals: ['/images/our-process-hero.png', '/images/our-process-design.png'],
+    visuals: ['/images/case-scrolledbrain-dashboard.jpg', '/images/case-scrolledbrain-cover.jpg'],
     brief:
       'Scrolled Brain is a speed-reading and focus platform aimed at students and knowledge workers. The founder came to us with a marketing site that was technically functional but converting poorly, and an analytics bill on PostHog that was eating more than fifteen percent of monthly revenue. Worse, the data PostHog was collecting did not actually answer the questions the team needed to make product decisions. The brief had two halves: rebuild the marketing site as a serious conversion surface, and build a custom analytics stack that costs a fraction of what they were paying and tells them exactly which onboarding step is bleeding users.',
     insight:

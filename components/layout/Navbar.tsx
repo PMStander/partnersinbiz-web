@@ -39,9 +39,7 @@ export default function Navbar() {
           className="container-pib flex items-center justify-between h-16 md:h-20"
         >
           <Link href="/" aria-label="Partners in Biz home" className="flex items-center gap-2.5 group">
-            <span className="relative grid place-items-center w-8 h-8 rounded-lg bg-[var(--color-pib-text)] text-black font-bold text-sm font-mono">
-              P
-            </span>
+            <img src="/pib-logo-512.png" alt="Partners in Biz" className="w-8 h-8 rounded-lg object-contain" />
             <span className="font-display text-xl tracking-tight hidden sm:inline">
               Partners <span className="text-[var(--color-pib-text-muted)]">in</span> Biz
             </span>

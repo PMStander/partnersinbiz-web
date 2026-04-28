@@ -60,10 +60,10 @@ const MANIFESTO = [
 ] as const
 
 const BTS = [
-  { src: '/images/team-marcus.png', label: 'Writing the brief', caption: 'Week 0 — discovery and scope' },
-  { src: '/images/team-julian.png', label: 'Design review', caption: 'Figma, in-context, with you' },
-  { src: '/images/team-elena.png', label: 'Deploying', caption: 'Preview URLs for every PR' },
-  { src: '/images/portrait-2.png', label: 'Launch day', caption: 'DNS, analytics, monitoring — live' },
+  { src: '/images/process-discover.jpg', label: 'Writing the brief', caption: 'Week 0 — discovery and scope' },
+  { src: '/images/process-design.jpg', label: 'Design review', caption: 'Figma, in-context, with you' },
+  { src: '/images/process-build.jpg', label: 'Building', caption: 'Code, tickets, and previews moving daily' },
+  { src: '/images/process-launch.jpg', label: 'Launch day', caption: 'DNS, analytics, monitoring — live' },
 ] as const
 
 const ENGAGEMENTS = [

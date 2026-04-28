@@ -116,7 +116,7 @@ export const CASE_STUDIES = [
       { value: '<4w', label: 'time to launch' },
       { value: '98%', label: 'retention' },
     ],
-    cover: '/images/our-process-hero.png', // PLACEHOLDER cover
+    cover: '/images/case-athleet-cover.jpg',
     stack: ['Next.js 16', 'Firebase', 'Tailwind v4', 'Resend'],
     href: '/work/athleet',
   },
@@ -133,7 +133,7 @@ export const CASE_STUDIES = [
       { value: '4.1x', label: 'faster page loads' },
       { value: '12+', label: 'enterprise clients' },
     ],
-    cover: '/images/our-process-design.png', // PLACEHOLDER
+    cover: '/images/case-loyaltyplus-cover.jpg',
     stack: ['Angular', 'Ionic', 'Capacitor', 'Firebase'],
     href: '/work/loyalty-plus',
   },
@@ -150,7 +150,7 @@ export const CASE_STUDIES = [
       { value: '1.4s', label: 'mobile LCP' },
       { value: '2x', label: 'inbound enquiries' },
     ],
-    cover: '/images/portrait-1.png', // PLACEHOLDER
+    cover: '/images/case-ahs-law-cover.jpg',
     stack: ['Vite', 'React', 'Firebase Auth'],
     href: '/work/ahs-law',
   },
@@ -167,7 +167,7 @@ export const CASE_STUDIES = [
       { value: '38%', label: 'sign-up rate' },
       { value: 'Day 1', label: 'analytics in production' },
     ],
-    cover: '/images/team-marcus.png', // PLACEHOLDER
+    cover: '/images/case-scrolledbrain-cover.jpg',
     stack: ['Next.js', '@partnersinbiz/analytics-js'],
     href: '/work/scrolledbrain',
   },
@@ -179,7 +179,7 @@ export const TESTIMONIALS = [
       'Pip and the Partners in Biz team rebuilt our entire platform in 6 weeks. We shipped what our last vendor took 9 months to half-finish.',
     author: 'Founder', // PLACEHOLDER
     role: 'CEO, Athleet',
-    avatar: '/images/portrait-1.png',
+    avatar: '/images/case-athleet-cover.jpg',
     company: 'Athleet',
   },
   {
@@ -187,7 +187,7 @@ export const TESTIMONIALS = [
       'They write code like grown-ups. No stubs, no "we will fix it in v2", no surprises in the invoice.',
     author: 'Operations Lead', // PLACEHOLDER
     role: 'Director, AHS Law',
-    avatar: '/images/portrait-2.png',
+    avatar: '/images/case-ahs-law-cover.jpg',
     company: 'AHS Law',
   },
   {
@@ -195,7 +195,7 @@ export const TESTIMONIALS = [
       'The thing that sold me was the process page. They show you exactly what they will do — and then they do it.',
     author: 'Product Lead', // PLACEHOLDER
     role: 'Product, Loyalty Plus',
-    avatar: '/images/portrait-3.png',
+    avatar: '/images/case-loyaltyplus-cover.jpg',
     company: 'Loyalty Plus',
   },
 ] as const;

@@ -20,8 +20,9 @@ export const dynamic = 'force-dynamic'
 const VALID_LEGACY_PLATFORMS: SocialPlatform[] = ['x', 'linkedin']
 // Use the canonical PostStatus type — includes pending_approval, approved, publishing, partially_published
 const VALID_STATUSES: PostStatus[] = [
-  'draft', 'pending_approval', 'approved', 'scheduled',
-  'publishing', 'published', 'partially_published', 'failed', 'cancelled',
+  'draft', 'qa_review', 'regenerating', 'client_review', 'pending_approval',
+  'approved', 'vaulted', 'scheduled', 'publishing', 'published',
+  'partially_published', 'failed', 'cancelled',
 ]
 
 function toLegacyPlatform(platform: string): SocialPlatform | null {

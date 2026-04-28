@@ -21,11 +21,11 @@ export const metadata: Metadata = {
 }
 
 const ARTIFACTS: Record<string, { label: string; image: string; tint: string }> = {
-  Discover: { label: 'Sample audit deck', image: '/images/our-process-design.png', tint: 'from-amber-500/20' },
-  Design: { label: 'Figma file thumbnail', image: '/images/our-process-hero.png', tint: 'from-violet-500/20' },
-  Build: { label: 'Linear board screenshot', image: '/images/our-process-design.png', tint: 'from-emerald-500/20' },
-  Launch: { label: 'Vercel deployment log', image: '/images/our-process-hero.png', tint: 'from-sky-500/20' },
-  Grow: { label: 'Analytics dashboard', image: '/images/our-process-design.png', tint: 'from-rose-500/20' },
+  Discover: { label: 'Sample audit deck', image: '/images/process-discover.jpg', tint: 'from-amber-500/20' },
+  Design: { label: 'Figma file thumbnail', image: '/images/process-design.jpg', tint: 'from-violet-500/20' },
+  Build: { label: 'Linear board screenshot', image: '/images/process-build.jpg', tint: 'from-emerald-500/20' },
+  Launch: { label: 'Vercel deployment log', image: '/images/process-launch.jpg', tint: 'from-sky-500/20' },
+  Grow: { label: 'Analytics dashboard', image: '/images/process-grow.jpg', tint: 'from-rose-500/20' },
 }
 
 const TOOLS = [

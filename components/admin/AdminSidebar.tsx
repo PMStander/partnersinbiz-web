@@ -143,9 +143,7 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
       >
       {/* Logo */}
       <div className="px-5 py-4 flex items-center gap-2.5">
-        <div className="w-7 h-7 rounded-lg bg-[var(--color-accent-v2)] flex items-center justify-center">
-          <span className="font-headline text-[11px] font-black text-black tracking-tight">P</span>
-        </div>
+        <img src="/pib-logo-512.png" alt="Partners in Biz" className="w-7 h-7 rounded-lg object-contain" />
         <span className="font-headline text-sm font-bold tracking-wide text-on-surface">
           PiB
         </span>

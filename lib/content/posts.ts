@@ -23,7 +23,7 @@ export const POSTS: Post[] = [
     readingTime: '8 min',
     datePublished: '2026-04-12',
     dateModified: '2026-04-25',
-    cover: '/images/our-process-hero.png',
+    cover: '/images/insight-nextjs16.jpg',
     tags: ['Next.js', 'Performance', 'SEO'],
     body: `## TL;DR
 Next.js 16 brings cache components, native View Transitions, and a smarter image pipeline. For business websites, the headline is faster perceived performance with less code.
@@ -48,7 +48,7 @@ If you are still on Pages Router or Next 14, the upgrade is overdue. If you are 
     category: 'Build Notes',
     readingTime: '11 min',
     datePublished: '2026-04-02',
-    cover: '/images/our-process-design.png',
+    cover: '/images/insight-ai-billing.jpg',
     tags: ['AI', 'Claude', 'Billing', 'South Africa'],
     body: `## TL;DR
 A functional invoicing agent is not "GPT writes a number". It is a tool-calling Claude that owns a state machine — draft, sent, viewed, proof uploaded, paid — with hard guardrails on every transition.
@@ -70,7 +70,7 @@ A client sends one message. The system invoices, follows up, and reconciles — 
     category: 'Industry POV',
     readingTime: '9 min',
     datePublished: '2026-03-21',
-    cover: '/images/portrait-2.png',
+    cover: '/images/insight-pricing-za.jpg',
     tags: ['Pricing', 'South Africa', 'Strategy'],
     body: `## TL;DR
 Marketing sites: R35k–R120k. Custom web apps: R120k–R450k+. The number is set by integrations, not pages.
