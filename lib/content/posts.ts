@@ -66,9 +66,9 @@ What's almost always missing:
 - **SSL and security hardening.** An SSL certificate (the padlock in the browser address bar) is the minimum standard for any commercial website. Without it, browsers flag your site as "not secure." Without proper security configuration beyond that, your site is a soft target.
 - **Performance tuning.** Page load speed is not cosmetic. 53% of mobile users abandon a site that takes more than three seconds to load. Cheap builds don't compress images, don't minify code, and don't use caching properly. They're slow by default.
 - **SEO foundations.** Being findable on Google doesn't happen automatically. It requires structured metadata, proper heading hierarchy, correctly configured Google Search Console, and clean URL architecture. None of this comes standard in a template build.
-- **A maintenance plan.** A site with no maintenance plan has a predictable future: it degrades, gets outdated, and eventually breaks.
+- **[A maintenance plan](/insights/website-maintenance-not-one-time).** A site with no maintenance plan has a predictable future: it degrades, gets outdated, and eventually breaks.
 
-A R20,000 custom build addresses all of this from the ground up. The developer is thinking about your customer journey, your load time, your search intent, and your conversion path — not just whether the "about us" page looks nice.
+A [R20,000 custom build](/services/web-development) addresses all of this from the ground up. The developer is thinking about your customer journey, your load time, your search intent, and your conversion path — not just whether the "about us" page looks nice.
 
 ---
 
@@ -111,7 +111,17 @@ The cheapest website costs you more. Not because of what you paid, but because o
 
 Budget for the build. Budget for the maintenance. Get a proposal that names what you're buying. And test the agency's existing work on a phone before you sign.
 
-A website that earns while you sleep costs more than one that just sits there. The maths eventually makes itself clear.`,
+A website that earns while you sleep costs more than one that just sits there. The maths eventually makes itself clear.
+
+---
+
+## Related reading
+
+- [Your Website Isn't a One-Time Project](/insights/website-maintenance-not-one-time) — what actually needs to happen after launch
+- [577 Attacks Per Hour: The Cybersecurity Crisis SA SMEs Are Ignoring](/insights/sa-sme-cybersecurity-attacks) — why the cheapest websites are the easiest targets
+- [How much does a custom website cost in South Africa in 2026?](/insights/south-african-website-cost-2026) — the full ZAR breakdown by project type
+
+Ready to scope a real proposal? See our [marketing website service](/services/web-development) or [start a project](/start-a-project).`,
   },
   {
     slug: 'website-vs-app-south-africa-sme',
@@ -143,7 +153,7 @@ The reasoning is almost always the same:
 
 **"I'll reach more customers."** This is where the logic breaks most visibly. New customers do not download apps from businesses they have never heard of. Nobody browses the App Store looking for their next plumber, accountant, or clothing brand. Discovery happens on the web. Apps serve customers you already have.
 
-The pressure to build an app is real, and much of it comes from agencies who earn more building apps than they do building websites. A well-executed responsive website might cost R25,000. A native app might cost R250,000.
+The pressure to build an app is real, and much of it comes from agencies who earn more building apps than they do building websites. A well-executed [responsive website](/services/web-development) might cost R25,000. A [native app](/services/mobile-apps) might cost R250,000.
 
 ---
 
@@ -228,7 +238,16 @@ For SA-specific context, the mobile-first imperative is more pronounced than in 
 - If your budget is under R100,000, spend it on an excellent mobile-first website, not a minimal app.
 - If you want app-like features without App Store friction, a Progressive Web App is probably the answer.
 - If you are in food delivery, fitness, fintech, or repeat-purchase e-commerce — and you have an established customer base — a native app is worth the investment.
-- If your competitor has an app and you do not know their download count, their active users, or their maintenance costs, you do not have enough information to copy them.`,
+- If your competitor has an app and you do not know their download count, their active users, or their maintenance costs, you do not have enough information to copy them.
+
+---
+
+## Related reading
+
+- [Why R4,500 Is the Minimum for a Website That Actually Works](/insights/website-minimum-price-south-africa) — the pricing reality before you commit
+- [How much does a custom website cost in South Africa in 2026?](/insights/south-african-website-cost-2026) — full ZAR ranges by project type
+
+Need help choosing? See our [web development](/services/web-development), [mobile app](/services/mobile-apps), and [web application](/services/web-applications) services, or [book a 20-min intro](/start-a-project).`,
   },
   {
     slug: 'ai-integration-roi-south-africa-sme',
@@ -290,9 +309,9 @@ AI-assisted content generation reduces content creation time by 41%, with 53% of
 
 ### 4. AI chatbot integration on your website or WhatsApp
 
-A chatbot is only valuable if it is connected to real data — your product catalogue, your pricing, your FAQs, your booking system. A well-integrated chatbot handles volume. The 15-employee e-commerce example handled 70% of incoming requests automatically.
+A chatbot is only valuable if it is connected to real data — your product catalogue, your pricing, your FAQs, your booking system. A well-integrated chatbot handles volume. The 15-employee e-commerce example handled 70% of incoming requests automatically — see the full [chatbot case study breakdown](/insights/ai-chatbot-case-study-sme).
 
-For SA businesses with high WhatsApp traffic, WhatsApp Business API integration is particularly high-value.
+For SA businesses with high WhatsApp traffic, WhatsApp Business API integration is particularly high-value. Our [AI integration service](/services/ai-integration) covers the full implementation.
 
 ---
 
@@ -320,7 +339,16 @@ A chatbot with no access to your data can only answer generic questions. It cann
 
 The cost difference between a generic chatbot skin and a properly integrated system is real — but so is the return difference. The $3.70 per $1 invested figure comes from integrations that connect to real data.
 
-Build the integration. Not the facade.`,
+Build the integration. Not the facade.
+
+---
+
+## Related reading
+
+- [4 Hours to 30 Seconds: The AI Chatbot Case Study Every SME Should Read](/insights/ai-chatbot-case-study-sme) — the integration architecture that actually delivers ROI
+- [Building an AI agent that actually bills clients](/insights/building-an-ai-agent-that-bills) — what real production AI looks like
+
+Want a scoped AI pilot for your business? Start with our [AI integration service](/services/ai-integration) or [book a 20-min intro](/start-a-project).`,
   },
   {
     slug: 'ai-chatbot-case-study-sme',
@@ -411,7 +439,16 @@ The 34% improvement in customer satisfaction has its own multiplier. Repeat purc
 
 **Step 4: Run a 90-day pilot on one channel.** Pick your highest-volume channel — usually the website chat or WhatsApp Business — and run the integration there for 90 days.
 
-Most businesses at this scale see meaningful results within the first 30 days. The 90-day window gives you time to tune the integration, catch edge cases, and train the AI on your specific product vocabulary.`,
+Most businesses at this scale see meaningful results within the first 30 days. The 90-day window gives you time to tune the integration, catch edge cases, and train the AI on your specific product vocabulary.
+
+---
+
+## Related reading
+
+- [AI Integration ROI: The Real Numbers SA SMEs Are Seeing](/insights/ai-integration-roi-south-africa-sme) — the data behind the case study
+- [Building an AI agent that actually bills clients](/insights/building-an-ai-agent-that-bills) — extending AI integration into billing workflows
+
+We scope this kind of work via our [AI integration service](/services/ai-integration). [Start a project](/start-a-project) — we'll identify your highest-value automation target and give you a straight estimate.`,
   },
   {
     slug: 'social-media-automation-sme',
@@ -490,7 +527,16 @@ This is not a weekend project. It is four focused hours, done once, that elimina
 
 **Hour four: Connect your analytics.** Set a weekly report to arrive in your inbox every Monday morning. Define three metrics that matter to you — reach, link clicks, and direct messages or enquiries.
 
-After those four hours: your social media runs for the next four weeks without daily intervention. You check the weekly report. You respond to comments when they come in. That is it.`,
+After those four hours: your social media runs for the next four weeks without daily intervention. You check the weekly report. You respond to comments when they come in. That is it.
+
+---
+
+## Related reading
+
+- [253% ROI on Social Automation: How to Measure What Your Software Is Actually Doing](/insights/social-automation-roi-measurement) — the measurement framework that proves the system works
+- [AI Integration ROI: The Real Numbers SA SMEs Are Seeing](/insights/ai-integration-roi-south-africa-sme) — including AI-assisted content generation data
+
+We build [growth automation systems](/services/growth-systems) connected to your real data, your actual brand voice, and your marketing goals — not generic scheduling tools. [Start a project](/start-a-project).`,
   },
   {
     slug: 'sa-sme-cybersecurity-attacks',
@@ -583,7 +629,16 @@ When you're evaluating a web developer or agency, ask these specific questions:
 - **"How is admin access controlled?"** Strong password requirements, two-factor authentication, and role-based access control should all be standard.
 - **"What happens if there's a breach?"** A serious developer has a documented incident response process. An amateur has a shrug.
 
-The right answer to all five of these questions is not expensive. It's built into a professional development process. If your current website can't answer these questions, you're operating with an open window.`,
+The right answer to all five of these questions is not expensive. It's built into a [professional development process](/our-process). If your current website can't answer these questions, you're operating with an open window.
+
+---
+
+## Related reading
+
+- [Your Website Isn't a One-Time Project](/insights/website-maintenance-not-one-time) — the maintenance cadence that prevents most breaches
+- [Why R4,500 Is the Minimum for a Website That Actually Works](/insights/website-minimum-price-south-africa) — why the cheapest sites are the easiest targets
+
+Every site we build includes HTTPS, a defined patch schedule, proper backup architecture, access controls, and an incident process — see our [web development service](/services/web-development) or [start a project](/start-a-project).`,
   },
   {
     slug: 'website-maintenance-not-one-time',
@@ -638,7 +693,7 @@ At **twelve months**, the problems compound. A known vulnerability in an unpatch
 
 At **twenty-four months**, the conversation changes entirely. The fix is no longer a patch — it is a rebuild. Costs manageable at R500 to R1,500 per month have now collapsed into R20,000 to R60,000.
 
-Security breaches carry their own category of cost. The SA SME market sees 577 cyber attack attempts per hour. When a site is compromised, the damage is rarely just the site — customer data, payment credentials, and reputation are all at risk.
+Security breaches carry their own category of cost. The SA SME market sees [577 cyber attack attempts per hour](/insights/sa-sme-cybersecurity-attacks). When a site is compromised, the damage is rarely just the site — customer data, payment credentials, and reputation are all at risk.
 
 ---
 
@@ -661,7 +716,16 @@ Maintenance is not about fixing problems after they appear. It is about ensuring
 - **Monthly reporting.** A brief report — uptime, security status, speed score, and SEO health — keeps you informed without requiring technical knowledge.
 - **Emergency response time.** What happens if your site goes down at 8pm on a Friday? "Business hours only" may not be adequate depending on your industry.
 
-We do not just build and disappear. Every project we deliver includes a maintenance plan — because a site without one is not finished. It is just waiting to become a problem.`,
+We do not just build and disappear. Every project we deliver includes a maintenance plan — because a site without one is not finished. It is just waiting to become a problem.
+
+---
+
+## Related reading
+
+- [577 Attacks Per Hour: The Cybersecurity Crisis SA SMEs Are Ignoring](/insights/sa-sme-cybersecurity-attacks) — what unmaintained sites get hit by, and how often
+- [Why R4,500 Is the Minimum for a Website That Actually Works](/insights/website-minimum-price-south-africa) — why "build it cheap and forget it" never actually saves money
+
+See our [web development service](/services/web-development) or [our process](/our-process) for what an ongoing relationship actually looks like. [Start a project](/start-a-project).`,
   },
   {
     slug: 'social-automation-roi-measurement',
@@ -759,7 +823,16 @@ If you are using a social automation tool and not seeing measurable improvement,
 - **No content calendar.** Automation schedules content. It does not create strategy. Consistent noise is still noise.
 - **Automation without strategy.** Posting 180 times per month does nothing if the content does not address a real question your audience has.
 - **Scheduling without engaging.** Automation handles outbound scheduling. It does not handle inbound engagement.
-- **Treating it as passive infrastructure.** The businesses that hit 253% ROI review their analytics monthly, adjust content mix, and iterate. The businesses that see 12% ROI set it up once and leave it.`,
+- **Treating it as passive infrastructure.** The businesses that hit 253% ROI review their analytics monthly, adjust content mix, and iterate. The businesses that see 12% ROI set it up once and leave it.
+
+---
+
+## Related reading
+
+- [6.7 Hours a Week on Social Media: How Automation Gives It Back](/insights/social-media-automation-sme) — the four-hour setup that recovers the time
+- [AI Integration ROI: The Real Numbers SA SMEs Are Seeing](/insights/ai-integration-roi-south-africa-sme) — broader ROI data, including AI-assisted captioning
+
+We build [growth automation systems](/services/growth-systems) you can actually measure — not scheduling tools bolted onto someone else's platform. [Start a project](/start-a-project).`,
   },
   {
     slug: 'next-js-16-for-business-websites',
