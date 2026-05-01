@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { SERVICES, CASE_STUDIES, SITE } from '@/lib/seo/site'
+import { POSTS } from '@/lib/content/posts'
 import {
   JsonLd,
   breadcrumbSchema,
@@ -22,6 +23,7 @@ interface ServiceContent {
   process: { step: string; title: string; body: string }[]
   techExtras: string[]
   caseStudySlugs: string[]
+  relatedInsightSlugs?: string[]
   pricing: {
     label: string
     note?: string
@@ -77,6 +79,12 @@ const CONTENT: Record<Slug, ServiceContent> = {
     ],
     techExtras: ['Sanity', 'MDX', 'Resend', 'Plausible', 'Cloudflare'],
     caseStudySlugs: ['ahs-law', 'scrolledbrain'],
+    relatedInsightSlugs: [
+      'website-minimum-price-south-africa',
+      'website-maintenance-not-one-time',
+      'sa-sme-cybersecurity-attacks',
+      'south-african-website-cost-2026',
+    ],
     pricing: {
       label: `from ${ZAR(35000)}`,
       includes: [
@@ -137,6 +145,11 @@ const CONTENT: Record<Slug, ServiceContent> = {
     ],
     techExtras: ['Server Actions', 'Firestore', 'Supabase', 'TanStack', 'Resend', 'Stripe / PayPal'],
     caseStudySlugs: ['athleet', 'loyalty-plus'],
+    relatedInsightSlugs: [
+      'website-vs-app-south-africa-sme',
+      'next-js-16-for-business-websites',
+      'building-an-ai-agent-that-bills',
+    ],
     pricing: {
       label: `from ${ZAR(120000)}`,
       includes: [
@@ -197,6 +210,10 @@ const CONTENT: Record<Slug, ServiceContent> = {
     ],
     techExtras: ['Expo', 'EAS Build', 'React Native', 'Reanimated', 'Sentry', 'Capacitor (when it fits)'],
     caseStudySlugs: ['athleet', 'loyalty-plus'],
+    relatedInsightSlugs: [
+      'website-vs-app-south-africa-sme',
+      'south-african-website-cost-2026',
+    ],
     pricing: {
       label: `from ${ZAR(180000)}`,
       includes: [
@@ -257,6 +274,11 @@ const CONTENT: Record<Slug, ServiceContent> = {
     ],
     techExtras: ['Anthropic', 'OpenAI', 'Vercel AI SDK', 'pgvector', 'LangSmith', 'Tool use'],
     caseStudySlugs: ['scrolledbrain', 'athleet'],
+    relatedInsightSlugs: [
+      'ai-integration-roi-south-africa-sme',
+      'ai-chatbot-case-study-sme',
+      'building-an-ai-agent-that-bills',
+    ],
     pricing: {
       label: `from ${ZAR(75000)}`,
       includes: [
@@ -318,6 +340,11 @@ const CONTENT: Record<Slug, ServiceContent> = {
     ],
     techExtras: ['Resend', 'Buffer / Native APIs', 'Webhooks', 'Cron jobs', 'PostgreSQL', 'Looker Studio'],
     caseStudySlugs: ['scrolledbrain', 'ahs-law'],
+    relatedInsightSlugs: [
+      'social-media-automation-sme',
+      'social-automation-roi-measurement',
+      'ai-integration-roi-south-africa-sme',
+    ],
     pricing: {
       label: `from ${ZAR(45000)} / month`,
       note: 'Monthly retainer. Includes build hours and ongoing tuning.',
@@ -379,6 +406,11 @@ const CONTENT: Record<Slug, ServiceContent> = {
     ],
     techExtras: ['Architecture review', 'AI strategy', 'Fractional CTO', 'Equity partnerships', 'Discovery sprints'],
     caseStudySlugs: ['athleet', 'loyalty-plus'],
+    relatedInsightSlugs: [
+      'next-js-16-for-business-websites',
+      'building-an-ai-agent-that-bills',
+      'ai-integration-roi-south-africa-sme',
+    ],
     pricing: {
       label: 'Custom — let&rsquo;s scope it.',
       note: 'These projects are quoted on the work, not a price card.',
@@ -726,6 +758,44 @@ export default async function ServiceDetailPage({
           <FAQ items={content.faqs} />
         </div>
       </section>
+
+      {/* Related Insights */}
+      {content.relatedInsightSlugs && content.relatedInsightSlugs.length > 0 && (
+        <section className="section pt-0">
+          <div className="container-pib">
+            <SectionHead
+              eyebrow="Related insights"
+              title="Further reading from the workshop."
+              subtitle="Practical writing on the topics this service touches — pricing, decision frameworks, ROI data, and the things that change once a project is live."
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+              {content.relatedInsightSlugs
+                .map((s) => POSTS.find((p) => p.slug === s))
+                .filter((p): p is NonNullable<typeof p> => Boolean(p))
+                .map((p, i) => (
+                  <Reveal key={p.slug} delay={i * 80}>
+                    <Link
+                      href={`/insights/${p.slug}`}
+                      className="bento-card h-full p-6 flex flex-col gap-3 group"
+                    >
+                      <span className="pill self-start">{p.category}</span>
+                      <h3 className="font-display text-xl leading-tight text-[var(--color-pib-text)] text-balance group-hover:text-[var(--color-pib-accent)] transition">
+                        {p.title}
+                      </h3>
+                      <p className="text-sm text-[var(--color-pib-text-muted)] leading-relaxed text-pretty flex-1">
+                        {p.description}
+                      </p>
+                      <span className="pib-link-underline text-[var(--color-pib-accent)] text-sm font-medium inline-flex items-center gap-1.5 mt-1">
+                        Read article
+                        <span className="material-symbols-outlined text-base">arrow_forward</span>
+                      </span>
+                    </Link>
+                  </Reveal>
+                ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* CTA */}
       <section className="section pt-0">
