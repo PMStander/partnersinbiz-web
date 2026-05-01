@@ -48,41 +48,139 @@ function fmtDate(iso: string) {
   })
 }
 
+// Inline markdown: **bold**, *italic*, `code`, [text](url)
+function renderInline(text: string, baseKey: string): React.ReactNode[] {
+  const tokens: React.ReactNode[] = []
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
+  let last = 0
+  let m: RegExpExecArray | null
+  let i = 0
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) tokens.push(text.slice(last, m.index))
+    const tok = m[0]
+    const key = `${baseKey}-${i++}`
+    if (tok.startsWith('**')) {
+      tokens.push(
+        <strong key={key} className="text-[var(--color-pib-text)] font-semibold">
+          {tok.slice(2, -2)}
+        </strong>
+      )
+    } else if (tok.startsWith('`')) {
+      tokens.push(
+        <code key={key} className="font-mono text-sm bg-white/[0.06] px-1.5 py-0.5 rounded">
+          {tok.slice(1, -1)}
+        </code>
+      )
+    } else if (tok.startsWith('[')) {
+      const linkMatch = /\[([^\]]+)\]\(([^)]+)\)/.exec(tok)
+      if (linkMatch) {
+        const [, label, href] = linkMatch
+        tokens.push(
+          <Link
+            key={key}
+            href={href}
+            className="text-[var(--color-pib-accent)] underline underline-offset-4 decoration-1 hover:decoration-2 transition"
+          >
+            {label}
+          </Link>
+        )
+      }
+    } else if (tok.startsWith('*')) {
+      tokens.push(
+        <em key={key} className="italic">
+          {tok.slice(1, -1)}
+        </em>
+      )
+    }
+    last = m.index + tok.length
+  }
+  if (last < text.length) tokens.push(text.slice(last))
+  return tokens
+}
+
 function renderBody(body: string) {
   const lines = body.split('\n')
   const out: React.ReactNode[] = []
+  let listBuffer: string[] = []
+  let key = 0
+
+  const flushList = () => {
+    if (listBuffer.length === 0) return
+    const items = listBuffer
+    listBuffer = []
+    out.push(
+      <ul
+        key={`ul-${key++}`}
+        className="my-6 ml-6 space-y-3 list-disc text-lg leading-relaxed text-[var(--color-pib-text-muted)] marker:text-[var(--color-pib-accent)]"
+      >
+        {items.map((item, i) => (
+          <li key={i} className="pl-2 text-pretty">
+            {renderInline(item, `li-${key}-${i}`)}
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
   lines.forEach((raw, idx) => {
     const line = raw.trim()
-    if (!line) return
-    if (line.startsWith('## ')) {
+    if (!line) {
+      flushList()
+      return
+    }
+    if (line === '---') {
+      flushList()
+      out.push(
+        <hr
+          key={idx}
+          className="my-12 border-0 h-px bg-[var(--color-pib-line)]"
+        />
+      )
+    } else if (line.startsWith('### ')) {
+      flushList()
+      out.push(
+        <h3
+          key={idx}
+          className="font-display text-2xl md:text-3xl text-[var(--color-pib-text)] mt-10 mb-3 text-balance"
+        >
+          {renderInline(line.slice(4), `h3-${idx}`)}
+        </h3>
+      )
+    } else if (line.startsWith('## ')) {
+      flushList()
       out.push(
         <h2
           key={idx}
           className="font-display text-3xl md:text-4xl text-[var(--color-pib-text)] mt-12 mb-4 text-balance"
         >
-          {line.slice(3)}
+          {renderInline(line.slice(3), `h2-${idx}`)}
         </h2>
       )
     } else if (line.startsWith('# ')) {
+      flushList()
       out.push(
         <h1
           key={idx}
           className="font-display text-4xl text-[var(--color-pib-text)] mt-12 mb-4 text-balance"
         >
-          {line.slice(2)}
+          {renderInline(line.slice(2), `h1-${idx}`)}
         </h1>
       )
+    } else if (line.startsWith('- ')) {
+      listBuffer.push(line.slice(2))
     } else {
+      flushList()
       out.push(
         <p
           key={idx}
           className="text-lg leading-relaxed text-[var(--color-pib-text-muted)] my-6 text-pretty"
         >
-          {line}
+          {renderInline(line, `p-${idx}`)}
         </p>
       )
     }
   })
+  flushList()
   return out
 }
 

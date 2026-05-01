@@ -8,8 +8,8 @@ export const SITE = {
     'South African web development and AI integration agency. We build Next.js websites, custom platforms, AI agents, and growth automation for ambitious SMEs.',
   tagline: 'Software your competitors will copy.',
   email: 'hello@partnersinbiz.online',
-  phone: '+27-00-000-0000', // PLACEHOLDER
-  whatsapp: '+27000000000', // PLACEHOLDER — digits only
+  phone: '+27-67-896-6333',
+  whatsapp: '+27678966333',
   address: {
     streetAddress: 'Remote-first', // PLACEHOLDER
     addressLocality: 'Pretoria',
@@ -26,6 +26,7 @@ export const SITE = {
     github: 'https://github.com/peetstander', // PLACEHOLDER
   },
   social: {
+    facebook: 'https://www.facebook.com/partnersinbiz',
     linkedin: 'https://www.linkedin.com/company/partnersinbiz', // PLACEHOLDER
     twitter: 'https://twitter.com/partnersinbiz', // PLACEHOLDER
     instagram: 'https://www.instagram.com/partnersinbiz', // PLACEHOLDER

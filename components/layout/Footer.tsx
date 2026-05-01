@@ -89,6 +89,7 @@ export default function Footer() {
           <div className="md:col-span-2">
             <h4 className="eyebrow mb-5">Connect</h4>
             <ul className="space-y-3 text-sm">
+              <li><a href={SITE.social.facebook} target="_blank" rel="noopener noreferrer" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">Facebook</a></li>
               <li><a href={SITE.social.linkedin} target="_blank" rel="noopener noreferrer" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">LinkedIn</a></li>
               <li><a href={SITE.social.twitter} target="_blank" rel="noopener noreferrer" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">X / Twitter</a></li>
               <li><a href={SITE.social.github} target="_blank" rel="noopener noreferrer" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors">GitHub</a></li>
