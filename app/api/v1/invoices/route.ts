@@ -1,4 +1,3 @@
-import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
@@ -8,14 +7,24 @@ import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 export const dynamic = 'force-dynamic'
 
-export const GET = withAuth('admin', async (req) => {
+export const GET = withAuth('client', async (req, user) => {
   const { searchParams } = new URL(req.url)
-  const orgId = searchParams.get('orgId')
-  const billingOrgId = searchParams.get('billingOrgId')
 
   let query = adminDb.collection('invoices').orderBy('createdAt', 'desc') as any
-  if (orgId) query = query.where('orgId', '==', orgId)
-  if (billingOrgId) query = query.where('billingOrgId', '==', billingOrgId)
+
+  if (user.role === 'client') {
+    // Clients can only see invoices issued to their own org.
+    const userDoc = await adminDb.collection('users').doc(user.uid).get()
+    const clientOrgId = userDoc.exists ? (userDoc.data()?.orgId as string | undefined) : undefined
+    if (!clientOrgId) return apiSuccess([])
+    query = query.where('orgId', '==', clientOrgId)
+  } else {
+    // Admin / AI can filter freely by orgId / billingOrgId query params.
+    const orgId = searchParams.get('orgId')
+    const billingOrgId = searchParams.get('billingOrgId')
+    if (orgId) query = query.where('orgId', '==', orgId)
+    if (billingOrgId) query = query.where('billingOrgId', '==', billingOrgId)
+  }
 
   const snapshot = await query.limit(50).get()
   const invoices = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))

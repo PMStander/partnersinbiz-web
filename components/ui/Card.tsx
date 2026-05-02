@@ -14,8 +14,7 @@ export function Card({ children, className, hover, onClick }: CardProps) {
       onClick={onClick}
       className={cn(
         'pib-card',
-        hover && 'pib-card-hover cursor-pointer',
-        onClick && 'cursor-pointer',
+        (hover || onClick) && 'pib-card-hover',
         className,
       )}
     >
@@ -30,28 +29,39 @@ interface MetricCardProps {
   sub?: string
   trend?: 'up' | 'down' | 'neutral'
   accent?: boolean
+  icon?: string
   onClick?: () => void
 }
 
-export function MetricCard({ label, value, sub, trend, accent, onClick }: MetricCardProps) {
+export function MetricCard({ label, value, sub, trend, accent, icon, onClick }: MetricCardProps) {
   return (
-    <Card hover={!!onClick} onClick={onClick} className="space-y-1">
-      <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-        {label}
-      </p>
-      <p className={cn(
-        'text-3xl font-headline font-bold',
-        accent ? 'text-[var(--color-accent-v2)]' : 'text-on-surface',
-      )}>
+    <div
+      onClick={onClick}
+      className={cn('pib-stat-card', onClick && 'cursor-pointer')}
+    >
+      <div className="flex items-start justify-between">
+        <p className="eyebrow !text-[10px]">{label}</p>
+        {icon && (
+          <span className="material-symbols-outlined text-[18px] text-[var(--color-pib-text-muted)]">
+            {icon}
+          </span>
+        )}
+      </div>
+      <p
+        className={cn(
+          'mt-3 font-display tracking-tight leading-none text-3xl md:text-4xl',
+          accent ? 'text-[var(--color-pib-accent)]' : 'text-[var(--color-pib-text)]',
+        )}
+      >
         {value}
       </p>
       {sub && (
-        <p className="text-xs text-on-surface-variant flex items-center gap-1">
-          {trend === 'up' && <span className="text-green-400">↑</span>}
-          {trend === 'down' && <span className="text-red-400">↓</span>}
+        <p className="mt-3 text-xs text-[var(--color-pib-text-muted)] flex items-center gap-1 font-mono">
+          {trend === 'up' && <span className="text-[var(--color-pib-success)]">↑</span>}
+          {trend === 'down' && <span className="text-[#FCA5A5]">↓</span>}
           {sub}
         </p>
       )}
-    </Card>
+    </div>
   )
 }

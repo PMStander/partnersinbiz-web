@@ -108,20 +108,13 @@ export default function GlobalSearch() {
   return (
     <div ref={containerRef} className="relative">
       <div
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant text-sm cursor-text min-w-[200px]"
+        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-pib-surface)] border border-[var(--color-pib-line)] hover:border-[var(--color-pib-line-strong)] text-[var(--color-pib-text-muted)] text-sm cursor-text transition-colors min-w-[200px]"
         onClick={() => {
           setOpen(true)
           setTimeout(() => inputRef.current?.focus(), 0)
         }}
       >
-        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
+        <span className="material-symbols-outlined text-[18px] flex-shrink-0">search</span>
         <input
           ref={inputRef}
           value={query}
@@ -131,27 +124,27 @@ export default function GlobalSearch() {
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
-          placeholder="Search contacts, projects, tasks..."
-          className="bg-transparent outline-none text-sm text-on-surface placeholder:text-on-surface-variant flex-1 min-w-0"
+          placeholder="Search…"
+          className="bg-transparent outline-none text-sm text-[var(--color-pib-text)] placeholder:text-[var(--color-pib-text-muted)] flex-1 min-w-0"
         />
         {loading && (
-          <div className="w-3 h-3 border border-on-surface-variant border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          <div className="w-3 h-3 border border-[var(--color-pib-text-muted)] border-t-transparent rounded-full animate-spin flex-shrink-0" />
         )}
       </div>
 
       {open && query.length >= 2 && (
-        <div className="absolute top-full mt-1 left-0 w-80 rounded-xl bg-surface-container border border-outline-variant shadow-lg z-50 overflow-hidden pib-card">
+        <div className="absolute top-full mt-2 left-0 w-80 rounded-xl bg-[var(--color-pib-surface)] border border-[var(--color-pib-line-strong)] shadow-2xl z-50 overflow-hidden">
           {!results.length && loading ? (
-            <div className="p-4 text-sm text-on-surface-variant text-center">Searching...</div>
+            <div className="p-4 text-sm text-[var(--color-pib-text-muted)] text-center">Searching…</div>
           ) : !results.length && !loading ? (
-            <div className="p-4 text-sm text-on-surface-variant text-center">
+            <div className="p-4 text-sm text-[var(--color-pib-text-muted)] text-center">
               No results for &quot;{query}&quot;
             </div>
           ) : (
             <div className="max-h-96 overflow-y-auto">
               {groupedResults.contacts.length > 0 && (
                 <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                  <p className="px-3 pt-3 pb-1.5 eyebrow !text-[10px]">
                     Contacts
                   </p>
                   {groupedResults.contacts.map((result, idx) => (
@@ -162,14 +155,14 @@ export default function GlobalSearch() {
                         setOpen(false)
                         setQuery('')
                       }}
-                      className="block px-3 py-2 hover:bg-row-hover transition-colors"
+                      className="block px-3 py-2 hover:bg-white/[0.04] transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-base">{typeIcons.contact}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-on-surface truncate">{result.title}</p>
+                          <p className="text-sm font-medium text-[var(--color-pib-text)] truncate">{result.title}</p>
                           {result.subtitle && (
-                            <p className="text-xs text-on-surface-variant truncate">{result.subtitle}</p>
+                            <p className="text-xs text-[var(--color-pib-text-muted)] truncate">{result.subtitle}</p>
                           )}
                         </div>
                       </div>
@@ -180,7 +173,7 @@ export default function GlobalSearch() {
 
               {groupedResults.projects.length > 0 && (
                 <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                  <p className="px-3 pt-3 pb-1.5 eyebrow !text-[10px]">
                     Projects
                   </p>
                   {groupedResults.projects.map((result) => (
@@ -191,14 +184,14 @@ export default function GlobalSearch() {
                         setOpen(false)
                         setQuery('')
                       }}
-                      className="block px-3 py-2 hover:bg-row-hover transition-colors"
+                      className="block px-3 py-2 hover:bg-white/[0.04] transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-base">{typeIcons.project}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-on-surface truncate">{result.title}</p>
+                          <p className="text-sm font-medium text-[var(--color-pib-text)] truncate">{result.title}</p>
                           {result.subtitle && (
-                            <p className="text-xs text-on-surface-variant truncate">{result.subtitle}</p>
+                            <p className="text-xs text-[var(--color-pib-text-muted)] truncate">{result.subtitle}</p>
                           )}
                         </div>
                       </div>
@@ -209,7 +202,7 @@ export default function GlobalSearch() {
 
               {groupedResults.tasks.length > 0 && (
                 <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                  <p className="px-3 pt-3 pb-1.5 eyebrow !text-[10px]">
                     Tasks
                   </p>
                   {groupedResults.tasks.map((result) => (
@@ -220,14 +213,14 @@ export default function GlobalSearch() {
                         setOpen(false)
                         setQuery('')
                       }}
-                      className="block px-3 py-2 hover:bg-row-hover transition-colors"
+                      className="block px-3 py-2 hover:bg-white/[0.04] transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-base">{typeIcons.task}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-on-surface truncate">{result.title}</p>
+                          <p className="text-sm font-medium text-[var(--color-pib-text)] truncate">{result.title}</p>
                           {result.subtitle && (
-                            <p className="text-xs text-on-surface-variant truncate">{result.subtitle}</p>
+                            <p className="text-xs text-[var(--color-pib-text-muted)] truncate">{result.subtitle}</p>
                           )}
                         </div>
                       </div>
@@ -238,7 +231,7 @@ export default function GlobalSearch() {
 
               {groupedResults.invoices.length > 0 && (
                 <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                  <p className="px-3 pt-3 pb-1.5 eyebrow !text-[10px]">
                     Invoices
                   </p>
                   {groupedResults.invoices.map((result) => (
@@ -249,14 +242,14 @@ export default function GlobalSearch() {
                         setOpen(false)
                         setQuery('')
                       }}
-                      className="block px-3 py-2 hover:bg-row-hover transition-colors"
+                      className="block px-3 py-2 hover:bg-white/[0.04] transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-base">{typeIcons.invoice}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-on-surface truncate">{result.title}</p>
+                          <p className="text-sm font-medium text-[var(--color-pib-text)] truncate">{result.title}</p>
                           {result.subtitle && (
-                            <p className="text-xs text-on-surface-variant truncate">{result.subtitle}</p>
+                            <p className="text-xs text-[var(--color-pib-text-muted)] truncate">{result.subtitle}</p>
                           )}
                         </div>
                       </div>

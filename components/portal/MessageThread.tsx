@@ -30,7 +30,13 @@ export default function MessageThread({ messages, enquiryId, onSent }: Props) {
     })
     if (res.ok) {
       const body = await res.json()
-      onSent({ id: body.data.id, text: text.trim(), direction: 'inbound', authorName: 'You', createdAt: null })
+      onSent({
+        id: body.data.id,
+        text: text.trim(),
+        direction: 'inbound',
+        authorName: 'You',
+        createdAt: null,
+      })
       setText('')
     }
     setSending(false)
@@ -38,27 +44,30 @@ export default function MessageThread({ messages, enquiryId, onSent }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+      <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
         {messages.length === 0 && (
-          <p className="text-white/40 text-sm text-center py-6">No messages yet. Send us an update below.</p>
+          <p className="text-[var(--color-pib-text-muted)] text-sm text-center py-8">
+            No messages yet. Send us an update below.
+          </p>
         )}
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.direction === 'inbound' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm ${
-                msg.direction === 'inbound'
-                  ? 'bg-white/10 text-white'
-                  : 'bg-white/[0.03] border border-white/10 text-white/80'
-              }`}
-            >
-              <p className="text-xs font-medium mb-1 opacity-60">{msg.authorName}</p>
-              <p>{msg.text}</p>
+        {messages.map((msg) => {
+          const mine = msg.direction === 'inbound'
+          return (
+            <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={[
+                  'max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-snug',
+                  mine
+                    ? 'bg-[var(--color-pib-accent)] text-black rounded-br-md'
+                    : 'bg-[var(--color-pib-surface-2)] border border-[var(--color-pib-line)] text-[var(--color-pib-text)] rounded-bl-md',
+                ].join(' ')}
+              >
+                <p className="text-[10px] font-mono uppercase tracking-widest opacity-70 mb-1">{msg.authorName}</p>
+                <p>{msg.text}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
       <div className="flex gap-2">
         <input
@@ -66,13 +75,9 @@ export default function MessageThread({ messages, enquiryId, onSent }: Props) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && send()}
           placeholder="Send a message or update…"
-          className="flex-1 px-4 py-2.5 rounded-xl bg-white/[0.05] border border-white/10 text-white text-sm placeholder:text-white/30 outline-none focus:border-white/30"
+          className="pib-input flex-1 !rounded-full !py-2.5"
         />
-        <button
-          onClick={send}
-          disabled={sending || !text.trim()}
-          className="px-4 py-2.5 rounded-xl bg-white text-black text-sm font-medium disabled:opacity-40 transition-opacity"
-        >
+        <button onClick={send} disabled={sending || !text.trim()} className="pib-btn-primary disabled:opacity-40 disabled:cursor-not-allowed">
           {sending ? '…' : 'Send'}
         </button>
       </div>

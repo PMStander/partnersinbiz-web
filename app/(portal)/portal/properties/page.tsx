@@ -19,18 +19,37 @@ const PROVIDER_LABEL: Record<string, string> = {
   firebase_analytics: 'Firebase Analytics',
 }
 
+const PROVIDER_ICON: Record<string, string> = {
+  adsense: 'ads_click',
+  admob: 'ads_click',
+  revenuecat: 'subscriptions',
+  app_store_connect: 'phone_iphone',
+  play_console: 'android',
+  google_ads: 'campaign',
+  ga4: 'analytics',
+  firebase_analytics: 'flame',
+}
+
+const STATUS_PILL: Record<string, string> = {
+  connected: 'pib-pill-success',
+  paused: 'pib-pill-warn',
+  reauth_required: 'pib-pill-warn',
+  error: 'pib-pill-danger',
+  pending: 'pib-pill-info',
+}
+
+const TYPE_ICON: Record<string, string> = {
+  web: 'language',
+  ios: 'phone_iphone',
+  android: 'android',
+  app: 'apps',
+}
+
 function StatusPill({ status }: { status: string }) {
-  const m: Record<string, string> = {
-    connected: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-    paused: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-    reauth_required: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-    error: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-    pending: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-  }
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-widest font-mono ${m[status] ?? 'bg-white/5 text-white/50 border-white/10'}`}>
+    <span className={`pib-pill ${STATUS_PILL[status] ?? ''}`}>
       <span className="w-1.5 h-1.5 rounded-full bg-current" />
-      {status.replace('_', ' ')}
+      {status.replace(/_/g, ' ')}
     </span>
   )
 }
@@ -57,51 +76,71 @@ export default function PortalProperties() {
   })()
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="font-headline text-2xl font-bold tracking-tighter">Properties</h1>
-        <p className="text-sm text-[var(--color-on-surface-variant)] mt-1">
-          Each property — site, iOS app, Android app — and its connected data sources.
+    <div className="space-y-10">
+      <header>
+        <p className="eyebrow">Your stack</p>
+        <h1 className="pib-page-title mt-2">Properties</h1>
+        <p className="pib-page-sub max-w-2xl">
+          Each property — site, iOS app, Android app — and the data sources we&rsquo;ve connected for you.
         </p>
-      </div>
+      </header>
 
       {loading ? (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="pib-skeleton h-24" />
+            <div key={i} className="pib-skeleton h-32" />
           ))}
         </div>
       ) : !data || data.properties.length === 0 ? (
-        <div className="pib-card p-8 text-center">
-          <p className="font-headline text-xl mb-2">No properties yet.</p>
-          <p className="text-sm text-[var(--color-on-surface-variant)] max-w-md mx-auto">
+        <div className="bento-card p-10 text-center">
+          <span className="material-symbols-outlined text-4xl text-[var(--color-pib-accent)]">apartment</span>
+          <h2 className="font-display text-2xl mt-4">No properties yet.</h2>
+          <p className="text-sm text-[var(--color-pib-text-muted)] max-w-md mx-auto mt-2">
             Properties are created during onboarding. Reach out via Messages if you need one added.
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {data.properties.map((p) => {
             const conns = byProperty.get(p.id) ?? []
+            const icon = TYPE_ICON[p.type] ?? 'inventory_2'
             return (
-              <div key={p.id} className="pib-card">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div>
-                    <h3 className="font-headline text-lg">{p.name}</h3>
-                    <p className="text-xs text-[var(--color-on-surface-variant)] uppercase tracking-widest font-label mt-1">{p.type} · {p.domain}</p>
+              <div key={p.id} className="pib-card-section">
+                <div className="pib-card-section-header flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[var(--color-pib-accent-soft)] border border-[var(--color-pib-line)] flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-[20px] text-[var(--color-pib-accent)]">{icon}</span>
+                    </div>
+                    <div>
+                      <h3 className="font-display text-xl leading-tight">{p.name}</h3>
+                      <p className="eyebrow !text-[10px] mt-1">{p.type} · {p.domain}</p>
+                    </div>
                   </div>
-                  <span className="text-xs text-[var(--color-on-surface-variant)] font-mono">{conns.length} connection{conns.length === 1 ? '' : 's'}</span>
+                  <span className="text-xs text-[var(--color-pib-text-muted)] font-mono whitespace-nowrap">
+                    {conns.length} connection{conns.length === 1 ? '' : 's'}
+                  </span>
                 </div>
                 {conns.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-[var(--color-pib-line)]">
                     {conns.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-[var(--color-outline-variant)]">
-                        <span className="text-sm">{PROVIDER_LABEL[c.provider] ?? c.provider}</span>
+                      <div
+                        key={c.id}
+                        className="flex items-center justify-between gap-3 px-5 py-3.5 bg-[var(--color-pib-surface)] hover:bg-[var(--color-pib-surface-2)] transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="material-symbols-outlined text-[18px] text-[var(--color-pib-text-muted)]">
+                            {PROVIDER_ICON[c.provider] ?? 'cable'}
+                          </span>
+                          <span className="text-sm truncate">{PROVIDER_LABEL[c.provider] ?? c.provider}</span>
+                        </div>
                         <StatusPill status={c.status} />
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-[var(--color-on-surface-variant)] italic">No data sources connected yet.</p>
+                  <div className="px-5 py-4 text-sm text-[var(--color-pib-text-muted)] italic">
+                    No data sources connected yet.
+                  </div>
                 )}
               </div>
             )

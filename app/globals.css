@@ -20,65 +20,76 @@
   --color-pib-cream: #F0EEE6;
   --color-pib-ink: #181818;
 
-  /* Legacy admin palette — kept for the admin/portal areas */
-  --color-surface-container: #1f1f1f;
-  --color-surface-container-highest: #353535;
-  --color-on-secondary-container: #e2e2e2;
-  --color-primary-fixed: #5d5f5f;
-  --color-on-tertiary-container: #000000;
-  --color-surface-bright: #393939;
-  --color-primary-container: #d4d4d4;
-  --color-surface-container-low: #1b1b1b;
-  --color-on-error-container: #ffdad6;
-  --color-tertiary-fixed-dim: #454747;
-  --color-secondary-container: #454747;
-  --color-error: #ffb4ab;
-  --color-surface-variant: #353535;
-  --color-inverse-surface: #e2e2e2;
-  --color-outline-variant: #474747;
-  --color-on-secondary: #1a1c1c;
-  --color-background: #000000;
-  --color-on-surface: #e2e2e2;
-  --color-on-primary-container: #000000;
-  --color-on-tertiary-fixed-variant: #e2e2e2;
-  --color-on-tertiary-fixed: #ffffff;
-  --color-on-tertiary: #1a1c1c;
-  --color-primary: #ffffff;
-  --color-surface: #000000;
-  --color-secondary: #c6c6c7;
-  --color-on-secondary-fixed: #1a1c1c;
-  --color-primary-fixed-dim: #454747;
-  --color-on-primary: #1a1c1c;
-  --color-surface-tint: #c6c6c7;
-  --color-secondary-fixed: #c6c6c7;
-  --color-on-primary-fixed-variant: #e2e2e2;
-  --color-tertiary: #e2e2e2;
-  --color-surface-dim: #000000;
+  /* === Admin/Portal tokens — bridged to PiB 2026 palette so admin and portal */
+  /* share the marketing-site aesthetic. Names kept for back-compat with existing markup. */
+  --color-bg: #0A0A0B;                /* alias of --color-pib-bg */
+  --color-background: #0A0A0B;
+  --color-surface: #141416;            /* alias of --color-pib-surface */
+  --color-surface-dim: #0A0A0B;
+  --color-surface-bright: #1C1C20;
+  --color-surface-tint: #F5A623;
+  --color-surface-variant: #1C1C20;
+  --color-surface-container-lowest: #0A0A0B;
+  --color-surface-container-low: #101012;
+  --color-surface-container: #141416;
+  --color-surface-container-high: #1C1C20;
+  --color-surface-container-highest: #232328;
+  --color-inverse-surface: #EDEDED;
+  --color-inverse-on-surface: #181818;
+
+  --color-on-background: #EDEDED;
+  --color-on-surface: #EDEDED;
+  --color-on-surface-variant: #8B8B92;
+
+  --color-outline: #8B8B92;
+  --color-outline-variant: rgba(255, 255, 255, 0.10);
+
+  --color-primary: #EDEDED;
+  --color-on-primary: #0A0A0B;
+  --color-primary-container: #232328;
+  --color-on-primary-container: #EDEDED;
+  --color-primary-fixed: #2A2A30;
+  --color-primary-fixed-dim: #3A3A42;
+  --color-on-primary-fixed: #FFFFFF;
+  --color-on-primary-fixed-variant: #EDEDED;
   --color-inverse-primary: #5d5f5f;
-  --color-error-container: #93000a;
-  --color-outline: #919191;
-  --color-on-secondary-fixed-variant: #3a3c3c;
-  --color-on-background: #e2e2e2;
-  --color-surface-container-high: #2a2a2a;
-  --color-on-surface-variant: #c6c6c6;
-  --color-inverse-on-surface: #303030;
-  --color-tertiary-container: #909191;
-  --color-secondary-fixed-dim: #aaabab;
-  --color-surface-container-lowest: #000000;
-  --color-on-error: #690005;
-  --color-on-primary-fixed: #ffffff;
+
+  --color-secondary: #8B8B92;
+  --color-on-secondary: #0A0A0B;
+  --color-secondary-container: #1C1C20;
+  --color-on-secondary-container: #EDEDED;
+  --color-secondary-fixed: #C6C6C7;
+  --color-secondary-fixed-dim: #8B8B92;
+  --color-on-secondary-fixed: #0A0A0B;
+  --color-on-secondary-fixed-variant: #4A4A52;
+
+  --color-tertiary: #7C5CFF;
+  --color-on-tertiary: #FFFFFF;
+  --color-tertiary-container: #2A2240;
+  --color-on-tertiary-container: #EDEDED;
   --color-tertiary-fixed: #5d5f5f;
-  --color-accent: #C0392B;
-  --color-sidebar: #111111;
-  --color-accent-v2: #F59E0B;
-  --color-accent-hover: #D97706;
-  --color-accent-subtle: rgba(245, 158, 11, 0.10);
-  --color-accent-text: #FCD34D;
-  --color-card: #0A0A0A;
-  --color-card-border: rgba(255, 255, 255, 0.06);
-  --color-card-hover: rgba(255, 255, 255, 0.03);
+  --color-tertiary-fixed-dim: #454747;
+  --color-on-tertiary-fixed: #FFFFFF;
+  --color-on-tertiary-fixed-variant: #EDEDED;
+
+  --color-error: #FCA5A5;
+  --color-on-error: #1A0000;
+  --color-error-container: rgba(252, 165, 165, 0.12);
+  --color-on-error-container: #FECACA;
+
+  --color-sidebar: #0E0E10;
+  --color-accent: #F5A623;             /* aligned with marketing accent */
+  --color-accent-v2: #F5A623;
+  --color-accent-hover: #FFB840;
+  --color-accent-subtle: rgba(245, 166, 35, 0.12);
+  --color-accent-text: #FFB840;
+
+  --color-card: #141416;
+  --color-card-border: rgba(255, 255, 255, 0.08);
+  --color-card-border-strong: rgba(255, 255, 255, 0.16);
+  --color-card-hover: #1C1C20;
   --color-row-hover: rgba(255, 255, 255, 0.04);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.18);
 
   /* === Type === */
   --font-sans: var(--font-sans), 'Inter', system-ui, sans-serif;
@@ -340,175 +351,262 @@
     flex-wrap: wrap;
   }
 
-  /* === Legacy components — keep for /admin and /portal === */
+  /* === Admin/Portal components — share the PiB 2026 marketing aesthetic. */
+  /* Class names match the historical admin markup so existing pages auto-upgrade. */
   .glass-card {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(40px) saturate(1.8);
-    -webkit-backdrop-filter: blur(40px) saturate(1.8);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: var(--radius-2xl);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+    backdrop-filter: blur(28px) saturate(1.4);
+    -webkit-backdrop-filter: blur(28px) saturate(1.4);
+    border: 1px solid var(--color-pib-line);
+    border-radius: 18px;
   }
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
   }
   .monolithic-grid {
-    background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-    background-size: 100px 100px;
+    background-image: linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
   }
+
+  /* Card surface — used everywhere in admin/portal */
   .pib-card {
-    background: var(--color-card);
-    border: 1px solid var(--color-card-border);
-    border-radius: var(--radius-card);
+    position: relative;
+    background: var(--color-pib-surface);
+    border: 1px solid var(--color-pib-line);
+    border-radius: 16px;
     padding: 1.5rem;
-    box-shadow: var(--shadow-card);
+    transition: border-color 250ms cubic-bezier(0.22, 1, 0.36, 1),
+                background-color 250ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .pib-card-hover {
-    transition: background-color 200ms ease;
+    cursor: pointer;
+    transition: all 250ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .pib-card-hover:hover {
-    background: color-mix(in srgb, var(--color-card) 100%, white 3%);
+    border-color: var(--color-pib-line-strong);
+    background: var(--color-pib-surface-2);
+    transform: translateY(-1px);
   }
-  .pib-btn-primary {
-    background: var(--color-accent-v2);
-    color: #000;
-    font-weight: 500;
-    border-radius: var(--radius-btn);
-    padding: 0.5rem 1rem;
-    transition: all 150ms ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .pib-btn-primary:hover { background: var(--color-accent-hover); }
-  .pib-btn-primary:active { transform: scale(0.97); }
-  .pib-btn-secondary {
-    border: 1px solid var(--color-outline-variant);
-    color: var(--color-on-surface);
-    border-radius: var(--radius-btn);
-    padding: 0.5rem 1rem;
-    transition: all 150ms ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .pib-btn-secondary:hover { background: var(--color-surface-container); }
-  .pib-btn-secondary:active { transform: scale(0.97); }
-  .pib-skeleton {
-    background: linear-gradient(90deg, var(--color-surface-container) 25%, var(--color-surface-container-high) 50%, var(--color-surface-container) 75%);
-    background-size: 200% 100%;
-    animation: pib-shimmer 1.5s infinite;
-    border-radius: var(--radius-btn);
-  }
-  @keyframes pib-shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-  .pib-stat-card {
-    background: var(--color-card);
-    border: 1px solid var(--color-card-border);
-    border-radius: var(--radius-card);
-    padding: 1.25rem 1.5rem;
-    box-shadow: var(--shadow-card);
-    position: relative;
-    overflow: hidden;
-  }
-  .pib-stat-card::after {
-    content: '';
-    position: absolute;
-    top: 0; right: 0;
-    width: 120px; height: 120px;
-    background: radial-gradient(circle at top right, rgba(245, 158, 11, 0.06), transparent 70%);
-    pointer-events: none;
-  }
+
+  /* Sectioned card (header + rows) */
   .pib-card-section {
-    background: var(--color-card);
-    border: 1px solid var(--color-card-border);
-    border-radius: var(--radius-card);
+    background: var(--color-pib-surface);
+    border: 1px solid var(--color-pib-line);
+    border-radius: 16px;
     overflow: hidden;
-    box-shadow: var(--shadow-card);
   }
   .pib-card-section-header {
-    padding: 0.75rem 1.25rem;
-    border-bottom: 1px solid var(--color-card-border);
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--color-pib-line);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
   }
   .pib-card-section-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid var(--color-card-border);
+    border-bottom: 1px solid var(--color-pib-line);
   }
   .pib-card-section-row:last-child { border-bottom: none; }
-  .pib-input {
-    width: 100%;
-    background: var(--color-surface-container-low);
-    border: 1px solid var(--color-outline-variant);
-    border-radius: var(--radius-btn);
-    padding: 0.5rem 0.75rem;
+
+  /* KPI / stat card with the same accent glow as marketing bento */
+  .pib-stat-card {
+    position: relative;
+    background: var(--color-pib-surface);
+    border: 1px solid var(--color-pib-line);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    overflow: hidden;
+    transition: border-color 250ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .pib-stat-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top right, var(--color-pib-accent-soft), transparent 55%);
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: none;
+  }
+  .pib-stat-card:hover {
+    border-color: var(--color-pib-line-strong);
+  }
+  .pib-stat-card:hover::before { opacity: 1; }
+
+  /* Buttons — match marketing system */
+  .pib-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-pib-accent);
+    color: #000;
+    font-weight: 600;
     font-size: 0.875rem;
-    color: var(--color-on-surface);
-    transition: border-color 150ms ease, box-shadow 150ms ease;
+    border-radius: 9999px;
+    padding: 0.55rem 1.1rem;
+    border: 1px solid transparent;
+    transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .pib-input::placeholder { color: var(--color-on-surface-variant); opacity: 0.5; }
-  .pib-input:focus {
-    outline: none;
-    border-color: var(--color-accent-v2);
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+  .pib-btn-primary:hover {
+    background: var(--color-pib-accent-hover);
+    transform: translateY(-1px);
   }
+  .pib-btn-primary:active { transform: translateY(0) scale(0.98); }
+
+  .pib-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-pib-text);
+    background: transparent;
+    border: 1px solid var(--color-pib-line-strong);
+    border-radius: 9999px;
+    padding: 0.55rem 1.1rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .pib-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.30);
+  }
+  .pib-btn-secondary:active { transform: scale(0.98); }
+
+  /* Skeleton */
+  .pib-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-pib-surface) 25%,
+      var(--color-pib-surface-2) 50%,
+      var(--color-pib-surface) 75%
+    );
+    background-size: 200% 100%;
+    animation: pib-shimmer 1.4s infinite;
+    border-radius: 12px;
+  }
+  @keyframes pib-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Form controls */
+  .pib-input,
+  .pib-textarea,
   .pib-select {
     width: 100%;
-    background: var(--color-surface-container-low);
-    border: 1px solid var(--color-outline-variant);
-    border-radius: var(--radius-btn);
-    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--color-pib-line);
+    border-radius: 10px;
+    padding: 0.6rem 0.85rem;
     font-size: 0.875rem;
-    color: var(--color-on-surface);
-    transition: border-color 150ms ease;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    padding-right: 2rem;
+    color: var(--color-pib-text);
+    transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
   }
+  .pib-input::placeholder,
+  .pib-textarea::placeholder { color: var(--color-pib-text-muted); opacity: 0.7; }
+  .pib-input:hover,
+  .pib-textarea:hover,
+  .pib-select:hover {
+    border-color: var(--color-pib-line-strong);
+  }
+  .pib-input:focus,
+  .pib-textarea:focus,
   .pib-select:focus {
     outline: none;
-    border-color: var(--color-accent-v2);
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+    border-color: var(--color-pib-accent);
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
+  }
+  .pib-textarea { resize: vertical; }
+  .pib-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238B8B92' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.85rem center;
+    padding-right: 2rem;
   }
   .pib-label {
     display: block;
-    font-size: 0.75rem;
-    font-family: var(--font-label);
-    color: var(--color-on-surface-variant);
-    margin-bottom: 0.375rem;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-pib-text-muted);
+    margin-bottom: 0.5rem;
   }
-  .pib-textarea {
-    width: 100%;
-    background: var(--color-surface-container-low);
-    border: 1px solid var(--color-outline-variant);
-    border-radius: var(--radius-btn);
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
-    color: var(--color-on-surface);
-    resize: vertical;
-    transition: border-color 150ms ease, box-shadow 150ms ease;
-  }
-  .pib-textarea:focus {
-    outline: none;
-    border-color: var(--color-accent-v2);
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
-  }
+
+  /* Sidebar nav */
   .pib-nav-active {
-    background: var(--color-accent-subtle);
-    color: var(--color-accent-text);
-    border-left: 3px solid var(--color-accent-v2);
+    background: var(--color-pib-accent-soft);
+    color: var(--color-pib-accent-hover);
+    border-left: 3px solid var(--color-pib-accent);
   }
   .pib-nav-item {
     border-left: 3px solid transparent;
     transition: background-color 150ms ease, color 150ms ease;
   }
-  .pib-nav-item:hover:not(.pib-nav-active) { background: var(--color-surface-container); }
+  .pib-nav-item:hover:not(.pib-nav-active) {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--color-pib-text);
+  }
+
+  /* Status pill (used in portal status indicators) */
+  .pib-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    border: 1px solid var(--color-pib-line);
+    background: rgba(255, 255, 255, 0.03);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-pib-text-muted);
+  }
+  .pib-pill-accent {
+    border-color: rgba(245, 166, 35, 0.35);
+    background: var(--color-pib-accent-soft);
+    color: var(--color-pib-accent-hover);
+  }
+  .pib-pill-success {
+    border-color: rgba(74, 222, 128, 0.35);
+    background: rgba(74, 222, 128, 0.10);
+    color: #6FE7A2;
+  }
+  .pib-pill-warn {
+    border-color: rgba(245, 166, 35, 0.35);
+    background: rgba(245, 166, 35, 0.10);
+    color: var(--color-pib-accent-hover);
+  }
+  .pib-pill-danger {
+    border-color: rgba(252, 165, 165, 0.35);
+    background: rgba(252, 165, 165, 0.10);
+    color: #FCA5A5;
+  }
+  .pib-pill-info {
+    border-color: rgba(124, 156, 255, 0.35);
+    background: rgba(124, 156, 255, 0.08);
+    color: #A4B8FF;
+  }
+
+  /* Page header — h1 + sub */
+  .pib-page-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    line-height: 1.05;
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    color: var(--color-pib-text);
+  }
+  .pib-page-sub {
+    color: var(--color-pib-text-muted);
+    font-size: 0.95rem;
+    margin-top: 0.5rem;
+  }
 }
 
 @layer base {
