@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase/config'
 import MessageThread from '@/components/portal/MessageThread'
@@ -14,11 +15,11 @@ const STATUS_LABELS: Record<string, string> = {
   closed: 'Completed',
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  new: 'border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)]',
-  reviewing: 'border-blue-400/40 text-blue-300',
-  active: 'border-green-400/40 text-green-300',
-  closed: 'border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)]',
+const STATUS_PILL: Record<string, string> = {
+  new: 'pib-pill',
+  reviewing: 'pib-pill pib-pill-info',
+  active: 'pib-pill pib-pill-success',
+  closed: 'pib-pill',
 }
 
 interface Message {
@@ -57,54 +58,55 @@ export default function EnquiryDetailPage({ params }: { params: Promise<{ id: st
     })
   }, [id, router])
 
-  if (loading) return (
-    <main className="relative z-10 pt-32 pb-24 px-8 md:px-16 min-h-screen">
-      <div className="max-w-3xl mx-auto space-y-4">
-        <div className="h-8 w-48 pib-skeleton rounded-xl" />
-        <div className="h-40 pib-skeleton rounded-2xl" />
+  if (loading)
+    return (
+      <div className="space-y-6">
+        <div className="pib-skeleton h-8 w-48" />
+        <div className="pib-skeleton h-40" />
+        <div className="pib-skeleton h-64" />
       </div>
-    </main>
-  )
+    )
 
   if (!enquiry) return null
 
   return (
-    <main className="relative z-10 pt-32 pb-24 px-8 md:px-16 min-h-screen">
-      <div className="max-w-3xl mx-auto space-y-8">
+    <div className="space-y-8 max-w-3xl">
+      <Link
+        href="/portal/project"
+        className="inline-flex items-center gap-1 text-sm text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors"
+      >
+        <span className="material-symbols-outlined text-base">arrow_back</span>
+        Back to projects
+      </Link>
+
+      <header className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <button
-            onClick={() => router.push('/portal/dashboard')}
-            className="text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] text-sm transition-colors mb-6 block"
-          >
-            ← Back to projects
-          </button>
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="font-headline text-3xl font-bold tracking-tighter">
-              {enquiry.projectType?.toUpperCase() ?? 'Project'}
-            </h1>
-            <span className={`text-xs font-label uppercase tracking-widest border px-3 py-1 rounded-full ${STATUS_COLORS[enquiry.status] ?? 'border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)]'}`}>
-              {STATUS_LABELS[enquiry.status] ?? enquiry.status}
-            </span>
-          </div>
+          <p className="eyebrow">Project brief</p>
+          <h1 className="pib-page-title mt-2">{enquiry.projectType?.replace(/_/g, ' ') ?? 'Project'}</h1>
         </div>
+        <span className={STATUS_PILL[enquiry.status] ?? 'pib-pill'}>
+          {STATUS_LABELS[enquiry.status] ?? enquiry.status}
+        </span>
+      </header>
 
-        <div className="glass-card p-6 space-y-3">
-          <h2 className="text-sm font-label uppercase tracking-widest text-[var(--color-on-surface-variant)]">Project Brief</h2>
-          <p className="text-[var(--color-on-surface)] text-sm leading-relaxed">{enquiry.details}</p>
-          {enquiry.company && (
-            <p className="text-xs text-[var(--color-on-surface-variant)]">Company: {enquiry.company}</p>
-          )}
-        </div>
+      <section className="bento-card !p-7 space-y-3">
+        <p className="eyebrow">Brief</p>
+        <p className="text-[var(--color-pib-text)] leading-relaxed text-pretty">{enquiry.details}</p>
+        {enquiry.company && (
+          <p className="text-xs text-[var(--color-pib-text-muted)] font-mono pt-3 border-t border-[var(--color-pib-line)]">
+            Company · {enquiry.company}
+          </p>
+        )}
+      </section>
 
-        <div className="glass-card p-6 space-y-4">
-          <h2 className="text-sm font-label uppercase tracking-widest text-[var(--color-on-surface-variant)]">Messages</h2>
-          <MessageThread
-            messages={messages}
-            enquiryId={enquiry.id}
-            onSent={(msg) => setMessages((prev) => [...prev, msg])}
-          />
-        </div>
-      </div>
-    </main>
+      <section className="bento-card !p-7 space-y-4">
+        <p className="eyebrow">Conversation</p>
+        <MessageThread
+          messages={messages}
+          enquiryId={enquiry.id}
+          onSent={(msg) => setMessages((prev) => [...prev, msg])}
+        />
+      </section>
+    </div>
   )
 }

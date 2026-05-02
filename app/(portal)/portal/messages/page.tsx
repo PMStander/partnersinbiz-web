@@ -83,13 +83,27 @@ function MessagesContent() {
   }
 
   if (loading) {
-    return <div className="pib-skeleton p-12 h-64" />
+    return (
+      <div className="space-y-6">
+        <div className="pib-skeleton h-12 w-48" />
+        <div className="pib-skeleton h-96" />
+      </div>
+    )
   }
 
   if (enquiries.length === 0) {
     return (
-      <div className="pib-card text-center">
-        <p className="text-[var(--color-on-surface-variant)]">No projects yet — submit an enquiry to start a conversation.</p>
+      <div className="space-y-10">
+        <header>
+          <p className="eyebrow">Direct line to your team</p>
+          <h1 className="pib-page-title mt-2">Messages</h1>
+        </header>
+        <div className="bento-card p-10 text-center">
+          <span className="material-symbols-outlined text-4xl text-[var(--color-pib-accent)]">forum</span>
+          <p className="text-[var(--color-pib-text-muted)] mt-4">
+            No projects yet — submit an enquiry to start a conversation.
+          </p>
+        </div>
       </div>
     )
   }
@@ -97,11 +111,12 @@ function MessagesContent() {
   const selected = enquiries.find((e) => e.id === selectedId)
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="font-headline text-2xl font-bold tracking-tighter">Messages</h1>
-        <p className="text-sm text-[var(--color-on-surface-variant)] mt-1">Your conversation with the PiB team.</p>
-      </div>
+    <div className="space-y-8">
+      <header>
+        <p className="eyebrow">Direct line to your team</p>
+        <h1 className="pib-page-title mt-2">Messages</h1>
+        <p className="pib-page-sub">Async by default. Replies typically within one business day.</p>
+      </header>
 
       {enquiries.length > 1 && (
         <div className="flex gap-2 flex-wrap">
@@ -109,9 +124,10 @@ function MessagesContent() {
             <button
               key={enq.id}
               onClick={() => setSelectedId(enq.id)}
-              className={`text-xs font-label uppercase tracking-widest px-3 py-1.5 border transition-colors ${
-                selectedId === enq.id ? 'border-[var(--color-accent-v2)] text-[var(--color-accent-v2)]' : 'border-[var(--color-outline-variant)] text-[var(--color-on-surface-variant)] hover:border-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)]'
-              }`}
+              className={[
+                'pill transition-colors',
+                selectedId === enq.id ? 'pill-accent' : 'hover:!text-[var(--color-pib-text)]',
+              ].join(' ')}
             >
               {enq.projectType ?? 'Project'}
             </button>
@@ -119,54 +135,66 @@ function MessagesContent() {
         </div>
       )}
 
-      <div className="pib-card flex flex-col" style={{ height: '480px' }}>
-        {/* Thread label */}
+      <div className="bento-card !p-0 flex flex-col overflow-hidden" style={{ height: '560px' }}>
         {selected && (
-          <div className="px-4 py-3 border-b border-[var(--color-outline-variant)] shrink-0">
-            <p className="text-xs font-label uppercase tracking-widest text-[var(--color-on-surface-variant)]">
-              {selected.projectType ?? 'Project'}
-            </p>
+          <div className="px-5 py-3.5 border-b border-[var(--color-pib-line)] shrink-0 flex items-center justify-between">
+            <div>
+              <p className="eyebrow !text-[10px]">{selected.projectType ?? 'Project'}</p>
+              <p className="text-xs text-[var(--color-pib-text-muted)] mt-0.5 font-mono">{selected.status}</p>
+            </div>
+            <span className="pill !text-[10px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-pib-success)]" />
+              live
+            </span>
           </div>
         )}
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
           {messages.length === 0 && (
-            <p className="text-[var(--color-on-surface-variant)] text-sm text-center pt-8">No messages yet. Start the conversation below.</p>
+            <p className="text-[var(--color-pib-text-muted)] text-sm text-center py-12">
+              No messages yet. Start the conversation below.
+            </p>
           )}
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex flex-col gap-0.5 ${msg.direction === 'inbound' ? 'items-end' : 'items-start'}`}>
-              <div
-                className={`max-w-xs md:max-w-sm px-4 py-2.5 text-sm ${
-                  msg.direction === 'inbound'
-                    ? 'bg-[var(--color-accent-v2)] text-black'
-                    : 'bg-[var(--color-surface-container)] text-[var(--color-on-surface)] border border-[var(--color-outline-variant)]'
-                }`}
-              >
-                {msg.text}
+          {messages.map((msg) => {
+            const mine = msg.direction === 'inbound'
+            return (
+              <div key={msg.id} className={`flex flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
+                <div
+                  className={[
+                    'max-w-[78%] px-4 py-2.5 text-sm rounded-2xl leading-snug',
+                    mine
+                      ? 'bg-[var(--color-pib-accent)] text-black rounded-br-md'
+                      : 'bg-[var(--color-pib-surface-2)] border border-[var(--color-pib-line)] text-[var(--color-pib-text)] rounded-bl-md',
+                  ].join(' ')}
+                >
+                  {msg.text}
+                </div>
+                <span className="text-[10px] text-[var(--color-pib-text-muted)] font-mono px-1">
+                  {mine ? 'You' : 'PiB'} · {formatTime(msg.createdAt)}
+                </span>
               </div>
-              <span className="text-[10px] text-[var(--color-on-surface-variant)]">
-                {msg.direction === 'inbound' ? 'You' : 'PiB'} · {formatTime(msg.createdAt)}
-              </span>
-            </div>
-          ))}
+            )
+          })}
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
-        <form onSubmit={handleSend} className="border-t border-[var(--color-outline-variant)] p-3 flex gap-2 shrink-0">
+        <form
+          onSubmit={handleSend}
+          className="border-t border-[var(--color-pib-line)] p-3 flex gap-2 shrink-0 bg-[var(--color-pib-bg)]/60"
+        >
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Type a message…"
-            className="flex-1 bg-transparent text-sm text-[var(--color-on-surface)] placeholder-[var(--color-on-surface-variant)] border-0 outline-none font-body"
+            className="pib-input flex-1 !rounded-full !py-2.5"
           />
           <button
             type="submit"
             disabled={!text.trim() || sending}
-            className="text-xs font-label uppercase tracking-widest text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)] disabled:opacity-30 transition-colors px-2"
+            className="pib-btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {sending ? '...' : 'Send'}
+            {sending ? '…' : 'Send'}
+            <span className="material-symbols-outlined text-base">send</span>
           </button>
         </form>
       </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 import { OrgSwitcher } from './OrgSwitcher'
@@ -16,27 +17,27 @@ interface NavItem {
 }
 
 const OPERATOR_NAV: NavItem[] = [
-  { label: 'Dashboard',   href: '/admin/dashboard',          icon: '⊞' },
-  { label: 'Properties',  href: '/admin/properties',         icon: '◉' },
-  { label: 'Analytics',   href: '/admin/analytics',          icon: '◎' },
-  { label: 'Pipeline',    href: '/admin/crm/contacts',       icon: '⟳' },
-  { label: 'Clients',    href: '/admin/clients',         icon: '◎' },
-  { label: 'Invoicing',  href: '/admin/invoicing',       icon: '◷' },
-  { label: 'Recurring',  href: '/admin/invoicing/recurring', icon: '↺' },
-  { label: 'Quotes',     href: '/admin/quotes',          icon: '◈' },
-  { label: 'Settings',   href: '/admin/settings',        icon: '◆' },
+  { label: 'Dashboard',   href: '/admin/dashboard',          icon: 'space_dashboard' },
+  { label: 'Properties',  href: '/admin/properties',         icon: 'apartment' },
+  { label: 'Analytics',   href: '/admin/analytics',          icon: 'analytics' },
+  { label: 'Pipeline',    href: '/admin/crm/contacts',       icon: 'pipeline' },
+  { label: 'Clients',     href: '/admin/clients',            icon: 'groups' },
+  { label: 'Invoicing',   href: '/admin/invoicing',          icon: 'receipt_long' },
+  { label: 'Recurring',   href: '/admin/invoicing/recurring', icon: 'autorenew' },
+  { label: 'Quotes',      href: '/admin/quotes',             icon: 'request_quote' },
+  { label: 'Settings',    href: '/admin/settings',           icon: 'settings' },
 ]
 
 function workspaceNav(slug: string): NavItem[] {
   return [
-    { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: '⊞' },
-    { label: 'Projects',  href: `/admin/org/${slug}/projects`,  icon: '◈' },
-    { label: 'Social',    href: `/admin/org/${slug}/social`,    icon: '◉' },
-    { label: 'Brand',     href: `/admin/org/${slug}/brand`,     icon: '◆' },
-    { label: 'Team',      href: `/admin/org/${slug}/team`,      icon: '◎' },
-    { label: 'Billing',   href: `/admin/org/${slug}/billing`,   icon: '◷' },
-    { label: 'Activity',  href: `/admin/org/${slug}/activity`,  icon: '⟳' },
-    { label: 'Settings',  href: `/admin/org/${slug}/settings`,  icon: '◆' },
+    { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: 'space_dashboard' },
+    { label: 'Projects',  href: `/admin/org/${slug}/projects`,  icon: 'rocket_launch' },
+    { label: 'Social',    href: `/admin/org/${slug}/social`,    icon: 'campaign' },
+    { label: 'Brand',     href: `/admin/org/${slug}/brand`,     icon: 'palette' },
+    { label: 'Team',      href: `/admin/org/${slug}/team`,      icon: 'groups' },
+    { label: 'Billing',   href: `/admin/org/${slug}/billing`,   icon: 'payments' },
+    { label: 'Activity',  href: `/admin/org/${slug}/activity`,  icon: 'pulse_alert' },
+    { label: 'Settings',  href: `/admin/org/${slug}/settings`,  icon: 'settings' },
   ]
 }
 
@@ -44,21 +45,25 @@ function workspaceNav(slug: string): NavItem[] {
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-
   return (
     <Link
       href={item.href}
       className={[
-        'flex items-center gap-3 px-4 py-2.5 text-[13px] font-label rounded-lg transition-all duration-150',
+        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150',
         isActive
-          ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]'
-          : 'text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-surface-container)]',
+          ? 'bg-[var(--color-pib-accent-soft)] text-[var(--color-pib-accent-hover)]'
+          : 'text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] hover:bg-white/[0.03]',
       ].join(' ')}
     >
-      <span className={['text-sm shrink-0', isActive ? 'text-[var(--color-accent-v2)]' : 'opacity-50'].join(' ')}>
+      <span
+        className={[
+          'material-symbols-outlined text-[20px] shrink-0',
+          isActive ? 'text-[var(--color-pib-accent)]' : 'opacity-70',
+        ].join(' ')}
+      >
         {item.icon}
       </span>
-      {item.label}
+      <span className="font-medium">{item.label}</span>
     </Link>
   )
 }
@@ -69,10 +74,10 @@ function SectionLink({ item, pathname }: { item: { label: string; href: string }
     <Link
       href={item.href}
       className={[
-        'flex items-center px-4 py-2 text-[13px] font-label rounded-lg transition-all duration-150',
+        'flex items-center px-3 py-1.5 text-sm rounded-lg transition-colors duration-150',
         isActive
-          ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]'
-          : 'text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-surface-container)]',
+          ? 'bg-[var(--color-pib-accent-soft)] text-[var(--color-pib-accent-hover)]'
+          : 'text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] hover:bg-white/[0.03]',
       ].join(' ')}
     >
       {item.label}
@@ -94,20 +99,14 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
   const selectedOrg = orgs.find((o) => o.id === selectedOrgId)
   const isWorkspaceMode = !!selectedOrgId && !!selectedOrg
 
-  const navItems = isWorkspaceMode
-    ? workspaceNav(selectedOrg.slug)
-    : OPERATOR_NAV
-
-  // Recent orgs for favorites (up to 4)
+  const navItems = isWorkspaceMode ? workspaceNav(selectedOrg.slug) : OPERATOR_NAV
   const favoriteOrgs = orgs.slice(0, 4)
 
-  // Auto-close drawer on navigation
   useEffect(() => {
     onClose?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
-  // Prevent body scroll while drawer is open on mobile
   useEffect(() => {
     if (typeof window === 'undefined') return
     const isMobile = window.matchMedia('(max-width: 767px)').matches
@@ -121,10 +120,9 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
 
   return (
     <>
-      {/* Mobile backdrop */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
+        className={`fixed inset-0 z-40 bg-black/70 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         aria-hidden="true"
@@ -132,109 +130,95 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
 
       <aside
         className={[
-          'w-60 shrink-0 flex flex-col border-r border-[var(--color-card-border)] overflow-y-auto',
-          // Desktop: sticky sidebar
+          'w-64 shrink-0 flex flex-col border-r border-[var(--color-pib-line)] bg-[var(--color-sidebar)] overflow-y-auto',
           'md:h-screen md:sticky md:top-0 md:translate-x-0 md:z-auto',
-          // Mobile: fixed drawer
           'fixed top-0 left-0 h-full z-50 transition-transform duration-300 ease-in-out',
           open ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         ].join(' ')}
-        style={{ background: 'var(--color-sidebar)' }}
       >
-      {/* Logo */}
-      <div className="px-5 py-4 flex items-center gap-2.5">
-        <img src="/pib-logo-512.png" alt="Partners in Biz" className="w-7 h-7 rounded-lg object-contain" />
-        <span className="font-headline text-sm font-bold tracking-wide text-on-surface">
-          PiB
-        </span>
-        <span
-          className="text-[9px] font-label uppercase tracking-widest px-1.5 py-0.5 rounded ml-auto"
-          style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent-text)' }}
-        >
-          {isWorkspaceMode ? 'Client' : 'Admin'}
-        </span>
-      </div>
-
-      {/* Search */}
-      <div className="px-3 pb-3">
-        <GlobalSearch />
-      </div>
-
-      {/* Org Switcher */}
-      <div className="border-t border-[var(--color-card-border)] py-2">
-        <p className="px-5 pt-1 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/50">
-          Context
-        </p>
-        <OrgSwitcher />
-      </div>
-
-      {/* Navigation */}
-      <div className="px-3 pt-2 pb-1">
-        <p className="px-2 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40 mb-2">
-          Navigation
-        </p>
-      </div>
-      <nav className="flex-1 px-3 space-y-0.5">
-        {navItems.map((item) => (
-          <NavLink key={item.href} item={item} pathname={pathname} />
-        ))}
-      </nav>
-
-      {/* Bottom section links */}
-      {isWorkspaceMode && (
-        <div className="border-t border-[var(--color-card-border)] px-3 py-3 space-y-0.5">
-          <p className="px-2 pb-1.5 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
-            Social
-          </p>
-          {[
-            { label: 'Accounts', href: '/admin/social/accounts' },
-            { label: 'Compose',  href: '/admin/social/compose' },
-            { label: 'Inbox',    href: '/admin/social/inbox' },
-            { label: 'Queue',    href: '/admin/social/queue' },
-            { label: 'Calendar', href: '/admin/social/calendar' },
-            { label: 'Design',   href: '/admin/social/design' },
-            { label: 'Links',    href: '/admin/social/links' },
-          ].map((item) => (
-            <SectionLink key={item.href} item={item} pathname={pathname} />
-          ))}
+        {/* Brand */}
+        <div className="px-5 h-16 flex items-center gap-2.5 border-b border-[var(--color-pib-line)] shrink-0">
+          <Image src="/pib-logo-512.png" alt="Partners in Biz" width={28} height={28} className="rounded-md object-contain" />
+          <span className="font-display text-lg leading-none">Partners in Biz</span>
+          <span
+            className={[
+              'ml-auto pill !text-[10px] !py-0.5 !px-2',
+              isWorkspaceMode ? 'pill-accent' : '',
+            ].join(' ')}
+          >
+            {isWorkspaceMode ? 'Client' : 'Admin'}
+          </span>
         </div>
-      )}
 
-      {!isWorkspaceMode && (
-        <div className="border-t border-[var(--color-card-border)] px-3 py-3 space-y-0.5">
-          <p className="px-2 pb-1.5 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
-            Tools
-          </p>
-          {[
-            { label: 'Social',    href: '/admin/social' },
-            { label: 'Email',     href: '/admin/email' },
-            { label: 'Sequences', href: '/admin/sequences' },
-          ].map((item) => (
-            <SectionLink key={item.href} item={item} pathname={pathname} />
-          ))}
+        {/* Search */}
+        <div className="px-3 pt-4 pb-3">
+          <GlobalSearch />
         </div>
-      )}
 
-      {/* Favorites — recent orgs */}
-      {!isWorkspaceMode && favoriteOrgs.length > 0 && (
-        <div className="border-t border-[var(--color-card-border)] px-3 py-3 space-y-1">
-          <p className="px-2 pb-1 text-[9px] font-label uppercase tracking-widest text-on-surface-variant/40">
-            Favorites
-          </p>
-          {favoriteOrgs.map((org) => (
-            <Link
-              key={org.id}
-              href={`/admin/org/${org.slug}/dashboard`}
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-label text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-surface-container)] transition-colors"
-            >
-              <span className="w-5 h-5 rounded bg-[var(--color-surface-container-high)] flex items-center justify-center text-[10px] font-bold text-on-surface-variant shrink-0">
-                {org.name?.[0]?.toUpperCase() ?? '?'}
-              </span>
-              <span className="truncate">{org.name}</span>
-            </Link>
-          ))}
+        {/* Org Switcher */}
+        <div className="border-t border-[var(--color-pib-line)] py-3">
+          <p className="eyebrow !text-[9px] px-5 mb-1.5">Context</p>
+          <OrgSwitcher />
         </div>
-      )}
+
+        {/* Navigation */}
+        <div className="px-3 pt-3 pb-1">
+          <p className="eyebrow !text-[9px] px-2 mb-2">Navigation</p>
+        </div>
+        <nav className="flex-1 px-3 space-y-1">
+          {navItems.map((item) => (
+            <NavLink key={item.href} item={item} pathname={pathname} />
+          ))}
+        </nav>
+
+        {/* Bottom sections */}
+        {isWorkspaceMode && (
+          <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-1">
+            <p className="eyebrow !text-[9px] px-2 pb-1.5">Social</p>
+            {[
+              { label: 'Accounts', href: '/admin/social/accounts' },
+              { label: 'Compose',  href: '/admin/social/compose' },
+              { label: 'Inbox',    href: '/admin/social/inbox' },
+              { label: 'Queue',    href: '/admin/social/queue' },
+              { label: 'Calendar', href: '/admin/social/calendar' },
+              { label: 'Design',   href: '/admin/social/design' },
+              { label: 'Links',    href: '/admin/social/links' },
+            ].map((item) => (
+              <SectionLink key={item.href} item={item} pathname={pathname} />
+            ))}
+          </div>
+        )}
+
+        {!isWorkspaceMode && (
+          <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-1">
+            <p className="eyebrow !text-[9px] px-2 pb-1.5">Tools</p>
+            {[
+              { label: 'Social',    href: '/admin/social' },
+              { label: 'Email',     href: '/admin/email' },
+              { label: 'Sequences', href: '/admin/sequences' },
+            ].map((item) => (
+              <SectionLink key={item.href} item={item} pathname={pathname} />
+            ))}
+          </div>
+        )}
+
+        {!isWorkspaceMode && favoriteOrgs.length > 0 && (
+          <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-1">
+            <p className="eyebrow !text-[9px] px-2 pb-1">Favorites</p>
+            {favoriteOrgs.map((org) => (
+              <Link
+                key={org.id}
+                href={`/admin/org/${org.slug}/dashboard`}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] hover:bg-white/[0.03] transition-colors"
+              >
+                <span className="w-6 h-6 rounded-md bg-[var(--color-pib-surface-2)] border border-[var(--color-pib-line)] flex items-center justify-center text-[10px] font-bold text-[var(--color-pib-text-muted)] shrink-0">
+                  {org.name?.[0]?.toUpperCase() ?? '?'}
+                </span>
+                <span className="truncate">{org.name}</span>
+              </Link>
+            ))}
+          </div>
+        )}
       </aside>
     </>
   )

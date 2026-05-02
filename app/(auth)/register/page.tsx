@@ -1,8 +1,10 @@
 'use client'
 export const dynamic = 'force-dynamic'
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { registerWithEmail } from '@/lib/firebase/auth'
 
 export default function RegisterPage() {
@@ -33,32 +35,60 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="relative z-10 min-h-screen flex items-center justify-center px-8 pt-20">
-      <div className="glass-card p-10 w-full max-w-md">
-        <h1 className="font-headline text-3xl font-bold tracking-tighter mb-8">Create Account</h1>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-          {[
-            { name: 'name', label: 'Full Name', type: 'text' },
-            { name: 'email', label: 'Email', type: 'email' },
-            { name: 'password', label: 'Password', type: 'password' },
-            { name: 'confirm', label: 'Confirm Password', type: 'password' },
-          ].map(({ name, label, type }) => (
-            <div key={name} className="flex flex-col gap-2">
-              <label className="font-headline text-[0.7rem] uppercase tracking-widest text-white/40">{label}</label>
-              <input name={name} type={type} required
-                className="bg-transparent border-0 border-b border-white/20 py-3 text-white font-body focus:border-white focus:outline-none transition-colors" />
-            </div>
-          ))}
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          <button type="submit" disabled={loading}
-            className="bg-white text-black px-8 py-4 rounded-md font-headline font-bold uppercase tracking-widest text-sm hover:bg-white/90 transition-all disabled:opacity-50 mt-2">
-            {loading ? 'Creating account...' : 'Create Account'}
-          </button>
-        </form>
-        <p className="text-white/40 text-sm mt-6 text-center">
-          Already have an account?{' '}
-          <Link href="/login" className="text-white hover:underline">Sign in</Link>
-        </p>
+    <main className="relative min-h-screen flex items-center justify-center px-6 md:px-10 bg-[var(--color-pib-bg)] overflow-hidden">
+      <div className="absolute inset-0 pib-mesh pointer-events-none" />
+      <div className="absolute inset-0 pib-grid-bg pointer-events-none opacity-40" />
+
+      <div className="relative w-full max-w-md">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2.5 mb-8 text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors"
+        >
+          <Image src="/pib-logo-512.png" alt="Partners in Biz" width={28} height={28} className="rounded-md object-contain" />
+          <span className="font-display text-lg leading-none">Partners in Biz</span>
+        </Link>
+
+        <div className="bento-card !p-8 md:!p-10">
+          <p className="eyebrow">Get started</p>
+          <h1 className="font-display text-3xl md:text-4xl mt-2 mb-2">Create your account.</h1>
+          <p className="text-sm text-[var(--color-pib-text-muted)] mb-8">
+            Set up your client portal to track projects, reports, and messages with the team.
+          </p>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            {[
+              { name: 'name',     label: 'Full name',         type: 'text',     autoComplete: 'name' },
+              { name: 'email',    label: 'Email',             type: 'email',    autoComplete: 'email' },
+              { name: 'password', label: 'Password',          type: 'password', autoComplete: 'new-password' },
+              { name: 'confirm',  label: 'Confirm password',  type: 'password', autoComplete: 'new-password' },
+            ].map(({ name, label, type, autoComplete }) => (
+              <div key={name} className="flex flex-col gap-2">
+                <label className="pib-label">{label}</label>
+                <input name={name} type={type} required autoComplete={autoComplete} className="pib-input" />
+              </div>
+            ))}
+            {error && (
+              <p className="text-sm text-[#FCA5A5] bg-[#FCA5A5]/10 border border-[#FCA5A5]/30 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-pib-accent justify-center mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Creating account…' : 'Create account'}
+              {!loading && <span className="material-symbols-outlined text-base">arrow_forward</span>}
+            </button>
+          </form>
+
+          <p className="text-xs text-[var(--color-pib-text-muted)] mt-8 text-center">
+            Already have an account?{' '}
+            <Link href="/login" className="text-[var(--color-pib-accent-hover)] hover:text-[var(--color-pib-accent)] transition-colors">
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </main>
   )
