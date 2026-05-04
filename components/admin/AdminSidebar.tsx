@@ -194,6 +194,7 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
             <p className="eyebrow !text-[9px] px-2 pb-1.5">Tools</p>
             {[
               { label: 'Social',    href: '/admin/social' },
+              { label: 'SEO',       href: '/admin/seo' },
               { label: 'Email',     href: '/admin/email' },
               { label: 'Sequences', href: '/admin/sequences' },
             ].map((item) => (
