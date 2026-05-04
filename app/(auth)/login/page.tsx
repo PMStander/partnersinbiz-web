@@ -49,8 +49,21 @@ export default function LoginPage() {
       const verifyData = verifyRes.ok ? await verifyRes.json() : null
       const role = verifyData?.role
       router.push(role === 'admin' ? '/admin/dashboard' : '/portal/dashboard')
-    } catch {
-      setError('Invalid email or password.')
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code ?? ''
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        setError('Incorrect password.')
+      } else if (code === 'auth/user-not-found' || code === 'auth/invalid-email') {
+        setError('No account found with that email.')
+      } else if (code === 'auth/too-many-requests') {
+        setError('Too many attempts. Wait a few minutes and try again.')
+      } else if (code === 'auth/unauthorized-domain') {
+        setError('Sign-in is not authorised from this domain. Contact support.')
+      } else if (code === 'auth/network-request-failed') {
+        setError('Network error. Check your connection.')
+      } else {
+        setError(`Sign-in failed (${code || 'unknown error'}).`)
+      }
     } finally {
       setLoading(false)
     }
@@ -63,8 +76,19 @@ export default function LoginPage() {
     try {
       await resetPassword(resetEmail)
       setResetStatus('sent')
-    } catch {
-      setResetError('Could not send reset email. Check the address and try again.')
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code ?? ''
+      if (code === 'auth/user-not-found' || code === 'auth/invalid-email') {
+        setResetError('No account found with that email address.')
+      } else if (code === 'auth/too-many-requests') {
+        setResetError('Too many attempts. Wait a few minutes and try again.')
+      } else if (code === 'auth/unauthorized-domain') {
+        setResetError('Reset not authorised from this domain. Contact support.')
+      } else if (code === 'auth/network-request-failed') {
+        setResetError('Network error. Check your connection.')
+      } else {
+        setResetError(`Could not send reset email (${code || 'unknown error'}).`)
+      }
       setResetStatus('error')
     }
   }
