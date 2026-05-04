@@ -151,15 +151,10 @@ export default function StartProjectForm() {
 
         <div className="mt-8 pt-6 border-t border-[var(--color-pib-line)] space-y-4">
           <p className="text-sm text-[var(--color-pib-text-muted)]">Want to grab a slot now?</p>
-          <a
-            href={SITE.cal.url}
-            target="_blank"
-            rel="noreferrer"
-            className="btn-pib-accent"
-          >
+          <Link href={SITE.cal.url} className="btn-pib-accent">
             <span className="material-symbols-outlined text-base">event</span>
             Book a 20-min call
-          </a>
+          </Link>
           <p className="text-sm text-[var(--color-pib-text-muted)] pt-2">Or message us on WhatsApp:</p>
           <a href={waLink} target="_blank" rel="noreferrer" className="btn-pib-secondary">
             <span className="material-symbols-outlined text-base">chat</span>

@@ -33,8 +33,7 @@ export const SITE = {
     github: 'https://github.com/partnersinbiz', // PLACEHOLDER
   },
   cal: {
-    url: 'https://cal.com/partnersinbiz/intro', // PLACEHOLDER
-    embed: 'partnersinbiz/intro',
+    url: '/book-a-call',
   },
   founded: '2024',
   pricing: {
@@ -211,7 +210,7 @@ export const STATS = [
 export const TECH_STACK = [
   'Next.js', 'React', 'TypeScript', 'Tailwind CSS', 'Vercel',
   'Firebase', 'Supabase', 'Anthropic', 'OpenAI', 'Resend',
-  'Stripe', 'PayPal', 'Cal.com', 'Sanity', 'Vite',
+  'Stripe', 'PayPal', 'Sanity', 'Vite',
 ] as const;
 
 export const PROCESS = [
@@ -283,6 +282,6 @@ export const FAQ_HOMEPAGE = [
   },
   {
     q: 'How do I start?',
-    a: 'Fill in the 4-step form on /start-a-project (takes 90 seconds), or book a 20-minute intro call directly via Cal.com. We reply within one business day.',
+    a: 'Fill in the 4-step form on /start-a-project (takes 90 seconds), or book a 20-minute intro call at /book-a-call. We reply within one business day.',
   },
 ] as const;
