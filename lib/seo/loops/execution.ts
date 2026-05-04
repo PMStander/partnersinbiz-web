@@ -41,7 +41,16 @@ const DEFAULT_SAFE_TASK_TYPES = new Set([
   'keyword-discover',
 ])
 
+// Lazy-load executors to avoid circular import (executors.ts imports registerExecutor from this file)
+let executorsLoaded = false
+async function ensureExecutorsLoaded() {
+  if (executorsLoaded) return
+  executorsLoaded = true
+  await import('./executors')
+}
+
 export async function executeTask(taskId: string, user: ApiUser): Promise<ExecutorResult> {
+  await ensureExecutorsLoaded()
   const taskSnap = await adminDb.collection('seo_tasks').doc(taskId).get()
   if (!taskSnap.exists) return { status: 'blocked', blockerReason: 'Task not found' }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,6 +87,7 @@ export async function runExecutionLoopForSprint(
   queued: string[]
   blocked: { taskId: string; reason: string }[]
 }> {
+  await ensureExecutorsLoaded()
   const sprintSnap = await adminDb.collection('seo_sprints').doc(sprintId).get()
   if (!sprintSnap.exists) return { done: [], queued: [], blocked: [{ taskId: 'sprint', reason: 'Sprint not found' }] }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
