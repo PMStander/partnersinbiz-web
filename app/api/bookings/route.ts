@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
   // Google Calendar event — failure is non-fatal
   let googleEventId = ''
   let meetLink = ''
+  let calendarError = ''
   try {
     const result = await createCalendarEvent({
       name: name.trim(),
@@ -53,7 +54,8 @@ export async function POST(request: NextRequest) {
     googleEventId = result.eventId
     meetLink = result.meetLink
   } catch (err) {
-    console.error('[bookings] Google Calendar event failed:', err)
+    calendarError = err instanceof Error ? err.message : String(err)
+    console.error('[bookings] Google Calendar event failed:', calendarError)
   }
 
   const docRef = await adminDb.collection('bookings').add({
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest) {
         <p><em>Booking ID: ${docRef.id}</em></p>
         ${googleEventId
           ? `<p>✓ Google Calendar event created${meetLink ? ` — <a href="${meetLink}">Join Meet</a>` : ''}</p>`
-          : '<p>⚠ Google Calendar not configured — add GOOGLE_CALENDAR_ID to Vercel env vars</p>'}
+          : `<p>⚠ Google Calendar failed: <code>${esc(calendarError || 'GOOGLE_CALENDAR_ID not set')}</code></p>`}
       `,
     })
   } catch (err) {
