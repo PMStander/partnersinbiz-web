@@ -43,6 +43,14 @@
     {
       "path": "/api/cron/anomalies",
       "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/seo-daily",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/seo-weekly",
+      "schedule": "0 5 * * 1"
     }
   ]
 }
