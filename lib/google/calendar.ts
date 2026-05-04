@@ -25,7 +25,8 @@ export async function getFreeBusy(date: string): Promise<{ start: string; end: s
       items: [{ id: calendarId }],
     },
   })
-  return res.data.calendars?.[calendarId]?.busy ?? []
+  return (res.data.calendars?.[calendarId]?.busy ?? [])
+    .filter((b): b is { start: string; end: string } => !!b.start && !!b.end)
 }
 
 export async function createCalendarEvent(booking: {
