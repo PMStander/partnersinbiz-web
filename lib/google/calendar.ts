@@ -29,12 +29,17 @@ export async function getFreeBusy(date: string): Promise<{ start: string; end: s
     .filter((b): b is { start: string; end: string } => !!b.start && !!b.end)
 }
 
+export interface CalendarEventResult {
+  eventId: string
+  meetLink: string
+}
+
 export async function createCalendarEvent(booking: {
   name: string
   email: string
   date: string
   time: string
-}): Promise<string> {
+}): Promise<CalendarEventResult> {
   const calendarId = process.env.GOOGLE_CALENDAR_ID
   if (!calendarId) throw new Error('GOOGLE_CALENDAR_ID not set')
 
@@ -49,12 +54,19 @@ export async function createCalendarEvent(booking: {
   const event = await cal.events.insert({
     calendarId,
     sendUpdates: 'all',
+    conferenceDataVersion: 1,
     requestBody: {
       summary: `Intro Call — ${booking.name}`,
       description: `20-min intro call booked via partnersinbiz.online\n\nClient: ${booking.name}\nEmail: ${booking.email}`,
       start: { dateTime: startDt, timeZone: TIMEZONE },
       end: { dateTime: endDt, timeZone: TIMEZONE },
       attendees: [{ email: booking.email, displayName: booking.name }],
+      conferenceData: {
+        createRequest: {
+          requestId: `pib-${booking.date}-${booking.time}-${Date.now()}`,
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
+        },
+      },
       reminders: {
         useDefault: false,
         overrides: [
@@ -65,5 +77,8 @@ export async function createCalendarEvent(booking: {
     },
   })
 
-  return event.data.id ?? ''
+  const meetLink =
+    event.data.conferenceData?.entryPoints?.find(ep => ep.entryPointType === 'video')?.uri ?? ''
+
+  return { eventId: event.data.id ?? '', meetLink }
 }

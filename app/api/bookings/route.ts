@@ -42,13 +42,16 @@ export async function POST(request: NextRequest) {
 
   // Google Calendar event — failure is non-fatal
   let googleEventId = ''
+  let meetLink = ''
   try {
-    googleEventId = await createCalendarEvent({
+    const result = await createCalendarEvent({
       name: name.trim(),
       email: email.trim().toLowerCase(),
       date,
       time,
     })
+    googleEventId = result.eventId
+    meetLink = result.meetLink
   } catch (err) {
     console.error('[bookings] Google Calendar event failed:', err)
   }
@@ -63,6 +66,7 @@ export async function POST(request: NextRequest) {
     durationMins: 20,
     timezone: 'Africa/Johannesburg',
     googleEventId,
+    meetLink,
     status: 'confirmed',
     createdAt: FieldValue.serverTimestamp(),
   })
@@ -85,7 +89,9 @@ export async function POST(request: NextRequest) {
         <p><strong>Time:</strong> ${displayTime}</p>
         ${brief ? `<p><strong>Brief:</strong> ${esc(brief)}</p>` : ''}
         <p><em>Booking ID: ${docRef.id}</em></p>
-        ${googleEventId ? '<p>✓ Google Calendar event created</p>' : '<p>⚠ Google Calendar not configured — add GOOGLE_CALENDAR_ID to Vercel env vars</p>'}
+        ${googleEventId
+          ? `<p>✓ Google Calendar event created${meetLink ? ` — <a href="${meetLink}">Join Meet</a>` : ''}</p>`
+          : '<p>⚠ Google Calendar not configured — add GOOGLE_CALENDAR_ID to Vercel env vars</p>'}
       `,
     })
   } catch (err) {
@@ -105,9 +111,12 @@ export async function POST(request: NextRequest) {
           <p>Your 20-minute intro call with Peet at Partners in Biz is confirmed:</p>
           <p style="background:#f5f5f5;padding:12px 16px;border-radius:6px">
             📅 <strong>${displayDate}</strong><br>
-            🕐 <strong>${displayTime}</strong>
+            🕐 <strong>${displayTime}</strong>${meetLink ? `<br>🎥 <a href="${meetLink}" style="color:#0066cc">${meetLink}</a>` : ''}
           </p>
-          <p>Peet will send you a Google Meet link shortly. Feel free to reply to this email with any background on your project in the meantime.</p>
+          ${meetLink
+            ? `<p><a href="${meetLink}" style="display:inline-block;background:#0066cc;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">Join Google Meet</a></p>`
+            : '<p>Peet will send you a Google Meet link shortly.</p>'}
+          <p>Feel free to reply to this email with any background on your project in the meantime.</p>
           <p>See you soon,<br><strong>Peet @ Partners in Biz</strong></p>
         </div>
       `,
