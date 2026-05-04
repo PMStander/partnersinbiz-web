@@ -20,7 +20,7 @@ const OPERATOR_NAV: NavItem[] = [
   { label: 'Dashboard',   href: '/admin/dashboard',          icon: 'space_dashboard' },
   { label: 'Properties',  href: '/admin/properties',         icon: 'apartment' },
   { label: 'Analytics',   href: '/admin/analytics',          icon: 'analytics' },
-  { label: 'Pipeline',    href: '/admin/crm/contacts',       icon: 'pipeline' },
+  { label: 'Pipeline',    href: '/admin/crm/contacts',       icon: 'view_kanban' },
   { label: 'Clients',     href: '/admin/clients',            icon: 'groups' },
   { label: 'Invoicing',   href: '/admin/invoicing',          icon: 'receipt_long' },
   { label: 'Recurring',   href: '/admin/invoicing/recurring', icon: 'autorenew' },
