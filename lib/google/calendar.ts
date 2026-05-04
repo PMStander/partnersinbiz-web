@@ -8,6 +8,8 @@ function getCalendarClient() {
     email: process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.trim(),
     key: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n').trim(),
     scopes: ['https://www.googleapis.com/auth/calendar'],
+    // Impersonate the calendar owner so the service account can write to their calendar
+    subject: process.env.GOOGLE_CALENDAR_ID,
   })
   return google.calendar({ version: 'v3', auth })
 }
