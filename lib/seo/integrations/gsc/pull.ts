@@ -2,6 +2,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { refreshGscClient } from './auth'
 import { fetchSearchAnalytics } from './client'
+import { decryptCredentials } from '@/lib/integrations/crypto'
 
 function dateNDaysAgo(n: number): string {
   const d = new Date()
@@ -16,10 +17,20 @@ export async function pullDailyGscForSprint(sprintId: string): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sprint = snap.data() as any
   const gsc = sprint.integrations?.gsc
-  if (!gsc?.connected || !gsc?.propertyUrl || !gsc?.tokens?.refresh_token) return
+  if (!gsc?.connected || !gsc?.propertyUrl || !gsc?.tokens) return
+
+  let refreshToken: string | undefined
+  try {
+    const decrypted = decryptCredentials<{ refresh_token?: string }>(gsc.tokens, sprint.orgId)
+    refreshToken = decrypted.refresh_token
+  } catch {
+    await sprintRef.update({ 'integrations.gsc.tokenStatus': 'expired' })
+    return
+  }
+  if (!refreshToken) return
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const auth = refreshGscClient(gsc.tokens.refresh_token) as any
+  const auth = refreshGscClient(refreshToken) as any
   let rows
   try {
     rows = await fetchSearchAnalytics(auth, gsc.propertyUrl, dateNDaysAgo(8), dateNDaysAgo(1))
