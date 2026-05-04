@@ -79,7 +79,7 @@ export default function StartProjectForm() {
     if (s === 3) return !!data.budget
     if (s === 4) {
       const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())
-      return data.name.trim().length > 1 && emailOk && data.details.trim().length > 4
+      return data.name.trim().length > 0 && emailOk && data.details.trim().length > 0
     }
     return false
   }

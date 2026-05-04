@@ -16,8 +16,6 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#x27;')
 }
 
-const VALID_PROJECT_TYPES = ['web', 'mobile', 'ai', 'design']
-
 export async function POST(request: NextRequest) {
   const body = await request.json()
   const { name, email, company, projectType, details, userId } = body
@@ -26,9 +24,7 @@ export async function POST(request: NextRequest) {
   if (!email?.trim()) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
   if (!isValidEmail(email)) return NextResponse.json({ error: 'Email is invalid' }, { status: 400 })
   if (!details?.trim()) return NextResponse.json({ error: 'Project details are required' }, { status: 400 })
-  if (!projectType || !VALID_PROJECT_TYPES.includes(projectType)) {
-    return NextResponse.json({ error: 'Invalid project type' }, { status: 400 })
-  }
+  if (!projectType?.trim()) return NextResponse.json({ error: 'Project type is required' }, { status: 400 })
 
   const docRef = await adminDb.collection('enquiries').add({
     userId: userId ?? null,
@@ -62,9 +58,10 @@ export async function POST(request: NextRequest) {
 
   // Notification email — fire-and-forget; failure must not break form submission
   try {
+    const adminEmail = process.env.ADMIN_EMAIL || 'peet.stander@partnersinbiz.online'
     await getResendClient().emails.send({
       from: FROM_ADDRESS,
-      to: 'peet@partnersinbiz.online',
+      to: adminEmail,
       subject: `New Project Inquiry from ${escapeHtml(name)}`,
       html: `
         <h2>New Project Inquiry</h2>
