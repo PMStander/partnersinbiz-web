@@ -226,5 +226,44 @@ service cloud.firestore {
     match /analytics_rate_limits/{id} {
       allow read, write: if false;
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // SEO Sprint Manager (2026-05-04)
+    //
+    // All writes via Admin SDK only. Reads are tenant-scoped via orgId on the
+    // auth token claim. Audits expose an optional public-share token for
+    // read-only deep links. Optimization log is admin-internal only.
+    // ──────────────────────────────────────────────────────────────────────────
+    match /seo_sprints/{id} {
+      allow read: if request.auth != null && resource.data.orgId == request.auth.token.orgId;
+      allow write: if false; // admin SDK only
+    }
+    match /seo_tasks/{id} {
+      allow read: if request.auth != null && resource.data.orgId == request.auth.token.orgId;
+      allow write: if false;
+    }
+    match /seo_keywords/{id} {
+      allow read: if request.auth != null && resource.data.orgId == request.auth.token.orgId;
+      allow write: if false;
+    }
+    match /seo_backlinks/{id} {
+      allow read: if request.auth != null && resource.data.orgId == request.auth.token.orgId;
+      allow write: if false;
+    }
+    match /seo_content/{id} {
+      allow read: if request.auth != null && resource.data.orgId == request.auth.token.orgId;
+      allow write: if false;
+    }
+    match /seo_audits/{id} {
+      allow read: if request.auth != null
+        && (resource.data.orgId == request.auth.token.orgId
+            || resource.data.publicShareToken == request.query.token);
+      allow write: if false;
+    }
+    match /seo_optimizations/{id} {
+      // Admin only — clients never read optimization log
+      allow read: if false;
+      allow write: if false;
+    }
   }
 }
