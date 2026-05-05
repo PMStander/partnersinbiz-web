@@ -44,6 +44,19 @@ Drive 90-day SEO sprints for any client site, with three loops:
 After Day 90, sprints transition to **Phase 4 (Compounding)** — Loop A still runs daily,
 Loop C generates work weekly. The sprint never "ends" until archived.
 
+## UI surfaces
+
+| Audience | URL | What's there |
+|---|---|---|
+| Admin (operator mode) | `/admin/seo` | Index of all sprints across all clients + presence pill + "+ New Sprint" |
+| Admin (workspace mode) | `/admin/org/[slug]/seo` | Per-client SEO landing — redirects to the active sprint cockpit, or shows "+ Create sprint" CTA if none exists. Also rendered in the sidebar as a collapsible **SEO Sprint** section with links to all 9 cockpit tabs. |
+| Admin sprint cockpit | `/admin/seo/sprints/[id]` | Today / Tasks / Keywords / Backlinks / Content / Audits / Optimizations / Health / Settings |
+| Admin tools (standalone) | `/admin/seo/tools` | Run any of the 13 in-house SEO tools by hand |
+| Client portal | `/portal/seo` | Hero dashboard for single-sprint clients (day-of-90, progress, top movers, recent wins, deep links). Multi-sprint clients see a card list. |
+| Public audit share | `/seo-audit/[token]` | Read-only audit snapshot the admin can hand to a client |
+
+When creating a sprint via the UI in workspace mode, the form pre-fills `orgId`/`clientId` from the URL query params (`?orgId=X&siteName=Y`) which the per-org page passes through. When in operator mode the user picks the org from a dropdown.
+
 ## Auth
 
 ```
@@ -52,6 +65,22 @@ Authorization: Bearer ${AI_API_KEY}
 
 The `AI_API_KEY` env var is set on Vercel for `partnersinbiz-web`. Auths as role `ai`
 which gets admin-equivalent access.
+
+## orgId / clientId rules
+
+Both `orgId` and `clientId` on a sprint **must equal the Firestore `organizations` document id** (e.g. `pib-platform-owner`, `gqkkZPlHEPLbrSPuYjlp` for AHS Law) — not the slug, not the org name. The sidebar lookup, portal scoping, and the `requireSprintAccess` tenant check all key off this.
+
+To resolve an org id from a slug or name:
+```bash
+curl -s "https://partnersinbiz.online/api/v1/organizations" \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  | jq -r '.data[] | "\(.id)\t\(.slug)\t\(.name)"'
+```
+
+Behaviour of the create endpoint by role:
+
+- **`ai` / `admin`**: `body.orgId` (or `body.clientId`) is honoured so a sprint can be scoped to any client. Falls back to `user.orgId` only if neither is sent.
+- **`client`**: locked to `user.orgId` — they cannot create sprints for other orgs.
 
 ## Base URL
 
@@ -183,15 +212,23 @@ POST   /seo/integrations/pagespeed/run/[sprintId]    on-demand pull
 
 ### Create a sprint for a client
 ```bash
+# 1. Look up the org's Firestore id (use slug to find it)
+ORG_ID=$(curl -s "$BASE/../organizations" \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  | jq -r '.data[] | select(.slug=="ahs-law") | .id')
+
+# 2. Create the sprint — pass orgId AND clientId, both = ORG_ID
 curl -X POST $BASE/sprints \
   -H "Authorization: Bearer $AI_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: sprint-$(date +%s)" \
-  -d '{"clientId":"c123","siteUrl":"https://acme.co","siteName":"Acme"}'
+  -d "{\"orgId\":\"$ORG_ID\",\"clientId\":\"$ORG_ID\",\"siteUrl\":\"https://ahs-law.co.za\",\"siteName\":\"AHS Law\"}"
 ```
 
 Returns `{ id, siteUrl, siteName, status: 'pre-launch' }`. Sprint is seeded with 42
-template tasks + 15 directory backlinks.
+template tasks + 15 directory backlinks. After creation, the sprint immediately
+appears in the workspace sidebar when that client is selected, and at
+`/portal/seo` for that client's portal users.
 
 ### Do today's SEO across all active sprints
 ```bash

@@ -1,27 +1,52 @@
 import Link from 'next/link'
+import { Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { SprintCard } from '@/components/seo/SprintCard'
 import { PipPresencePill } from '@/components/seo/PipPresencePill'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Convert any Firestore `Timestamp` instances inside a doc to plain ISO
+ * strings, recursively. Required because Server Components cannot pass
+ * non-plain class instances to `'use client'` boundaries — Next.js will throw
+ * "Only plain objects can be passed from Server to Client Components."
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function serializeForClient(value: any): any {
+  if (value === null || value === undefined) return value
+  if (value instanceof Timestamp) return value.toDate().toISOString()
+  if (Array.isArray(value)) return value.map(serializeForClient)
+  if (typeof value === 'object') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const out: Record<string, any> = {}
+    for (const [k, v] of Object.entries(value)) out[k] = serializeForClient(v)
+    return out
+  }
+  return value
+}
+
 export default async function SeoIndexPage() {
   const snap = await adminDb.collection('seo_sprints').where('deleted', '==', false).get()
+  const sprints = snap.docs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((d) => serializeForClient({ id: d.id, ...(d.data() as any) }))
+  // Newest first (createdAt is now an ISO string)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sprints = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
-  // Newest first
-  sprints.sort((a, b) => {
-    const at = a.createdAt?.toMillis?.() ?? 0
-    const bt = b.createdAt?.toMillis?.() ?? 0
+  sprints.sort((a: any, b: any) => {
+    const at = a.createdAt ? new Date(a.createdAt).getTime() : 0
+    const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0
     return bt - at
   })
 
-  // Find any sprint's lastPullAt for the presence pill
-  const lastRun = sprints
-    .map((s) => s.integrations?.gsc?.lastPullAt)
-    .filter(Boolean)
-    .sort()
-    .pop()
+  // Find any sprint's lastPullAt for the presence pill (already a string)
+  const lastRun =
+    sprints
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((s: any) => s.integrations?.gsc?.lastPullAt)
+      .filter(Boolean)
+      .sort()
+      .pop() ?? null
 
   return (
     <div className="space-y-6">
@@ -33,7 +58,7 @@ export default async function SeoIndexPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <PipPresencePill lastRunAt={lastRun?.toDate?.()?.toISOString?.() ?? null} />
+          <PipPresencePill lastRunAt={lastRun} />
           <Link
             href="/admin/seo/sprints/new"
             className="text-sm px-4 py-2 rounded bg-black text-white hover:bg-gray-800"
@@ -57,7 +82,8 @@ export default async function SeoIndexPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sprints.map((s) => (
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {sprints.map((s: any) => (
             <SprintCard key={s.id} sprint={s} />
           ))}
         </div>

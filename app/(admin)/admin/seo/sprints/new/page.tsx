@@ -1,14 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useOrg } from '@/lib/contexts/OrgContext'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Client = { id: string; name: string; orgId?: string }
+interface OrgChoice {
+  id: string
+  name: string
+  slug?: string
+  websiteUrl?: string
+}
 
-export default function NewSprintPage() {
+function NewSprintForm() {
   const router = useRouter()
-  const [clients, setClients] = useState<Client[]>([])
+  const searchParams = useSearchParams()
+  const { selectedOrgId, orgs: contextOrgs } = useOrg()
+
+  const [orgs, setOrgs] = useState<OrgChoice[]>([])
   const [clientId, setClientId] = useState('')
   const [siteUrl, setSiteUrl] = useState('')
   const [siteName, setSiteName] = useState('')
@@ -17,17 +25,64 @@ export default function NewSprintPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Resolve list of organisations from context (or fetch as fallback). The
+  // `clientId` here is the Firestore organization id — same pattern the rest
+  // of the SEO module uses (`orgId` and `clientId` are both the org doc id).
   useEffect(() => {
+    if (contextOrgs.length > 0) {
+      setOrgs(
+        contextOrgs.map((o) => ({
+          id: o.id,
+          name: o.name,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          slug: (o as any).slug,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          websiteUrl: (o as any).websiteUrl,
+        })),
+      )
+      return
+    }
     void (async () => {
       try {
-        const res = await fetch('/api/v1/clients')
+        const res = await fetch('/api/v1/organizations')
         const json = await res.json()
-        if (json.success) setClients(json.data ?? [])
+        if (json.success ?? json.data) setOrgs(json.data ?? [])
       } catch {
         // ignore
       }
     })()
-  }, [])
+  }, [contextOrgs])
+
+  // Pre-fill from URL query params and/or workspace context. Priority:
+  //   1. ?orgId / ?clientId from URL  → set explicitly
+  //   2. selectedOrgId from OrgContext (workspace mode)
+  //   3. nothing — user picks from dropdown
+  useEffect(() => {
+    const qOrgId = searchParams?.get('orgId') ?? searchParams?.get('clientId') ?? ''
+    const qSiteName = searchParams?.get('siteName') ?? ''
+    const qSiteUrl = searchParams?.get('siteUrl') ?? ''
+
+    if (qOrgId) {
+      setClientId(qOrgId)
+    } else if (selectedOrgId) {
+      setClientId(selectedOrgId)
+    }
+
+    if (qSiteName) setSiteName(qSiteName)
+    if (qSiteUrl) setSiteUrl(qSiteUrl)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, selectedOrgId])
+
+  // When the selected client changes, auto-fill siteName from the org if not
+  // already set.
+  useEffect(() => {
+    if (!clientId) return
+    const org = orgs.find((o) => o.id === clientId)
+    if (!org) return
+    if (!siteName) setSiteName(org.name)
+    if (!siteUrl && org.websiteUrl) setSiteUrl(org.websiteUrl)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, orgs])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -41,7 +96,15 @@ export default function NewSprintPage() {
       const res = await fetch('/api/v1/seo/sprints', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'idempotency-key': `sprint-${Date.now()}` },
-        body: JSON.stringify({ clientId, siteUrl, siteName, autopilotMode, pagespeedEnabled }),
+        body: JSON.stringify({
+          // We send orgId AND clientId as the same value — Pip skill / API both honour either
+          orgId: clientId,
+          clientId,
+          siteUrl,
+          siteName,
+          autopilotMode,
+          pagespeedEnabled,
+        }),
       })
       const json = await res.json()
       if (!json.success) {
@@ -55,6 +118,8 @@ export default function NewSprintPage() {
       setSubmitting(false)
     }
   }
+
+  const selectedOrg = orgs.find((o) => o.id === clientId)
 
   return (
     <div className="max-w-xl space-y-6">
@@ -75,12 +140,17 @@ export default function NewSprintPage() {
             required
           >
             <option value="">— pick client —</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
               </option>
             ))}
           </select>
+          {selectedOrg && (
+            <p className="text-xs text-[var(--color-pib-text-muted)] mt-1">
+              Pre-filled from workspace context.
+            </p>
+          )}
         </label>
 
         <label className="block">
@@ -153,5 +223,14 @@ export default function NewSprintPage() {
         </p>
       </form>
     </div>
+  )
+}
+
+export default function NewSprintPage() {
+  // useSearchParams must be inside a Suspense boundary
+  return (
+    <Suspense fallback={<div className="text-sm text-[var(--color-pib-text-muted)]">Loading…</div>}>
+      <NewSprintForm />
+    </Suspense>
   )
 }

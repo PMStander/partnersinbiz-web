@@ -35,7 +35,8 @@ export const GET = withAuth('admin', async (req: NextRequest, user: ApiUser) => 
   const clientId = searchParams.get('clientId')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = adminDb.collection('seo_sprints')
-  if (user.role !== 'ai' && user.orgId) q = q.where('orgId', '==', user.orgId)
+  // Admins and ai see all sprints; client role is locked to their own org.
+  if (user.role === 'client' && user.orgId) q = q.where('orgId', '==', user.orgId)
   if (status) q = q.where('status', '==', status)
   if (clientId) q = q.where('clientId', '==', clientId)
   const snap = await q.get()
@@ -55,7 +56,13 @@ export const POST = withAuth(
     if (!body?.clientId) return apiError('clientId is required', 400)
     if (!body?.siteUrl) return apiError('siteUrl is required', 400)
     if (!body?.siteName) return apiError('siteName is required', 400)
-    const orgId = user.orgId ?? body.orgId
+    // For admin/ai callers, prefer body.orgId so a sprint can be scoped to ANY
+    // client (admins are not locked to their own home org). For non-admin
+    // callers we fall back to their own orgId.
+    const orgId =
+      user.role === 'admin' || user.role === 'ai'
+        ? (body.orgId ?? body.clientId ?? user.orgId)
+        : user.orgId
     if (!orgId) return apiError('orgId is required (no user.orgId set)', 400)
 
     const startDate = body.startDate ?? new Date().toISOString()
