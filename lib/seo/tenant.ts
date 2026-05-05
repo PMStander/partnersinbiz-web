@@ -10,7 +10,8 @@ export async function sprintIdsForUser(user: ApiUser): Promise<string[]> {
 export async function requireSprintAccess(sprintId: string, user: ApiUser) {
   const snap = await adminDb.collection('seo_sprints').doc(sprintId).get()
   if (!snap.exists) throw new Error('Sprint not found')
-  const data = snap.data() as { orgId: string; deleted?: boolean }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = snap.data() as any
   if (data.deleted) throw new Error('Sprint not found')
   if (user.role !== 'ai' && data.orgId !== user.orgId) {
     throw new Error('Sprint access denied')

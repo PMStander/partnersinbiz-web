@@ -50,7 +50,8 @@ export default async function PortalSeoIndex() {
         </p>
       </header>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {sprints.map((s) => {
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {sprints.map((s: any) => {
           const day = s.currentDay ?? 0
           const phase = s.currentPhase ?? 0
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

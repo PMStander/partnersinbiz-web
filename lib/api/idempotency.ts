@@ -6,7 +6,8 @@ import type { ApiUser } from './types'
 type IdempotentHandler = (
   req: NextRequest,
   user: ApiUser,
-  context?: Record<string, unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  context?: any,
 ) => Promise<NextResponse>
 
 const WINDOW_MS = 24 * 60 * 60 * 1000 // 24h

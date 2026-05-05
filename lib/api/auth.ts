@@ -3,7 +3,8 @@ import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { apiError, apiErrorFromException } from './response'
 import type { ApiRole, ApiUser } from './types'
 
-type RouteHandler = (req: NextRequest, user: ApiUser, context?: Record<string, unknown>) => Promise<NextResponse>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RouteHandler = (req: NextRequest, user: ApiUser, context?: any) => Promise<NextResponse>
 
 /**
  * Wraps an API route handler with authentication and role enforcement.
@@ -17,7 +18,8 @@ type RouteHandler = (req: NextRequest, user: ApiUser, context?: Record<string, u
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function withAuth(requiredRole: 'admin' | 'client', handler: RouteHandler): any {
-  return async (req: NextRequest, context?: Record<string, unknown>): Promise<NextResponse> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return async (req: NextRequest, context?: any): Promise<NextResponse> => {
     let user: ApiUser | null
     try {
       user = await _resolveUser(req)
