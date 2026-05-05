@@ -19,6 +19,7 @@ const NAV_LINKS: NavItem[] = [
   { href: '/portal/dashboard',  label: 'Dashboard',  icon: 'space_dashboard',  group: 'work' },
   { href: '/portal/project',    label: 'Projects',   icon: 'rocket_launch',    group: 'work' },
   { href: '/portal/social',     label: 'Social',     icon: 'campaign',         group: 'work' },
+  { href: '/portal/seo',        label: 'SEO',        icon: 'trending_up',      group: 'work' },
   { href: '/portal/properties', label: 'Properties', icon: 'apartment',        group: 'data' },
   { href: '/portal/reports',    label: 'Reports',    icon: 'analytics',        group: 'data' },
   { href: '/portal/data',       label: 'Data',       icon: 'database',         group: 'data' },

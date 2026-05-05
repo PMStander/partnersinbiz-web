@@ -3,6 +3,7 @@ export type ApiRole = 'admin' | 'client' | 'ai'
 export interface ApiUser {
   uid: string
   role: ApiRole
+  orgId?: string
 }
 
 export interface ApiMeta {
