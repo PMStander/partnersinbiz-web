@@ -5,6 +5,7 @@ const nextConfig = {
     root: path.resolve('.'),
   },
   transpilePackages: ['@partnersinbiz/analytics-js'],
+  serverExternalPackages: ['@react-pdf/renderer'],
   async redirects() {
     return [
       { source: '/discover', destination: '/work', permanent: true },
