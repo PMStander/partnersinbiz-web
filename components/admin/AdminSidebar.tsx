@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { OrgSwitcher } from './OrgSwitcher'
 import GlobalSearch from './GlobalSearch'
+import { CollapsibleSection } from './CollapsibleSection'
 import { useOrg } from '@/lib/contexts/OrgContext'
 
 // ── Nav definitions ────────────────────────────────────────────────────────
@@ -32,7 +33,6 @@ function workspaceNav(slug: string): NavItem[] {
   return [
     { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: 'space_dashboard' },
     { label: 'Projects',  href: `/admin/org/${slug}/projects`,  icon: 'rocket_launch' },
-    { label: 'Social',    href: `/admin/org/${slug}/social`,    icon: 'campaign' },
     { label: 'Brand',     href: `/admin/org/${slug}/brand`,     icon: 'palette' },
     { label: 'Team',      href: `/admin/org/${slug}/team`,      icon: 'groups' },
     { label: 'Billing',   href: `/admin/org/${slug}/billing`,   icon: 'payments' },
@@ -82,6 +82,73 @@ function SectionLink({ item, pathname }: { item: { label: string; href: string }
     >
       {item.label}
     </Link>
+  )
+}
+
+// ── SEO section (workspace mode) ───────────────────────────────────────────
+// Fetches the active sprint for the selected org and renders deep links into
+// the cockpit. If no sprint exists, links to /admin/org/[slug]/seo (the
+// "Create sprint" CTA page).
+
+function SeoWorkspaceSection({ slug, orgId, pathname }: { slug: string; orgId: string; pathname: string }) {
+  const [sprintId, setSprintId] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoaded(false)
+    setSprintId(null)
+    fetch('/api/v1/seo/sprints')
+      .then((r) => r.json())
+      .then((body) => {
+        if (cancelled) return
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const match = (body.data ?? []).find((s: any) => s.orgId === orgId)
+        setSprintId(match?.id ?? null)
+        setLoaded(true)
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId])
+
+  if (!loaded) {
+    return (
+      <CollapsibleSection storageKey={`seo_${slug}`} label="SEO Sprint" icon="trending_up">
+        <p className="px-3 py-2 text-xs text-[var(--color-pib-text-muted)]">Loading…</p>
+      </CollapsibleSection>
+    )
+  }
+
+  if (!sprintId) {
+    return (
+      <CollapsibleSection storageKey={`seo_${slug}`} label="SEO Sprint" icon="trending_up">
+        <SectionLink item={{ label: '+ Create SEO sprint', href: `/admin/org/${slug}/seo` }} pathname={pathname} />
+      </CollapsibleSection>
+    )
+  }
+
+  const items = [
+    { label: 'Today',         href: `/admin/seo/sprints/${sprintId}` },
+    { label: 'Tasks',         href: `/admin/seo/sprints/${sprintId}/tasks` },
+    { label: 'Keywords',      href: `/admin/seo/sprints/${sprintId}/keywords` },
+    { label: 'Backlinks',     href: `/admin/seo/sprints/${sprintId}/backlinks` },
+    { label: 'Content',       href: `/admin/seo/sprints/${sprintId}/content` },
+    { label: 'Audits',        href: `/admin/seo/sprints/${sprintId}/audits` },
+    { label: 'Optimisations', href: `/admin/seo/sprints/${sprintId}/optimizations` },
+    { label: 'Health',        href: `/admin/seo/sprints/${sprintId}/health` },
+    { label: 'Settings',      href: `/admin/seo/sprints/${sprintId}/settings` },
+  ]
+
+  return (
+    <CollapsibleSection storageKey={`seo_${slug}`} label="SEO Sprint" icon="trending_up">
+      {items.map((item) => (
+        <SectionLink key={item.href} item={item} pathname={pathname} />
+      ))}
+    </CollapsibleSection>
   )
 }
 
@@ -171,24 +238,33 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
           ))}
         </nav>
 
-        {/* Bottom sections */}
+        {/* Workspace mode: collapsible tool stacks per client */}
         {isWorkspaceMode && (
-          <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-1">
-            <p className="eyebrow !text-[9px] px-2 pb-1.5">Social</p>
-            {[
-              { label: 'Accounts', href: '/admin/social/accounts' },
-              { label: 'Compose',  href: '/admin/social/compose' },
-              { label: 'Inbox',    href: '/admin/social/inbox' },
-              { label: 'Queue',    href: '/admin/social/queue' },
-              { label: 'Calendar', href: '/admin/social/calendar' },
-              { label: 'Design',   href: '/admin/social/design' },
-              { label: 'Links',    href: '/admin/social/links' },
-            ].map((item) => (
-              <SectionLink key={item.href} item={item} pathname={pathname} />
-            ))}
+          <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-3">
+            <CollapsibleSection
+              storageKey={`social_${selectedOrg.slug}`}
+              label="Social Media"
+              icon="campaign"
+            >
+              <SectionLink item={{ label: 'Overview', href: `/admin/org/${selectedOrg.slug}/social` }} pathname={pathname} />
+              <SectionLink item={{ label: 'Compose',  href: '/admin/social/compose' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Calendar', href: '/admin/social/calendar' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Queue',    href: '/admin/social/queue' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Inbox',    href: '/admin/social/inbox' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Accounts', href: '/admin/social/accounts' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Design',   href: '/admin/social/design' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Links',    href: '/admin/social/links' }} pathname={pathname} />
+            </CollapsibleSection>
+
+            <SeoWorkspaceSection
+              slug={selectedOrg.slug}
+              orgId={selectedOrgId}
+              pathname={pathname}
+            />
           </div>
         )}
 
+        {/* Operator mode: flat global tools list */}
         {!isWorkspaceMode && (
           <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-1">
             <p className="eyebrow !text-[9px] px-2 pb-1.5">Tools</p>
