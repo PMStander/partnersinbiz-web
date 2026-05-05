@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { useOrg } from '@/lib/contexts/OrgContext'
 
 export function OrgSwitcher() {
   const { selectedOrgId, orgName, orgs: contextOrgs, setOrg, clearOrg } = useOrg()
+  const router = useRouter()
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -46,7 +49,13 @@ export function OrgSwitcher() {
           {contextOrgs.map((org) => (
             <button
               key={org.id}
-              onClick={() => { setOrg(org.id, org.name); setOpen(false) }}
+              onClick={() => {
+                setOrg(org.id, org.name)
+                setOpen(false)
+                // Preserve the current sub-page (projects, brand, etc.) under the new org slug
+                const subPath = pathname.replace(/^\/admin\/org\/[^/]+/, '') || '/dashboard'
+                router.push(`/admin/org/${org.slug}${subPath}`)
+              }}
               className={[
                 'w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-white/[0.03] flex items-center gap-2',
                 selectedOrgId === org.id ? 'text-[var(--color-pib-accent-hover)]' : 'text-[var(--color-pib-text)]',

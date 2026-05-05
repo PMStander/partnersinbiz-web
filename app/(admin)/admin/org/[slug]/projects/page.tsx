@@ -83,13 +83,10 @@ export default function ProjectsPage() {
         throw new Error(body.error || 'Failed to create project')
       }
 
-      // Add new project to list
-      const newProject: Project = {
-        id: body.data.id,
-        name: formName,
-        status: formStatus,
-      }
-      setProjects([newProject, ...projects])
+      // Refetch the full list so the new project is confirmed from the server
+      const listRes = await fetch(`/api/v1/projects?orgSlug=${slug}`)
+      const listBody = await listRes.json()
+      setProjects(listBody.data ?? [])
       setShowForm(false)
       setFormName('')
       setFormStatus('discovery')
