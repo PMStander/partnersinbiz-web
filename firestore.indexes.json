@@ -540,6 +540,15 @@
       ]
     },
     {
+      "collectionGroup": "seo_keywords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sprintId", "order": "ASCENDING" },
+        { "fieldPath": "deleted", "order": "ASCENDING" },
+        { "fieldPath": "currentPosition", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "seo_backlinks",
       "queryScope": "COLLECTION",
       "fields": [
