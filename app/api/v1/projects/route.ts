@@ -72,7 +72,7 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
   const snapshot = await query.get()
 
   const projects: ProjectListItem[] = snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .map((doc): ProjectListItem => ({ id: doc.id, ...doc.data() }))
     .sort((a, b) => createdAtMillis(b.createdAt) - createdAtMillis(a.createdAt))
 
   return apiSuccess(projects)
