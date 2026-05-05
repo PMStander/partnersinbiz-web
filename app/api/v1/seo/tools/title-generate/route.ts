@@ -8,5 +8,5 @@ export const dynamic = 'force-dynamic'
 export const POST = withAuth('admin', async (req: NextRequest) => {
   const body = await req.json().catch(() => null)
   if (!body?.topic || !body?.keyword) return apiError('topic and keyword are required', 400)
-  return apiSuccess({ candidates: generateTitleCandidates(body.topic, body.keyword) })
+  return apiSuccess({ candidates: await generateTitleCandidates(body.topic, body.keyword) })
 })
