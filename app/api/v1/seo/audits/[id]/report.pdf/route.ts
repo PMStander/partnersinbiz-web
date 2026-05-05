@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
-import { createElement } from 'react'
+import React, { createElement } from 'react'
+import type { DocumentProps } from '@react-pdf/renderer'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiError, apiErrorFromException } from '@/lib/api/response'
@@ -54,7 +55,9 @@ export const GET = withAuth(
 
       // 4. Render PDF
       const buffer = await renderToBuffer(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // renderToBuffer expects ReactElement<DocumentProps>; our wrapper component
+        // structurally satisfies this at runtime but TS can't verify it through the
+        // function component boundary — cast is required.
         createElement(AuditReportPDF, {
           clientName: sprint.siteName ?? sprint.orgId ?? audit.orgId ?? 'Client',
           siteUrl: sprint.siteUrl ?? '',
@@ -64,8 +67,8 @@ export const GET = withAuth(
           rankings: audit.rankings ?? { top100: 0, top10: 0, top3: 0 },
           authority: audit.authority ?? { referringDomains: 0, totalBacklinks: 0 },
           content: audit.content ?? { pagesIndexed: 0, postsPublished: 0, comparisonPagesLive: 0 },
-          keywords,
-        }), // eslint-disable-line @typescript-eslint/no-explicit-any
+          topKeywords: keywords,
+        }) as unknown as React.ReactElement<DocumentProps>,
       )
 
       // 5. Return PDF response

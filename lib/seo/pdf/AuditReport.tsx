@@ -32,7 +32,7 @@ export interface AuditReportProps {
     postsPublished: number
     comparisonPagesLive: number
   }
-  keywords: AuditKeyword[]
+  topKeywords: AuditKeyword[]
 }
 
 const BRAND = '#4F46E5'
@@ -98,7 +98,7 @@ function pct(n: number) {
 }
 
 export function AuditReportPDF(props: AuditReportProps) {
-  const { clientName, siteUrl, capturedAt, sprintDay, traffic, rankings, authority, content, keywords } = props
+  const { clientName, siteUrl, capturedAt, sprintDay, traffic, rankings, authority, content, topKeywords } = props
   const date = new Date(capturedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
@@ -151,7 +151,7 @@ export function AuditReportPDF(props: AuditReportProps) {
         </View>
 
         {/* Keywords table */}
-        {keywords.length > 0 && (
+        {topKeywords.length > 0 && (
           <>
             <Text style={s.sectionTitle}>Top Keywords by Position</Text>
             <View style={s.table}>
@@ -162,7 +162,7 @@ export function AuditReportPDF(props: AuditReportProps) {
                 <Text style={s.thNum}>Clicks</Text>
                 <Text style={s.thNum}>CTR</Text>
               </View>
-              {keywords.map((kw, i) => {
+              {topKeywords.map((kw, i) => {
                 const rowStyle = i % 2 === 0 ? s.tableRow : s.tableRowAlt
                 const kwCtr = kw.currentImpressions > 0 ? kw.currentClicks / kw.currentImpressions : 0
                 return (
