@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { createElement } from 'react'
-import type { ReactElement } from 'react'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiError, apiErrorFromException } from '@/lib/api/response'
@@ -29,10 +28,11 @@ export const GET = withAuth(
       let sprint: any = {}
       if (audit.sprintId) {
         const sprintSnap = await adminDb.collection('seo_sprints').doc(audit.sprintId).get()
-        if (sprintSnap.exists) sprint = sprintSnap.data()
+        if (sprintSnap.exists) sprint = sprintSnap.data() ?? {}
       }
 
       // 3. Fetch top 20 keywords by currentPosition
+      if (!audit.sprintId) console.warn('[audit-pdf] audit missing sprintId, keywords will be empty', id)
       const kwSnap = await adminDb
         .collection('seo_keywords')
         .where('sprintId', '==', audit.sprintId ?? '')
@@ -65,7 +65,7 @@ export const GET = withAuth(
           authority: audit.authority ?? { referringDomains: 0, totalBacklinks: 0 },
           content: audit.content ?? { pagesIndexed: 0, postsPublished: 0, comparisonPagesLive: 0 },
           keywords,
-        }) as ReactElement<any>, // eslint-disable-line @typescript-eslint/no-explicit-any
+        }), // eslint-disable-line @typescript-eslint/no-explicit-any
       )
 
       // 5. Return PDF response
@@ -73,7 +73,7 @@ export const GET = withAuth(
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="audit-report-day-${audit.snapshotDay ?? 0}.pdf"`,
+          'Content-Disposition': `attachment; filename="audit-report-day-${Number(audit.snapshotDay ?? 0)}.pdf"`,
           'Cache-Control': 'no-store',
         },
       })
