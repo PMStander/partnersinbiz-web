@@ -9,7 +9,14 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "firebase-functions/v2/scheduler": ["./node_modules/firebase-functions/lib/v2/providers/scheduler"],
+      "firebase-functions/v2/https": ["./node_modules/firebase-functions/lib/v2/providers/https"],
+      "firebase-functions/v2/pubsub": ["./node_modules/firebase-functions/lib/v2/providers/pubsub"],
+      "firebase-functions/v2/storage": ["./node_modules/firebase-functions/lib/v2/providers/storage"],
+      "firebase-functions/v2/*": ["./node_modules/firebase-functions/lib/v2/providers/*"]
+    }
   },
   "compileOnSave": true,
   "include": ["src"]
