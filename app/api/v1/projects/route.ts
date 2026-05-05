@@ -8,6 +8,7 @@ import type * as FirebaseFirestore from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import type { ApiUser } from '@/lib/api/types'
 
 const VALID_STATUSES = [
   'discovery',
@@ -19,6 +20,32 @@ const VALID_STATUSES = [
 ] as const
 
 type ProjectStatus = (typeof VALID_STATUSES)[number]
+
+type ProjectListItem = {
+  id: string
+  createdAt?: unknown
+  [key: string]: unknown
+}
+
+function createdAtMillis(value: unknown): number {
+  if (!value) return 0
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    return Number.isNaN(parsed) ? 0 : parsed
+  }
+  if (typeof value === 'object') {
+    const timestamp = value as {
+      toMillis?: () => number
+      seconds?: number
+      _seconds?: number
+    }
+    if (typeof timestamp.toMillis === 'function') return timestamp.toMillis()
+    const seconds = timestamp.seconds ?? timestamp._seconds
+    if (typeof seconds === 'number') return seconds * 1000
+  }
+  return 0
+}
 
 export const GET = withAuth('admin', async (req: NextRequest) => {
   const { searchParams } = new URL(req.url)
@@ -42,19 +69,16 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     query = query.where('orgId', '==', orgId)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const snapshot = await query.orderBy('createdAt', 'desc').get()
+  const snapshot = await query.get()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const projects = snapshot.docs.map((doc: any) => ({
-    id: doc.id,
-    ...doc.data(),
-  }))
+  const projects: ProjectListItem[] = snapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .sort((a, b) => createdAtMillis(b.createdAt) - createdAtMillis(a.createdAt))
 
   return apiSuccess(projects)
 })
 
-export const POST = withAuth('admin', async (req: NextRequest) => {
+export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) => {
   const body = await req.json()
 
   if (!body.name?.trim()) return apiError('Name is required')
@@ -74,19 +98,26 @@ export const POST = withAuth('admin', async (req: NextRequest) => {
 
     if (!orgSnapshot.empty) {
       orgId = orgSnapshot.docs[0].id
+    } else {
+      return apiError('Organization not found', 404)
     }
   }
+
+  const clientId = body.clientId?.trim() || orgId
 
   const docRef = await adminDb.collection('projects').add({
     name: body.name.trim(),
     orgId,
-    clientId: body.clientId?.trim() ?? '',
+    clientId,
+    clientOrgId: body.clientOrgId?.trim() || clientId || null,
     description: body.description?.trim() ?? '',
     brief: body.brief?.trim() ?? '',
     status: (body.status as ProjectStatus) ?? 'discovery',
     startDate: FieldValue.serverTimestamp(),
     targetDate: body.targetDate ?? null,
+    createdBy: user.uid,
     createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   })
 
   return apiSuccess({ id: docRef.id }, 201)
