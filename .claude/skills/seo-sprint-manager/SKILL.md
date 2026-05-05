@@ -1,0 +1,261 @@
+---
+name: seo-sprint-manager
+description: >
+  Manage 90-day SEO sprints for any client through the Partners in Biz platform API.
+  Run daily SEO work, track keywords + rankings, manage backlinks, generate audits, and
+  drive an autoresearch-style optimization loop that adapts when the plan isn't working.
+  Use this skill whenever the user mentions anything SEO-related, including but not limited to:
+  "do today's SEO", "run today's SEO", "do this week's SEO", "work the SEO sprint",
+  "what's due in the SEO sprint", "today's SEO plan", "kick off SEO sprint",
+  "create SEO sprint", "new SEO sprint", "start a 90 day SEO sprint",
+  "connect search console", "GSC", "google search console", "bing webmaster tools",
+  "page speed", "core web vitals", "CWV", "robots.txt check", "sitemap check",
+  "metadata check", "title tag", "meta description", "canonical check", "schema validate",
+  "JSON-LD", "structured data", "internal links", "internal link audit", "orphan pages",
+  "keyword research", "keyword discovery", "find keywords", "winnable keywords",
+  "keyword density", "track keyword", "add keyword", "retire keyword",
+  "find backlinks", "discover backlinks", "directory submission", "backlink to mark live",
+  "guest post pitch", "indiehackers", "saashub", "G2 listing", "Capterra",
+  "publish blog post", "draft blog post", "repurpose post", "comparison page", "pillar post",
+  "content cluster", "publish to insights", "schedule audit", "day 30 audit", "day 90 audit",
+  "audit snapshot", "audit report", "share audit",
+  "optimize sprint", "find stuck pages", "stuck pages", "approve optimization",
+  "Karpathy autoresearch", "page rewrite", "lost keyword", "unindexed page",
+  "what's not ranking", "why is my page not ranking", "SEO health", "sprint health",
+  "compounding mode", "phase 4", "compounding SEO",
+  "SEO ROI", "project organic value", "domain rating", "DR check", "OpenPageRank",
+  "common crawl", "crawler simulator", "googlebot view".
+  If in doubt, trigger — this skill owns the SEO sprint lifecycle from creation to
+  Day 90 audit and beyond into Phase 4 (Compounding).
+---
+
+# SEO Sprint Manager — Partners in Biz Platform API
+
+Drive 90-day SEO sprints for any client site, with three loops:
+
+- **Loop A (Daily)** — pulls Google Search Console + Bing Webmaster Tools + PageSpeed,
+  refreshes today's plan, computes sprint phase. Runs at 06:00 SAST via cron.
+- **Loop B (Execution)** — when Peet says "do today's SEO", walks today's plan,
+  auto-executes safe tasks, queues anything that publishes for human review.
+- **Loop C (Optimization — Karpathy autoresearch)** — weekly cron + on-demand. Detects
+  health signals (stuck pages, lost keywords, zero-impression posts, etc.), proposes
+  hypotheses, generates new tasks, measures outcomes 14 days later, scores wins/losses.
+
+After Day 90, sprints transition to **Phase 4 (Compounding)** — Loop A still runs daily,
+Loop C generates work weekly. The sprint never "ends" until archived.
+
+## Auth
+
+```
+Authorization: Bearer ${AI_API_KEY}
+```
+
+The `AI_API_KEY` env var is set on Vercel for `partnersinbiz-web`. Auths as role `ai`
+which gets admin-equivalent access.
+
+## Base URL
+
+```
+https://partnersinbiz.online/api/v1/seo
+```
+
+Override via `PIB_API_BASE` for local dev.
+
+## The "Do today's SEO" flow
+
+```
+GET  /seo/sprints?status=active                      # find active sprints
+GET  /seo/sprints/[id]/today                         # what's due today
+POST /seo/sprints/[id]/run                           # execute Loop B end-to-end
+```
+
+`/run` returns `{ done: [taskIds], queued: [taskIds], blocked: [{taskId, reason}] }`.
+
+Pip's natural-language flow when Peet says "do today's SEO":
+
+1. Find active sprints (filter by client if mentioned)
+2. For each, GET today's plan
+3. POST /run to execute autopilot tasks + queue the rest
+4. Report a short digest: "Did 4, queued 2 for your review, 1 blocked on GSC reconnect"
+
+## Endpoints
+
+### Sprints
+```
+GET    /seo/sprints                                  list (filter: status, clientId)
+POST   /seo/sprints                                  create from outrank-90 template
+GET    /seo/sprints/[id]                             single sprint
+PATCH  /seo/sprints/[id]                             update (autopilot mode, etc)
+POST   /seo/sprints/[id]/archive                     soft-archive (force=true to delete)
+GET    /seo/sprints/[id]/today                       today's plan
+GET    /seo/sprints/[id]/health                      health + integration status
+POST   /seo/sprints/[id]/optimize                    trigger Loop C on demand
+POST   /seo/sprints/[id]/run                         trigger Loop B (do today's SEO)
+```
+
+### Tasks
+```
+GET    /seo/sprints/[id]/tasks                       list (filters: week, phase, status, source, taskType)
+POST   /seo/sprints/[id]/tasks                       add custom task
+PATCH  /seo/tasks/[id]                               update
+POST   /seo/tasks/[id]/complete                      mark done
+POST   /seo/tasks/[id]/skip                          mark skipped
+POST   /seo/tasks/[id]/execute                       run executor for a single task
+```
+
+### Keywords
+```
+GET    /seo/sprints/[id]/keywords                    list
+POST   /seo/sprints/[id]/keywords                    add (or POST?bulk=true with {keywords: [...]})
+PATCH  /seo/keywords/[id]                            update
+DELETE /seo/keywords/[id]                            soft-delete
+POST   /seo/keywords/[id]/retire                     mark lost
+GET    /seo/keywords/[id]/positions                  full time series
+```
+
+### Backlinks
+```
+GET    /seo/sprints/[id]/backlinks                   list
+POST   /seo/sprints/[id]/backlinks                   add manually
+PATCH  /seo/backlinks/[id]                           update
+POST   /seo/backlinks/[id]/mark-live                 transition to live
+GET    /seo/sprints/[id]/backlinks/discover          run Bing WMT + Common Crawl discovery
+```
+
+### Content
+```
+GET    /seo/sprints/[id]/content                     list
+POST   /seo/sprints/[id]/content                     add idea
+PATCH  /seo/content/[id]                             update
+POST   /seo/content/[id]/draft                       AI-draft the post
+POST   /seo/content/[id]/repurpose                   handoff to social-media-manager
+POST   /seo/content/[id]/publish                     mark live
+```
+
+### Audits
+```
+GET    /seo/sprints/[id]/audits                      list
+POST   /seo/sprints/[id]/audits                      generate snapshot now
+GET    /seo/audits/[id]                              audit detail
+GET    /seo/audits/[id]/share                        get/create public share token
+GET    /seo/audits/[id]/report.pdf                   PDF (501 — coming soon)
+```
+
+### Optimizations (Karpathy autoresearch log)
+```
+GET    /seo/sprints/[id]/optimizations               list (filter: status, result)
+POST   /seo/optimizations/[id]/approve               turn proposal → tasks
+POST   /seo/optimizations/[id]/reject
+POST   /seo/optimizations/[id]/measure               re-measure outcome (win/loss/no-change)
+```
+
+### In-house SEO toolkit
+```
+POST   /seo/tools/metadata-check                     {url} → title/meta/og audit
+POST   /seo/tools/robots-check                       {domain}
+POST   /seo/tools/sitemap-check                      {sitemapUrl}
+POST   /seo/tools/canonical-check                    {url}
+POST   /seo/tools/crawler-sim                        {url} → render as Googlebot
+POST   /seo/tools/schema-validate                    {url} → JSON-LD validation
+POST   /seo/tools/title-generate                     {topic, keyword} → 5 candidates
+POST   /seo/tools/meta-generate                      {topic, keyword} → 3 candidates
+POST   /seo/tools/slug-generate                      {title} → URL slug
+POST   /seo/tools/keyword-density                    {url, keyword}
+POST   /seo/tools/keyword-discover                   {seedKeywords[], siteUrl}
+POST   /seo/tools/internal-link-audit                {sitemapUrl}
+POST   /seo/tools/seo-roi                            {keywords[], conversionRate, avgValue}
+POST   /seo/tools/page-fetch                         {url} → cached fetch
+```
+
+### Integrations
+```
+GET    /seo/integrations/gsc/auth-url?sprintId=X     start OAuth flow
+GET    /seo/integrations/gsc/callback                OAuth callback (redirect target)
+POST   /seo/integrations/gsc/connect/[sprintId]      pick GSC property
+POST   /seo/integrations/gsc/disconnect/[sprintId]
+POST   /seo/integrations/gsc/pull/[sprintId]         on-demand pull
+GET    /seo/integrations/gsc/properties/[sprintId]   list GSC properties for connected account
+POST   /seo/integrations/bing/connect/[sprintId]     {siteUrl}
+POST   /seo/integrations/pagespeed/run/[sprintId]    on-demand pull
+```
+
+## Examples
+
+### Create a sprint for a client
+```bash
+curl -X POST $BASE/sprints \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: sprint-$(date +%s)" \
+  -d '{"clientId":"c123","siteUrl":"https://acme.co","siteName":"Acme"}'
+```
+
+Returns `{ id, siteUrl, siteName, status: 'pre-launch' }`. Sprint is seeded with 42
+template tasks + 15 directory backlinks.
+
+### Do today's SEO across all active sprints
+```bash
+# 1. List active sprints
+curl "$BASE/sprints?status=active" -H "Authorization: Bearer $AI_API_KEY"
+
+# 2. For each, run the execution loop
+for id in $SPRINT_IDS; do
+  curl -X POST "$BASE/sprints/$id/run" \
+    -H "Authorization: Bearer $AI_API_KEY" \
+    -H "Idempotency-Key: run-$id-$(date +%s)"
+done
+```
+
+### Add 5 keywords in bulk
+```bash
+curl -X POST "$BASE/sprints/$ID/keywords?bulk=true" \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"keywords":[
+        {"keyword":"acme alternative","volume":1300,"intentBucket":"solution"},
+        {"keyword":"how to acme","volume":2400,"intentBucket":"problem"}
+      ]}'
+```
+
+### Approve all open optimizations
+```bash
+curl "$BASE/sprints/$ID/optimizations?status=proposed" -H "Authorization: Bearer $AI_API_KEY" \
+  | jq -r '.data[].id' \
+  | while read oid; do
+      curl -X POST "$BASE/optimizations/$oid/approve" \
+        -H "Authorization: Bearer $AI_API_KEY" \
+        -H "Idempotency-Key: approve-$oid"
+    done
+```
+
+### Generate Day 30 audit
+```bash
+curl -X POST "$BASE/sprints/$ID/audits" \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"snapshotDay":30}'
+```
+
+## Cross-skill handoffs
+
+- **`/content/[id]/repurpose`** calls `/api/v1/social/posts` (the social-media-manager
+  skill's namespace) to draft LI + X posts. Records `liUrl` and `xUrl` on the
+  `seo_content` doc.
+- **Day 90 announcement** (week-13 task `audit-announce`) hands off to
+  `social-media-manager` to schedule the audit announcement post.
+
+## Idempotency
+
+All POST creates and side-effect endpoints accept `Idempotency-Key` header.
+Same key replays cached response within 24h.
+
+## Audit trail
+
+All writes include `createdBy`, `createdByType` (`user|agent|system`), `updatedBy`,
+`updatedByType`. Pip's writes show as `agent` in the audit log.
+
+## When tools error
+
+If the cron has been failing or GSC tokens expired, sprint health will show
+`integrations.gsc.tokenStatus = 'expired'`. Surface this as: "GSC connection expired
+for [client] — needs reconnect at /admin/seo/sprints/[id]/settings".
