@@ -42,6 +42,8 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
 
   // New project form state
   const [showForm, setShowForm] = useState(false)
@@ -102,6 +104,23 @@ export default function ProjectsPage() {
     setFormName('')
     setFormStatus('discovery')
     setFormError(null)
+  }
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/v1/projects?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json()
+        throw new Error(body.error || 'Failed to delete project')
+      }
+      setProjects(prev => prev.filter(p => p.id !== id))
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setDeletingId(null)
+      setConfirmId(null)
+    }
   }
 
   return (
@@ -201,19 +220,49 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map(project => (
-            <Link
-              key={project.id}
-              href={`/admin/org/${slug}/projects/${project.id}`}
-              className="pib-card pib-card-hover block"
-            >
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <h3 className="font-medium text-on-surface">{project.name}</h3>
-                <StatusBadge status={project.status} />
-              </div>
-              {project.description && (
-                <p className="text-sm text-on-surface-variant line-clamp-2">{project.description}</p>
+            <div key={project.id} className="relative group">
+              <Link
+                href={`/admin/org/${slug}/projects/${project.id}`}
+                className="pib-card pib-card-hover block"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3 className="font-medium text-on-surface pr-6">{project.name}</h3>
+                  <StatusBadge status={project.status} />
+                </div>
+                {project.description && (
+                  <p className="text-sm text-on-surface-variant line-clamp-2">{project.description}</p>
+                )}
+              </Link>
+
+              {/* Delete button — appears on hover */}
+              {confirmId === project.id ? (
+                <div className="absolute top-2 right-2 flex items-center gap-1 bg-[var(--color-surface)] border border-[#ef4444] rounded-md px-2 py-1 shadow-sm z-10">
+                  <span className="text-[11px] text-[#ef4444]">Delete?</span>
+                  <button
+                    onClick={() => handleDelete(project.id)}
+                    disabled={deletingId === project.id}
+                    className="text-[11px] font-medium text-[#ef4444] hover:underline disabled:opacity-50"
+                  >
+                    {deletingId === project.id ? '…' : 'Yes'}
+                  </button>
+                  <span className="text-[11px] text-on-surface-variant">/</span>
+                  <button
+                    onClick={() => setConfirmId(null)}
+                    className="text-[11px] text-on-surface-variant hover:text-on-surface"
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => { e.preventDefault(); setConfirmId(project.id) }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[#ef444420] text-[#ef4444]"
+                  title="Delete project"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                </button>
               )}
-            </Link>
+            </div>
           ))}
         </div>
       )}

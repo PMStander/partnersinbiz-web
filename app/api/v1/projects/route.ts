@@ -122,3 +122,17 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
 
   return apiSuccess({ id: docRef.id }, 201)
 })
+
+export const DELETE = withAuth('admin', async (req: NextRequest) => {
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+
+  if (!id) return apiError('Project ID is required', 400)
+
+  const docRef = adminDb.collection('projects').doc(id)
+  const snap = await docRef.get()
+  if (!snap.exists) return apiError('Project not found', 404)
+
+  await docRef.delete()
+  return apiSuccess({ id })
+})
