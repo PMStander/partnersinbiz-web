@@ -21,24 +21,6 @@
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 
-;(function loadEnv() {
-  const envPath = resolve(process.cwd(), '.env.local')
-  if (!existsSync(envPath)) return
-  const lines = readFileSync(envPath, 'utf-8').split('\n')
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const eqIdx = trimmed.indexOf('=')
-    if (eqIdx === -1) continue
-    const key = trimmed.slice(0, eqIdx).trim()
-    let val = trimmed.slice(eqIdx + 1).trim()
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1)
-    }
-    if (!process.env[key]) process.env[key] = val
-  }
-})()
-
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const admin = require('firebase-admin')
 
@@ -52,6 +34,15 @@ function initFirebase() {
   if (existsSync(keyPath)) {
     admin.initializeApp({
       credential: admin.credential.cert(JSON.parse(readFileSync(keyPath, 'utf-8'))),
+    })
+    return admin.firestore()
+  }
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL
+  const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n').trim()
+  if (projectId && clientEmail && privateKey) {
+    admin.initializeApp({
+      credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
     })
     return admin.firestore()
   }
