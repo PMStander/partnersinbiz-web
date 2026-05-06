@@ -109,6 +109,21 @@ export const POST = withAuth('admin', async (req, user, ctx) => {
     updatedAt: FieldValue.serverTimestamp(),
   })
 
+  // Mirror orgId onto the user doc so resolveOrgScope finds it without an
+  // extra membership query. If the user already belongs to another org,
+  // their existing orgId is preserved (multi-org membership not supported
+  // in Phase 3 — first-org-bound).
+  if (!userData.orgId) {
+    try {
+      await adminDb.collection('users').doc(userId).set(
+        { orgId: id, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true },
+      )
+    } catch (err) {
+      console.error('[members.add] failed to mirror orgId on user doc', err)
+    }
+  }
+
   // Return the new member with details
   return apiSuccess(
     {

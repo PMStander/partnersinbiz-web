@@ -4,6 +4,8 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { ContactForm } from '@/components/admin/crm/ContactForm'
+import { useOrg } from '@/lib/contexts/OrgContext'
+import { PIB_PLATFORM_ORG_ID } from '@/lib/platform/constants'
 
 const STAGES = ['new','contacted','replied','demo','proposal','won','lost']
 const TYPES = ['lead','prospect','client','churned']
@@ -54,6 +56,12 @@ function TypeBadge({ type }: { type: string }) {
 }
 
 export default function ContactsPage() {
+  const { selectedOrgId } = useOrg()
+  // Operator mode (no org selected) defaults to the PIB platform org so the
+  // operator's CRM still has a sensible scope. In workspace mode we use the
+  // selected org. The API requires orgId on every contact write/list.
+  const activeOrgId = selectedOrgId || PIB_PLATFORM_ORG_ID
+
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -64,6 +72,7 @@ export default function ContactsPage() {
   const fetchContacts = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams()
+    params.set('orgId', activeOrgId)
     if (search) params.set('search', search)
     if (stageFilter) params.set('stage', stageFilter)
     if (typeFilter) params.set('type', typeFilter)
@@ -71,7 +80,7 @@ export default function ContactsPage() {
     const body = await res.json()
     setContacts(body.data ?? [])
     setLoading(false)
-  }, [search, stageFilter, typeFilter])
+  }, [search, stageFilter, typeFilter, activeOrgId])
 
   useEffect(() => { fetchContacts() }, [fetchContacts])
 
@@ -79,7 +88,7 @@ export default function ContactsPage() {
     const res = await fetch('/api/v1/crm/contacts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, orgId: activeOrgId }),
     })
     if (!res.ok) {
       const err = await res.json()

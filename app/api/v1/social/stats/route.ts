@@ -1,8 +1,7 @@
 /**
  * GET /api/v1/social/stats?orgId={id}  — get social analytics for an org
  */
-import { NextRequest } from 'next/server'
-import { Timestamp } from 'firebase-admin/firestore'
+import type { Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { withTenant } from '@/lib/api/tenant'
@@ -26,15 +25,62 @@ interface SocialStats {
   byPlatform: Record<string, number>
   approvalRate: number
   last30Days: number
+  last30DaysSeries: { label: string; value: number }[]
+}
+
+interface SocialPostData {
+  id: string
+  status?: string
+  platforms?: unknown
+  platform?: unknown
+  createdAt?: Timestamp | string | Date | null
+}
+
+const TREND_BUCKETS = 7
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+
+function emptyLast30DaysSeries() {
+  return Array.from({ length: TREND_BUCKETS }, (_, i) => ({
+    label: `W${i + 1}`,
+    value: 0,
+  }))
+}
+
+function toDate(value: unknown): Date | null {
+  if (!value) return null
+  if (value instanceof Date) return value
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    return Number.isNaN(parsed) ? null : new Date(parsed)
+  }
+  if (typeof value === 'object') {
+    const timestamp = value as {
+      toDate?: () => Date
+      seconds?: number
+      _seconds?: number
+    }
+    if (typeof timestamp.toDate === 'function') return timestamp.toDate()
+    const seconds = timestamp.seconds ?? timestamp._seconds
+    if (typeof seconds === 'number') return new Date(seconds * 1000)
+  }
+  return null
+}
+
+function trendBucketIndex(date: Date, now = Date.now()): number {
+  const ageMs = now - date.getTime()
+  if (ageMs < 0 || ageMs > THIRTY_DAYS_MS) return -1
+
+  const bucketSize = THIRTY_DAYS_MS / TREND_BUCKETS
+  const bucketFromNewest = Math.min(TREND_BUCKETS - 1, Math.floor(ageMs / bucketSize))
+  return TREND_BUCKETS - 1 - bucketFromNewest
 }
 
 export const GET = withAuth('client', withTenant(async (req, _user, orgId) => {
   const snapshot = await adminDb.collection('social_posts').where('orgId', '==', orgId).get()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const posts: any[] = snapshot.docs.map((doc: any) => ({
+  const posts: SocialPostData[] = snapshot.docs.map((doc) => ({
     id: doc.id,
-    ...doc.data(),
+    ...(doc.data() as Omit<SocialPostData, 'id'>),
   }))
 
   // Initialize stats
@@ -52,31 +98,35 @@ export const GET = withAuth('client', withTenant(async (req, _user, orgId) => {
     byPlatform: {},
     approvalRate: 0,
     last30Days: 0,
+    last30DaysSeries: emptyLast30DaysSeries(),
   }
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const thirtyDaysAgo = new Date(Date.now() - THIRTY_DAYS_MS)
 
   // Count by status and platform, calculate last 30 days
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  posts.forEach((post: any) => {
+  posts.forEach((post) => {
     const status = (post.status || 'draft') as PostStatus
     if (status in stats.byStatus) {
       stats.byStatus[status]++
     }
 
     // Count platforms
-    const platforms = post.platforms ?? (post.platform ? [post.platform] : [])
-    platforms.forEach((platform: string) => {
+    const platforms = Array.isArray(post.platforms)
+      ? post.platforms
+      : post.platform
+        ? [post.platform]
+        : []
+    platforms.forEach((platform) => {
+      if (typeof platform !== 'string') return
       stats.byPlatform[platform] = (stats.byPlatform[platform] ?? 0) + 1
     })
 
     // Check if created in last 30 days
-    const createdAtTs = post.createdAt as Timestamp | undefined
-    if (createdAtTs) {
-      const createdDate = new Date(createdAtTs.seconds * 1000)
-      if (createdDate > thirtyDaysAgo) {
-        stats.last30Days++
-      }
+    const createdDate = toDate(post.createdAt as Timestamp | string | Date | undefined)
+    if (createdDate && createdDate > thirtyDaysAgo) {
+      stats.last30Days++
+      const bucket = trendBucketIndex(createdDate)
+      if (bucket >= 0) stats.last30DaysSeries[bucket].value++
     }
   })
 

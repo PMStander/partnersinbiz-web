@@ -25,7 +25,7 @@ beforeEach(() => {
 
 describe('GET /api/v1/sequences/[id]', () => {
   it('returns a sequence', async () => {
-    mockGet.mockResolvedValue({ exists: true, id: 'seq1', data: () => ({ name: 'Welcome', deleted: false }) })
+    mockGet.mockResolvedValue({ exists: true, id: 'seq1', data: () => ({ orgId: 'org-test', name: 'Welcome', deleted: false }) })
     const { GET } = await import('@/app/api/v1/sequences/[id]/route')
     const req = new NextRequest('http://localhost/api/v1/sequences/seq1', { headers: authHeader })
     const res = await GET(req, params)
@@ -45,7 +45,7 @@ describe('GET /api/v1/sequences/[id]', () => {
 
 describe('PUT /api/v1/sequences/[id]', () => {
   it('updates a sequence', async () => {
-    mockGet.mockResolvedValue({ exists: true, id: 'seq1', data: () => ({ name: 'Old', deleted: false }) })
+    mockGet.mockResolvedValue({ exists: true, id: 'seq1', data: () => ({ orgId: 'org-test', name: 'Old', deleted: false }) })
     mockUpdate.mockResolvedValue({})
     const { PUT } = await import('@/app/api/v1/sequences/[id]/route')
     const req = new NextRequest('http://localhost/api/v1/sequences/seq1', {
@@ -60,7 +60,7 @@ describe('PUT /api/v1/sequences/[id]', () => {
 
 describe('DELETE /api/v1/sequences/[id]', () => {
   it('soft-deletes a sequence', async () => {
-    mockGet.mockResolvedValue({ exists: true, id: 'seq1', data: () => ({ name: 'Welcome', deleted: false }) })
+    mockGet.mockResolvedValue({ exists: true, id: 'seq1', data: () => ({ orgId: 'org-test', name: 'Welcome', deleted: false }) })
     mockUpdate.mockResolvedValue({})
     const { DELETE } = await import('@/app/api/v1/sequences/[id]/route')
     const req = new NextRequest('http://localhost/api/v1/sequences/seq1', { method: 'DELETE', headers: authHeader })

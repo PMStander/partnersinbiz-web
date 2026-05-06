@@ -261,6 +261,74 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
               orgId={selectedOrgId}
               pathname={pathname}
             />
+
+            <CollapsibleSection
+              storageKey={`email_${selectedOrg.slug}`}
+              label="Email"
+              icon="mail"
+            >
+              <SectionLink item={{ label: 'Overview',   href: '/admin/email' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Compose',   href: '/admin/email/compose' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Scheduled', href: '/admin/email?folder=scheduled' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Drafts',    href: '/admin/email?folder=drafts' }} pathname={pathname} />
+              <SectionLink item={{ label: 'Failed',    href: '/admin/email?folder=failed' }} pathname={pathname} />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              storageKey={`sequences_${selectedOrg.slug}`}
+              label="Sequences"
+              icon="stacked_email"
+            >
+              <SectionLink item={{ label: 'All Sequences', href: '/admin/sequences' }} pathname={pathname} />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              storageKey={`campaigns_${selectedOrg.slug}`}
+              label="Campaigns"
+              icon="campaign"
+            >
+              <SectionLink
+                item={{ label: 'All Campaigns', href: `/admin/org/${selectedOrg.slug}/campaigns` }}
+                pathname={pathname}
+              />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              storageKey={`capture_sources_${selectedOrg.slug}`}
+              label="Capture Sources"
+              icon="inventory_2"
+            >
+              <SectionLink
+                item={{ label: 'All sources', href: `/admin/org/${selectedOrg.slug}/capture-sources` }}
+                pathname={pathname}
+              />
+              <SectionLink
+                item={{ label: 'Import CSV', href: `/admin/org/${selectedOrg.slug}/capture-sources/import` }}
+                pathname={pathname}
+              />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              storageKey={`integrations_${selectedOrg.slug}`}
+              label="Integrations"
+              icon="extension"
+            >
+              <SectionLink
+                item={{ label: 'All integrations', href: `/admin/org/${selectedOrg.slug}/integrations` }}
+                pathname={pathname}
+              />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              storageKey={`email_domains_${selectedOrg.slug}`}
+              label="Email Domains"
+              icon="dns"
+            >
+              <SectionLink
+                item={{ label: 'Verified Domains', href: `/admin/org/${selectedOrg.slug}/email-domains` }}
+                pathname={pathname}
+              />
+            </CollapsibleSection>
           </div>
         )}
 

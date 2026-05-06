@@ -37,7 +37,7 @@ describe('GET /api/v1/email', () => {
 
   it('returns list of emails', async () => {
     mockCollection([{ id: 'e1', subject: 'Hello', status: 'sent', direction: 'outbound' }])
-    const res = await GET(makeReq())
+    const res = await GET(makeReq('?orgId=org-test'))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.success).toBe(true)
@@ -47,26 +47,26 @@ describe('GET /api/v1/email', () => {
 
   it('filters by status query param', async () => {
     mockCollection([])
-    const res = await GET(makeReq('?status=sent'))
+    const res = await GET(makeReq('?orgId=org-test&status=sent'))
     expect(res.status).toBe(200)
     expect(adminDb.collection).toHaveBeenCalledWith('emails')
   })
 
   it('filters by direction query param', async () => {
     mockCollection([])
-    const res = await GET(makeReq('?direction=outbound'))
+    const res = await GET(makeReq('?orgId=org-test&direction=outbound'))
     expect(res.status).toBe(200)
   })
 
   it('filters by contactId query param', async () => {
     mockCollection([])
-    const res = await GET(makeReq('?contactId=c1'))
+    const res = await GET(makeReq('?orgId=org-test&contactId=c1'))
     expect(res.status).toBe(200)
   })
 
   it('returns empty array when no emails exist', async () => {
     mockCollection([])
-    const res = await GET(makeReq())
+    const res = await GET(makeReq('?orgId=org-test'))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.data).toEqual([])

@@ -17,11 +17,14 @@ import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { getResendClient, FROM_ADDRESS, plainTextToHtml, htmlToPlainText } from '@/lib/email/resend'
+import { signUnsubscribeToken } from '@/lib/email/unsubscribeToken'
+import { checkQuota } from '@/lib/platform/quotas'
 import type { ApiUser } from '@/lib/api/types'
 
-export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) => {
+export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) => {
   const body = await req.json()
   const {
     to,
@@ -32,14 +35,24 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
     contactId = '',
     sequenceId = '',
     sequenceStep = null,
+    campaignId = '',
+    fromDomainId = '',
   } = body
 
   if (!to?.trim()) return apiError('to is required')
   if (!subject?.trim()) return apiError('subject is required')
   if (!bodyText?.trim() && !bodyHtml?.trim()) return apiError('bodyText or bodyHtml is required')
 
+  const requestedOrgId = typeof body.orgId === 'string' ? body.orgId.trim() : null
+  const scope = resolveOrgScope(user, requestedOrgId)
+  if (!scope.ok) return apiError(scope.error, scope.status)
+  const orgId = scope.orgId
+
   const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://partnersinbiz.online'
-  const unsubscribeUrl = contactId ? `${BASE_URL}/api/unsubscribe?token=${contactId}` : undefined
+  const unsubscribeToken = contactId
+    ? signUnsubscribeToken(contactId, campaignId || undefined)
+    : undefined
+  const unsubscribeUrl = unsubscribeToken ? `${BASE_URL}/api/unsubscribe?token=${unsubscribeToken}` : undefined
 
   const unsubscribeFooter = unsubscribeUrl
     ? `<p style="font-size:11px;color:#666;text-align:center;margin-top:24px;">Don't want these emails? <a href="${unsubscribeUrl}" style="color:#888;">Unsubscribe</a></p>`
@@ -51,6 +64,9 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
 
   // 1. Create draft doc first so we have an id for the activity log
   const docRef = await adminDb.collection('emails').add({
+    orgId,
+    campaignId,
+    fromDomainId,
     direction: 'outbound',
     contactId,
     resendId: '',
@@ -65,6 +81,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
     sentAt: null,
     openedAt: null,
     clickedAt: null,
+    bouncedAt: null,
     sequenceId,
     sequenceStep,
     deleted: false,
@@ -99,6 +116,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
   // 4. Log activity on linked contact
   if (contactId) {
     await adminDb.collection('activities').add({
+      orgId,
       contactId,
       dealId: '',
       type: 'email_sent',
@@ -108,6 +126,9 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
       createdAt: FieldValue.serverTimestamp(),
     })
   }
+
+  // Fire-and-forget quota tracking — never blocks the response
+  checkQuota(orgId, 'emailsPerMonth').catch(() => {})
 
   return apiSuccess({ id: docRef.id }, 201)
 })

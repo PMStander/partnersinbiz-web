@@ -7,22 +7,28 @@ import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 type Params = { params: Promise<{ id: string }> }
 
-export const GET = withAuth('admin', async (_req, _user, context) => {
+export const GET = withAuth('client', async (_req, user, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('contacts').doc(id).get()
   if (!doc.exists) return apiError('Contact not found', 404)
+  const scope = resolveOrgScope(user, (doc.data()?.orgId as string | undefined) ?? null)
+  if (!scope.ok) return apiError(scope.error, scope.status)
   return apiSuccess({ id: doc.id, ...doc.data() })
 })
 
-export const PUT = withAuth('admin', async (req, _user, context) => {
+export const PUT = withAuth('client', async (req, user, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('contacts').doc(id).get()
   if (!doc.exists) return apiError('Contact not found', 404)
+  const existing = doc.data() ?? {}
+  const scope = resolveOrgScope(user, (existing.orgId as string | undefined) ?? null)
+  if (!scope.ok) return apiError(scope.error, scope.status)
 
   const body = await req.json()
   await adminDb.collection('contacts').doc(id).update({
@@ -31,7 +37,6 @@ export const PUT = withAuth('admin', async (req, _user, context) => {
   })
 
   // Prefer orgId from body if provided (rare on PUT), else fall back to existing doc.
-  const existing = doc.data() ?? {}
   const orgId =
     (typeof body?.orgId === 'string' && body.orgId) ||
     (typeof existing.orgId === 'string' && existing.orgId) ||
@@ -50,10 +55,12 @@ export const PUT = withAuth('admin', async (req, _user, context) => {
   return apiSuccess({ id })
 })
 
-export const DELETE = withAuth('admin', async (_req, _user, context) => {
+export const DELETE = withAuth('client', async (_req, user, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('contacts').doc(id).get()
   if (!doc.exists) return apiError('Contact not found', 404)
+  const scope = resolveOrgScope(user, (doc.data()?.orgId as string | undefined) ?? null)
+  if (!scope.ok) return apiError(scope.error, scope.status)
 
   await adminDb.collection('contacts').doc(id).update({
     deleted: true,

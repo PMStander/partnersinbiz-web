@@ -5,12 +5,23 @@ import { NextRequest } from 'next/server'
 jest.mock('@/lib/firebase/admin', () => ({
   adminAuth: {
     createSessionCookie: jest.fn(),
+    verifyIdToken: jest.fn(),
+  },
+  adminDb: {
+    collection: jest.fn().mockReturnValue({
+      doc: jest.fn().mockReturnValue({
+        get: jest.fn().mockResolvedValue({ exists: false }),
+        set: jest.fn().mockResolvedValue(undefined),
+        update: jest.fn().mockResolvedValue(undefined),
+      }),
+    }),
   },
 }))
 
 import { adminAuth } from '@/lib/firebase/admin'
 
 const mockCreateSessionCookie = adminAuth.createSessionCookie as jest.Mock
+const mockVerifyIdToken = adminAuth.verifyIdToken as jest.Mock
 
 function makePostRequest(body: Record<string, unknown>) {
   return new NextRequest('http://localhost/api/auth/session', {
@@ -32,6 +43,7 @@ describe('POST /api/auth/session', () => {
   })
 
   it('returns 200 and sets cookie when idToken is valid', async () => {
+    mockVerifyIdToken.mockResolvedValue({ uid: 'test-uid', email: 'user@example.com', name: 'Test User' })
     mockCreateSessionCookie.mockResolvedValue('mock-session-cookie')
     const req = makePostRequest({ idToken: 'valid-id-token' })
     const res = await POST(req)
@@ -41,6 +53,7 @@ describe('POST /api/auth/session', () => {
   })
 
   it('returns 401 when idToken is invalid', async () => {
+    mockVerifyIdToken.mockRejectedValue(new Error('Invalid token'))
     mockCreateSessionCookie.mockRejectedValue(new Error('Invalid token'))
     const req = makePostRequest({ idToken: 'bad-token' })
     const res = await POST(req)

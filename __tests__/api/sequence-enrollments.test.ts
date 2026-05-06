@@ -36,8 +36,8 @@ beforeEach(() => {
 
 describe('POST /api/v1/sequences/[id]/enroll', () => {
   it('enrolls contacts into an active sequence', async () => {
-    const seqData = { name: 'Welcome', status: 'active', steps: [{ stepNumber: 1, delayDays: 0, subject: 'Hi', bodyHtml: '<p>Hi</p>', bodyText: 'Hi' }], deleted: false }
-    const contactData = { name: 'Alice', email: 'alice@example.com', deleted: false }
+    const seqData = { orgId: 'org-test', name: 'Welcome', status: 'active', steps: [{ stepNumber: 1, delayDays: 0, subject: 'Hi', bodyHtml: '<p>Hi</p>', bodyText: 'Hi' }], deleted: false }
+    const contactData = { orgId: 'org-test', name: 'Alice', email: 'alice@example.com', deleted: false }
 
     mockGet
       .mockResolvedValueOnce({ exists: true, id: 'seq1', data: () => seqData })

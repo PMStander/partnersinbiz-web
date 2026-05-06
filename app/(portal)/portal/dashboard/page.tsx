@@ -111,15 +111,61 @@ function Tile({
   )
 }
 
+interface CampaignStats {
+  contacts: number | null
+  activeCampaigns: number | null
+  captureSources: number | null
+}
+
 export default function PortalDashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<CampaignStats>({
+    contacts: null,
+    activeCampaigns: null,
+    captureSources: null,
+  })
 
   useEffect(() => {
     fetch('/api/v1/portal/dashboard')
       .then((r) => r.json())
       .then((b) => { setData(b); setLoading(false) })
       .catch(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    // Total contacts — read meta.total
+    fetch('/api/v1/crm/contacts?limit=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (b) {
+          const total = b.meta?.total ?? (Array.isArray(b.data) ? b.data.length : 0)
+          setStats((s) => ({ ...s, contacts: total }))
+        }
+      })
+      .catch(() => {})
+
+    // Active campaigns
+    fetch('/api/v1/campaigns?status=active')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (b) {
+          const count = Array.isArray(b.data) ? b.data.length : (b.meta?.total ?? 0)
+          setStats((s) => ({ ...s, activeCampaigns: count }))
+        }
+      })
+      .catch(() => {})
+
+    // Capture sources
+    fetch('/api/v1/crm/capture-sources')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (b) {
+          const count = Array.isArray(b.data) ? b.data.length : (b.meta?.total ?? 0)
+          setStats((s) => ({ ...s, captureSources: count }))
+        }
+      })
+      .catch(() => {})
   }, [])
 
   const noData = !loading && (!data || (data?.connections?.length ?? 0) === 0)
@@ -155,6 +201,54 @@ export default function PortalDashboard() {
               Message your team
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* Campaigns section */}
+      <section>
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="eyebrow">Campaigns</h2>
+          <Link
+            href="/portal/campaigns"
+            className="text-xs text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] inline-flex items-center gap-1 transition-colors"
+          >
+            All campaigns
+            <span className="material-symbols-outlined text-sm">arrow_outward</span>
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Link href="/portal/contacts" className="pib-stat-card hover:border-[var(--color-pib-accent)] transition-colors group">
+            <div className="flex items-start justify-between">
+              <p className="eyebrow !text-[10px]">Contacts</p>
+              <span className="material-symbols-outlined text-[18px] text-[var(--color-pib-text-muted)] group-hover:text-[var(--color-pib-accent)] transition-colors">contacts</span>
+            </div>
+            <p className="mt-3 font-display tracking-tight leading-none text-3xl md:text-4xl text-[var(--color-pib-text)]">
+              {stats.contacts === null ? '—' : fmtNum.format(stats.contacts)}
+            </p>
+            <p className="mt-3 text-xs text-[var(--color-pib-text-muted)]">total in your audience</p>
+          </Link>
+
+          <Link href="/portal/campaigns" className="pib-stat-card hover:border-[var(--color-pib-accent)] transition-colors group">
+            <div className="flex items-start justify-between">
+              <p className="eyebrow !text-[10px]">Active campaigns</p>
+              <span className="material-symbols-outlined text-[18px] text-[var(--color-pib-text-muted)] group-hover:text-[var(--color-pib-accent)] transition-colors">campaign</span>
+            </div>
+            <p className="mt-3 font-display tracking-tight leading-none text-3xl md:text-4xl text-[var(--color-pib-text)]">
+              {stats.activeCampaigns === null ? '—' : fmtNum.format(stats.activeCampaigns)}
+            </p>
+            <p className="mt-3 text-xs text-[var(--color-pib-text-muted)]">running right now</p>
+          </Link>
+
+          <Link href="/portal/capture-sources" className="pib-stat-card hover:border-[var(--color-pib-accent)] transition-colors group">
+            <div className="flex items-start justify-between">
+              <p className="eyebrow !text-[10px]">Capture sources</p>
+              <span className="material-symbols-outlined text-[18px] text-[var(--color-pib-text-muted)] group-hover:text-[var(--color-pib-accent)] transition-colors">inventory_2</span>
+            </div>
+            <p className="mt-3 font-display tracking-tight leading-none text-3xl md:text-4xl text-[var(--color-pib-text)]">
+              {stats.captureSources === null ? '—' : fmtNum.format(stats.captureSources)}
+            </p>
+            <p className="mt-3 text-xs text-[var(--color-pib-text-muted)]">funneling leads in</p>
+          </Link>
         </div>
       </section>
 

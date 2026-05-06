@@ -1,6 +1,7 @@
 // components/admin/email/EmailList.tsx
 'use client'
 import Link from 'next/link'
+import { fmtTimestamp } from './fmtTimestamp'
 
 export type EmailFolder = 'sent' | 'scheduled' | 'drafts' | 'failed'
 
@@ -95,6 +96,13 @@ export function EmailList({
             >
               <p className="text-sm text-on-surface font-medium truncate">{email.subject || '(no subject)'}</p>
               <p className="text-xs text-on-surface-variant truncate mt-0.5">{email.to}</p>
+              <p className="text-[10px] text-on-surface-variant mt-0.5">
+                {fmtTimestamp(
+                  folder === 'sent' ? email.sentAt :
+                  folder === 'scheduled' ? email.scheduledFor :
+                  email.createdAt
+                )}
+              </p>
             </button>
           ))
         )}

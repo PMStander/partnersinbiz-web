@@ -1,4 +1,9 @@
 // __tests__/api/v1/email/webhook.test.ts
+const mockVerify = jest.fn()
+jest.mock('svix', () => ({
+  Webhook: jest.fn().mockImplementation(() => ({ verify: mockVerify })),
+}))
+
 import { POST } from '@/app/api/v1/email/webhook/route'
 import { NextRequest } from 'next/server'
 
@@ -10,18 +15,34 @@ jest.mock('@/lib/firebase/admin', () => ({
 import { adminDb } from '@/lib/firebase/admin'
 
 const mockDocUpdate = jest.fn().mockResolvedValue(undefined)
+const mockContactUpdate = jest.fn().mockResolvedValue(undefined)
+const mockCampaignUpdate = jest.fn().mockResolvedValue(undefined)
 const mockQuery = {
   where: jest.fn().mockReturnThis(),
   limit: jest.fn().mockReturnThis(),
   get: jest.fn(),
 }
 
-function mockEmail(id: string) {
+function mockEmail(id: string, extra: { campaignId?: string; contactId?: string } = {}) {
   mockQuery.get.mockResolvedValue({
     empty: false,
-    docs: [{ id, ref: { update: mockDocUpdate } }],
+    docs: [
+      {
+        id,
+        ref: { update: mockDocUpdate },
+        data: () => extra,
+      },
+    ],
   })
-  ;(adminDb.collection as jest.Mock).mockReturnValue(mockQuery)
+  ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
+    if (name === 'contacts') {
+      return { doc: jest.fn().mockReturnValue({ update: mockContactUpdate }) }
+    }
+    if (name === 'campaigns') {
+      return { doc: jest.fn().mockReturnValue({ update: mockCampaignUpdate }) }
+    }
+    return mockQuery
+  })
 }
 
 function mockNoEmail() {
@@ -29,16 +50,24 @@ function mockNoEmail() {
   ;(adminDb.collection as jest.Mock).mockReturnValue(mockQuery)
 }
 
-function makeReq(payload: object) {
+function makeReq(payload: object, headers: Record<string, string> = {}) {
   return new NextRequest('http://localhost/api/v1/email/webhook', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(payload),
   })
 }
 
 describe('POST /api/v1/email/webhook', () => {
-  beforeEach(() => jest.clearAllMocks())
+  const ORIGINAL_ENV = process.env.RESEND_WEBHOOK_SECRET
+  beforeEach(() => {
+    jest.clearAllMocks()
+    delete process.env.RESEND_WEBHOOK_SECRET
+  })
+  afterAll(() => {
+    if (ORIGINAL_ENV === undefined) delete process.env.RESEND_WEBHOOK_SECRET
+    else process.env.RESEND_WEBHOOK_SECRET = ORIGINAL_ENV
+  })
 
   it('returns 200 for unknown event type (no-op)', async () => {
     mockNoEmail()
@@ -100,5 +129,88 @@ describe('POST /api/v1/email/webhook', () => {
     })
     const res = await POST(req)
     expect(res.status).toBe(400)
+  })
+
+  describe('signature verification', () => {
+    it('returns 400 when secret is set and verification throws', async () => {
+      process.env.RESEND_WEBHOOK_SECRET = 'whsec_test'
+      mockVerify.mockImplementationOnce(() => {
+        throw new Error('bad signature')
+      })
+      const res = await POST(
+        makeReq(
+          { type: 'email.delivered', data: { email_id: 'r1' } },
+          { 'svix-id': 'msg_1', 'svix-timestamp': '1', 'svix-signature': 'v1,sig' },
+        ),
+      )
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body).toEqual({ error: 'Invalid signature' })
+    })
+
+    it('returns 200 when secret is set and verification succeeds', async () => {
+      process.env.RESEND_WEBHOOK_SECRET = 'whsec_test'
+      mockVerify.mockReturnValueOnce(undefined)
+      mockEmail('email-doc-1', { campaignId: 'camp-1' })
+      const res = await POST(
+        makeReq(
+          { type: 'email.delivered', data: { email_id: 'resend-1' } },
+          { 'svix-id': 'msg_1', 'svix-timestamp': '1', 'svix-signature': 'v1,sig' },
+        ),
+      )
+      expect(res.status).toBe(200)
+      expect(mockVerify).toHaveBeenCalled()
+    })
+
+    it('returns 200 when secret is NOT set (logs warning, lets request through)', async () => {
+      delete process.env.RESEND_WEBHOOK_SECRET
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      mockEmail('email-doc-1')
+      const res = await POST(makeReq({ type: 'email.opened', data: { email_id: 'resend-1' } }))
+      expect(res.status).toBe(200)
+      expect(mockVerify).not.toHaveBeenCalled()
+      warnSpy.mockRestore()
+    })
+  })
+
+  describe('event handling stats', () => {
+    beforeEach(() => {
+      process.env.RESEND_WEBHOOK_SECRET = 'whsec_test'
+      mockVerify.mockReturnValue(undefined)
+    })
+
+    it('bumps stats.delivered on email.delivered', async () => {
+      mockEmail('email-doc-1', { campaignId: 'camp-1' })
+      const res = await POST(
+        makeReq(
+          { type: 'email.delivered', data: { email_id: 'resend-1' } },
+          { 'svix-id': 'm', 'svix-timestamp': '1', 'svix-signature': 's' },
+        ),
+      )
+      expect(res.status).toBe(200)
+      expect(mockCampaignUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ 'stats.delivered': expect.anything() }),
+      )
+    })
+
+    it('flags contact and bumps stats.bounced on email.bounced', async () => {
+      mockEmail('email-doc-1', { campaignId: 'camp-1', contactId: 'contact-1' })
+      const res = await POST(
+        makeReq(
+          { type: 'email.bounced', data: { email_id: 'resend-1' } },
+          { 'svix-id': 'm', 'svix-timestamp': '1', 'svix-signature': 's' },
+        ),
+      )
+      expect(res.status).toBe(200)
+      expect(mockDocUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'failed', bouncedAt: expect.anything() }),
+      )
+      expect(mockContactUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ bouncedAt: expect.anything() }),
+      )
+      expect(mockCampaignUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ 'stats.bounced': expect.anything() }),
+      )
+    })
   })
 })

@@ -35,7 +35,7 @@ function mockCollection(docs: object[], addId = 'new-id') {
 describe('GET /api/v1/crm/contacts', () => {
   it('returns list of contacts', async () => {
     mockCollection([{ id: 'c1', name: 'John', email: 'john@test.com', deleted: false }])
-    const res = await GET(makeReq('GET'))
+    const res = await GET(makeReq('GET', undefined, '?orgId=org-test'))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.success).toBe(true)
@@ -62,6 +62,7 @@ describe('POST /api/v1/crm/contacts', () => {
     tags: [],
     notes: '',
     assignedTo: '',
+    orgId: 'org-test',
   }
 
   it('creates a contact and returns 201', async () => {

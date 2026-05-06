@@ -9,6 +9,7 @@ import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type {
   Contact,
@@ -29,12 +30,17 @@ function isValidEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
 }
 
-export const GET = withAuth('admin', async (req) => {
+export const GET = withAuth('client', async (req, user) => {
   const { searchParams } = new URL(req.url)
+  const requestedOrgId = searchParams.get('orgId')
+  const scope = resolveOrgScope(user, requestedOrgId)
+  if (!scope.ok) return apiError(scope.error, scope.status)
+  const orgId = scope.orgId
   const stage = searchParams.get('stage') as ContactStage | null
   const type = searchParams.get('type') as ContactType | null
   const source = searchParams.get('source') as ContactSource | null
   const tagsParam = searchParams.get('tags') ?? ''
+  const capturedFromId = searchParams.get('capturedFromId') ?? ''
   const search = searchParams.get('search') ?? ''
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 200)
   const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1)
@@ -50,6 +56,12 @@ export const GET = withAuth('admin', async (req) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query: any = adminDb.collection('contacts').orderBy('createdAt', 'desc')
 
+  if (orgId) {
+    query = query.where('orgId', '==', orgId)
+  }
+  if (capturedFromId) {
+    query = query.where('capturedFromId', '==', capturedFromId)
+  }
   if (stage && VALID_STAGES.includes(stage)) {
     query = query.where('stage', '==', stage)
   }
@@ -85,7 +97,7 @@ export const GET = withAuth('admin', async (req) => {
   return apiSuccess(contacts, 200, { total: contacts.length, page, limit })
 })
 
-export const POST = withAuth('admin', async (req) => {
+export const POST = withAuth('client', async (req, user) => {
   const body = await req.json() as ContactInput
 
   if (!body.name?.trim()) return apiError('Name is required')
@@ -95,13 +107,20 @@ export const POST = withAuth('admin', async (req) => {
   if (body.type && !VALID_TYPES.includes(body.type)) return apiError('Invalid type')
   if (body.source && !VALID_SOURCES.includes(body.source)) return apiError('Invalid source')
 
-  const orgId = typeof (body as { orgId?: unknown }).orgId === 'string'
+  const requestedOrgId = typeof (body as { orgId?: unknown }).orgId === 'string'
     ? ((body as { orgId?: string }).orgId as string).trim()
+    : null
+  const scope = resolveOrgScope(user, requestedOrgId)
+  if (!scope.ok) return apiError(scope.error, scope.status)
+  const orgId = scope.orgId
+
+  const capturedFromId = typeof (body as { capturedFromId?: unknown }).capturedFromId === 'string'
+    ? ((body as { capturedFromId?: string }).capturedFromId as string).trim()
     : ''
-  if (!orgId) return apiError('orgId is required — contacts must belong to an organisation so webhooks and org-scoped reports work', 400)
 
   const docRef = await adminDb.collection('contacts').add({
     orgId,
+    capturedFromId,
     name: body.name.trim(),
     email: body.email.trim().toLowerCase(),
     phone: body.phone?.trim() ?? '',
@@ -114,6 +133,9 @@ export const POST = withAuth('admin', async (req) => {
     notes: body.notes?.trim() ?? '',
     assignedTo: body.assignedTo ?? '',
     deleted: false,
+    subscribedAt: FieldValue.serverTimestamp(),
+    unsubscribedAt: null,
+    bouncedAt: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     lastContactedAt: null,

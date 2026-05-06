@@ -263,6 +263,101 @@ async function main() {
   }
   console.log(`  quotes: wrote ${quoteWritten} (${quoteInferred} inferred, ${quoteWritten - quoteInferred} defaulted)`)
 
+  // ── Email + Sequences (Phase 1 campaign system) ─────────────────────────
+  // emails: { contactId?, sequenceId?, orgId? } — prefer contact's orgId
+  const emailsSnap = await db.collection('emails').get()
+  const emailsMissing = emailsSnap.docs.filter((d: any) => !d.data().orgId)
+  console.log(`Emails: ${emailsSnap.size} total, ${emailsMissing.length} missing orgId`)
+  let emailBatch = db.batch()
+  let emailInBatch = 0
+  let emailWritten = 0
+  let emailInferred = 0
+  for (const doc of emailsMissing) {
+    const data = doc.data() as { contactId?: string }
+    const fromContact = data.contactId ? contactOrgMap.get(data.contactId) : undefined
+    const chosen = fromContact ?? orgId
+    if (fromContact) emailInferred++
+    emailBatch.update(doc.ref, {
+      orgId: chosen,
+      campaignId: doc.data().campaignId ?? '',
+      fromDomainId: doc.data().fromDomainId ?? '',
+      bouncedAt: doc.data().bouncedAt ?? null,
+    })
+    emailInBatch++
+    if (emailInBatch === 400) {
+      await emailBatch.commit()
+      emailWritten += emailInBatch
+      console.log(`  emails: committed ${emailWritten}/${emailsMissing.length}`)
+      emailBatch = db.batch()
+      emailInBatch = 0
+    }
+  }
+  if (emailInBatch > 0) {
+    await emailBatch.commit()
+    emailWritten += emailInBatch
+  }
+  console.log(`  emails: wrote ${emailWritten} (${emailInferred} inferred, ${emailWritten - emailInferred} defaulted)`)
+
+  // sequences: { orgId? } — default to platform org
+  const sequencesSnap = await db.collection('sequences').get()
+  const sequencesMissing = sequencesSnap.docs.filter((d: any) => !d.data().orgId)
+  console.log(`Sequences: ${sequencesSnap.size} total, ${sequencesMissing.length} missing orgId`)
+  let seqBatch = db.batch()
+  let seqInBatch = 0
+  let seqWritten = 0
+  for (const doc of sequencesMissing) {
+    seqBatch.update(doc.ref, { orgId, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    seqInBatch++
+    if (seqInBatch === 400) {
+      await seqBatch.commit()
+      seqWritten += seqInBatch
+      seqBatch = db.batch()
+      seqInBatch = 0
+    }
+  }
+  if (seqInBatch > 0) {
+    await seqBatch.commit()
+    seqWritten += seqInBatch
+  }
+  console.log(`  sequences: wrote ${seqWritten}`)
+
+  // Build sequence → orgId map for enrollment inference (post-backfill)
+  const sequenceOrgMap = new Map<string, string>()
+  for (const doc of sequencesSnap.docs) {
+    const data = doc.data() as { orgId?: string }
+    sequenceOrgMap.set(doc.id, data.orgId ?? orgId)
+  }
+
+  // sequence_enrollments: prefer sequence's orgId, then contact's
+  const enrollSnap = await db.collection('sequence_enrollments').get()
+  const enrollMissing = enrollSnap.docs.filter((d: any) => !d.data().orgId)
+  console.log(`Sequence enrollments: ${enrollSnap.size} total, ${enrollMissing.length} missing orgId`)
+  let enrollBatch = db.batch()
+  let enrollInBatch = 0
+  let enrollWritten = 0
+  let enrollInferred = 0
+  for (const doc of enrollMissing) {
+    const data = doc.data() as { sequenceId?: string; contactId?: string }
+    const fromSeq = data.sequenceId ? sequenceOrgMap.get(data.sequenceId) : undefined
+    const fromContact = data.contactId ? contactOrgMap.get(data.contactId) : undefined
+    const inferred = fromSeq ?? fromContact
+    const chosen = inferred ?? orgId
+    if (inferred) enrollInferred++
+    enrollBatch.update(doc.ref, { orgId: chosen, campaignId: doc.data().campaignId ?? '' })
+    enrollInBatch++
+    if (enrollInBatch === 400) {
+      await enrollBatch.commit()
+      enrollWritten += enrollInBatch
+      enrollBatch = db.batch()
+      enrollInBatch = 0
+    }
+  }
+  if (enrollInBatch > 0) {
+    await enrollBatch.commit()
+    enrollWritten += enrollInBatch
+  }
+  console.log(`  enrollments: wrote ${enrollWritten} (${enrollInferred} inferred, ${enrollWritten - enrollInferred} defaulted)`)
+
   console.log('\nBackfill complete.')
 }
 

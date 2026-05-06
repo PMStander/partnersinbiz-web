@@ -16,8 +16,9 @@ export type ContactStage =
 
 export interface Contact {
   id: string
-  orgId?: string
+  orgId: string            // required after Phase 1 backfill
   convertedToOrgId?: string | null
+  capturedFromId: string   // "" if not captured via a CaptureSource
   name: string
   email: string
   phone: string
@@ -29,6 +30,9 @@ export interface Contact {
   tags: string[]
   notes: string
   assignedTo: string
+  subscribedAt: Timestamp | null
+  unsubscribedAt: Timestamp | null
+  bouncedAt: Timestamp | null
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
   lastContactedAt: Timestamp | null
@@ -50,7 +54,7 @@ export type Currency = 'USD' | 'EUR' | 'ZAR'
 
 export interface Deal {
   id: string
-  orgId?: string
+  orgId: string
   contactId: string
   title: string
   value: number
@@ -78,7 +82,7 @@ export type ActivityType =
 
 export interface Activity {
   id: string
-  orgId?: string
+  orgId: string
   contactId: string
   dealId: string
   type: ActivityType
@@ -93,6 +97,7 @@ export type ActivityInput = Omit<Activity, 'id' | 'createdAt'>
 // ── API list params ──────────────────────────────────────────────────────────
 
 export interface ContactListParams {
+  orgId?: string
   stage?: ContactStage
   type?: ContactType
   source?: ContactSource
@@ -102,6 +107,7 @@ export interface ContactListParams {
 }
 
 export interface DealListParams {
+  orgId?: string
   stage?: DealStage
   contactId?: string
   limit?: number

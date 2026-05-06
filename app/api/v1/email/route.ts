@@ -13,23 +13,31 @@
 import { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
-import { apiSuccess } from '@/lib/api/response'
+import { resolveOrgScope } from '@/lib/api/orgScope'
+import { apiSuccess, apiError } from '@/lib/api/response'
 import type { Email, EmailDirection, EmailStatus } from '@/lib/email/types'
 
 const VALID_DIRECTIONS: EmailDirection[] = ['outbound', 'inbound']
 const VALID_STATUSES: EmailStatus[] = ['draft', 'scheduled', 'sent', 'failed', 'opened', 'clicked']
 
-export const GET = withAuth('admin', async (req: NextRequest) => {
+export const GET = withAuth('client', async (req: NextRequest, user) => {
   const { searchParams } = new URL(req.url)
+  const scope = resolveOrgScope(user, searchParams.get('orgId'))
+  if (!scope.ok) return apiError(scope.error, scope.status)
+  const orgId = scope.orgId
   const direction = searchParams.get('direction') as EmailDirection | null
   const status = searchParams.get('status') as EmailStatus | null
   const contactId = searchParams.get('contactId') ?? ''
+  const campaignId = searchParams.get('campaignId') ?? ''
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 200)
   const page = Math.max(parseInt(searchParams.get('page') ?? '1'), 1)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query: any = adminDb.collection('emails').orderBy('createdAt', 'desc')
 
+  if (orgId) {
+    query = query.where('orgId', '==', orgId)
+  }
   if (direction && VALID_DIRECTIONS.includes(direction)) {
     query = query.where('direction', '==', direction)
   }
@@ -38,6 +46,9 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
   }
   if (contactId) {
     query = query.where('contactId', '==', contactId)
+  }
+  if (campaignId) {
+    query = query.where('campaignId', '==', campaignId)
   }
 
   const snapshot = await query.get()

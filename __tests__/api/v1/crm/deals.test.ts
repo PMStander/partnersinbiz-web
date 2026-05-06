@@ -12,8 +12,8 @@ process.env.AI_API_KEY = 'test-key'
 
 const params = { params: Promise.resolve({ id: 'deal-1' }) }
 
-function makeReq(method: string, body?: object) {
-  return new NextRequest('http://localhost/api/v1/crm/deals', {
+function makeReq(method: string, body?: object, search = '') {
+  return new NextRequest(`http://localhost/api/v1/crm/deals${search}`, {
     method,
     headers: { authorization: 'Bearer test-key', 'content-type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -39,7 +39,7 @@ function mockList(docs: object[]) {
 describe('GET /api/v1/crm/deals', () => {
   it('returns list of deals', async () => {
     mockList([{ id: 'd1', title: 'Big deal', stage: 'discovery', deleted: false }])
-    const res = await GET(makeReq('GET'))
+    const res = await GET(makeReq('GET', undefined, '?orgId=org-test'))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.success).toBe(true)
@@ -49,6 +49,7 @@ describe('GET /api/v1/crm/deals', () => {
 
 describe('POST /api/v1/crm/deals', () => {
   const validDeal = {
+    orgId: 'org-test',
     contactId: 'c1',
     title: 'New Website',
     value: 5000,

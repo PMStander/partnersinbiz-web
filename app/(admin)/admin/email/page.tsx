@@ -2,6 +2,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { EmailList, type EmailFolder } from '@/components/admin/email/EmailList'
 import { EmailDetail } from '@/components/admin/email/EmailDetail'
 
@@ -27,7 +28,11 @@ interface EmailRow {
 }
 
 export default function EmailInboxPage() {
-  const [folder, setFolder] = useState<EmailFolder>('sent')
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const [folder, setFolder] = useState<EmailFolder>(
+    (searchParams.get('folder') as EmailFolder) ?? 'sent'
+  )
   const [emails, setEmails] = useState<EmailRow[]>([])
   const [listLoading, setListLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -63,7 +68,10 @@ export default function EmailInboxPage() {
         loading={listLoading}
         selectedId={selectedId}
         onSelect={handleSelect}
-        onFolderChange={(f) => setFolder(f)}
+        onFolderChange={(f) => {
+            setFolder(f)
+            router.push(`?folder=${f}`)
+          }}
       />
       <EmailDetail email={detailEmail} loading={detailLoading} />
     </div>

@@ -10,7 +10,7 @@ interface Project {
   name: string
   status: string
   description?: string
-  updatedAt?: any
+  updatedAt?: unknown
 }
 
 interface SocialStats {
@@ -27,6 +27,12 @@ interface SocialStats {
   byPlatform: Record<string, number>
   approvalRate: number
   last30Days: number
+  last30DaysSeries?: { label: string; value: number }[]
+}
+
+interface OrganizationSummary {
+  id: string
+  slug: string
 }
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -73,7 +79,6 @@ export default function OrgDashboard() {
 
   const [projects, setProjects] = useState<Project[]>([])
   const [socialStats, setSocialStats] = useState<SocialStats | null>(null)
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -81,9 +86,8 @@ export default function OrgDashboard() {
       fetch(`/api/v1/organizations`)
         .then(r => r.json())
         .then(body => {
-          const org = (body.data ?? []).find((o: any) => o.slug === slug)
+          const org = ((body.data ?? []) as OrganizationSummary[]).find((o) => o.slug === slug)
           if (org) {
-            setOrgId(org.id)
             return org.id
           }
           return null
@@ -126,11 +130,10 @@ export default function OrgDashboard() {
       }))
     : []
 
-  // Mock 30-day trend for social posts
-  const last30DaysData = Array.from({ length: 7 }, (_, i) => ({
-    label: `W${i + 1}`,
-    value: Math.max(0, (socialStats?.last30Days ?? 0) - Math.floor(Math.random() * 3) + i),
-  }))
+  const last30DaysData = socialStats?.last30DaysSeries?.length
+    ? socialStats.last30DaysSeries
+    : Array.from({ length: 7 }, (_, i) => ({ label: `W${i + 1}`, value: 0 }))
+  const hasLast30DaysData = last30DaysData.some((point) => point.value > 0)
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -169,8 +172,8 @@ export default function OrgDashboard() {
               label="Posts Published"
               value={socialStats?.byStatus.published ?? 0}
               sub={`${socialStats?.last30Days ?? 0} last 30d`}
-              trend="up"
-              data={last30DaysData.map(d => ({ value: d.value }))}
+              trend={hasLast30DaysData ? 'up' : undefined}
+              data={hasLast30DaysData ? last30DaysData.map(d => ({ value: d.value })) : undefined}
               chartType="area"
             />
             <StatCardWithChart
@@ -296,7 +299,13 @@ export default function OrgDashboard() {
                 Last 30 days
               </span>
             </div>
-            <TrendAreaChart data={last30DaysData} height={160} color="#4ade80" />
+            {hasLast30DaysData ? (
+              <TrendAreaChart data={last30DaysData} height={160} color="#4ade80" />
+            ) : (
+              <div className="h-40 flex items-center justify-center text-sm text-on-surface-variant">
+                No posts in the last 30 days.
+              </div>
+            )}
           </div>
         </div>
       )}

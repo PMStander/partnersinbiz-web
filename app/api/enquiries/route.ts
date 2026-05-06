@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
+import { PIB_PLATFORM_ORG_ID } from '@/lib/platform/constants'
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
+
+const VALID_PROJECT_TYPES = ['web', 'mobile', 'design', 'marketing', 'seo', 'branding', 'other'] as const
 
 function escapeHtml(str: string): string {
   return str
@@ -25,6 +28,7 @@ export async function POST(request: NextRequest) {
   if (!isValidEmail(email)) return NextResponse.json({ error: 'Email is invalid' }, { status: 400 })
   if (!details?.trim()) return NextResponse.json({ error: 'Project details are required' }, { status: 400 })
   if (!projectType?.trim()) return NextResponse.json({ error: 'Project type is required' }, { status: 400 })
+  if (!VALID_PROJECT_TYPES.includes(projectType)) return NextResponse.json({ error: 'Invalid project type' }, { status: 400 })
 
   const docRef = await adminDb.collection('enquiries').add({
     userId: userId ?? null,
@@ -38,8 +42,11 @@ export async function POST(request: NextRequest) {
     assignedTo: null,
   })
 
-  // Also create a CRM contact for this lead
+  // Also create a CRM contact for this lead — scoped to the PIB platform org
+  // (PIB-internal enquiries land in the platform-owner org's CRM).
   await adminDb.collection('contacts').add({
+    orgId: PIB_PLATFORM_ORG_ID,
+    capturedFromId: '',
     name: name.trim(),
     email: email.trim().toLowerCase(),
     company: company?.trim() ?? '',
@@ -48,9 +55,13 @@ export async function POST(request: NextRequest) {
     source: 'form',
     type: 'lead',
     stage: 'new',
-    tags: [],
+    tags: ['enquiry'],
     notes: `Enquiry ID: ${docRef.id}`,
     assignedTo: '',
+    deleted: false,
+    subscribedAt: FieldValue.serverTimestamp(),
+    unsubscribedAt: null,
+    bouncedAt: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     lastContactedAt: null,

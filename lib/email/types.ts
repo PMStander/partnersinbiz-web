@@ -13,6 +13,9 @@ export type EmailStatus =
 
 export interface Email {
   id: string
+  orgId: string            // required after Phase 1 backfill
+  campaignId: string       // "" if not part of a campaign
+  fromDomainId: string     // "" if sent from shared PIB domain
   direction: EmailDirection
   contactId: string        // "" if none linked
   resendId: string         // Resend email ID — populated after send, used for webhook lookup
@@ -27,6 +30,7 @@ export interface Email {
   sentAt: Timestamp | null
   openedAt: Timestamp | null
   clickedAt: Timestamp | null
+  bouncedAt: Timestamp | null
   sequenceId: string       // "" if not part of a sequence
   sequenceStep: number | null
   createdAt: Timestamp | null

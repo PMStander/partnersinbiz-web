@@ -11,6 +11,7 @@ import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { Organization, OrgMember } from '@/lib/organizations/types'
+import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,14 +53,25 @@ export const POST = withAuth('admin', async (req: NextRequest, user, ctx) => {
     const created = await adminAuth.createUser({ email, displayName: name })
     uid = created.uid
 
-    // Store user profile in Firestore
+    // Store user profile in Firestore — orgId is set so resolveOrgScope finds
+    // it on every request without an extra org-membership query.
     await adminDb.collection('users').doc(uid).set({
       email,
       displayName: name,
       role: 'client',
+      orgId: id,
       createdAt: FieldValue.serverTimestamp(),
     })
   }
+
+  // Always set / update orgId on the user doc so client-role reads scope
+  // correctly via resolveOrgScope. This is denormalised from the org's
+  // `members` array but trades one Firestore lookup per request for the
+  // need to keep it in sync.
+  await adminDb.collection('users').doc(uid).set(
+    { orgId: id, updatedAt: FieldValue.serverTimestamp() },
+    { merge: true },
+  )
 
   // Add to organisation members
   const newMember: OrgMember = {
@@ -81,5 +93,96 @@ export const POST = withAuth('admin', async (req: NextRequest, user, ctx) => {
     // Non-fatal — admin can trigger reset manually from login page
   }
 
+  // Fire-and-forget welcome email (only when we have a setup link AND the
+  // request explicitly opts in via `sendWelcomeEmail !== false`)
+  const sendWelcome = body.sendWelcomeEmail !== false
+  if (sendWelcome && setupLink) {
+    try {
+      await sendWelcomeEmail({
+        to: email,
+        name,
+        orgName: org.name ?? 'your workspace',
+        setupLink,
+      })
+    } catch (err) {
+      console.error('[create-login] welcome email failed', err)
+    }
+  }
+
   return apiSuccess({ uid, email, displayName: name, role, setupLink }, 201)
 })
+
+// ── Welcome email template ───────────────────────────────────────────────────
+
+interface WelcomeEmailInput {
+  to: string
+  name: string
+  orgName: string
+  setupLink: string
+}
+
+async function sendWelcomeEmail(input: WelcomeEmailInput) {
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://partnersinbiz.online'
+  const portalUrl = `${BASE_URL}/portal/dashboard`
+  const greeting = input.name?.split(' ')[0] ?? 'there'
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#fafafa;font-family:system-ui,-apple-system,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;padding:0 24px;">
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;">
+      <h1 style="font-size:20px;color:#111;margin:0 0 16px 0;">Your campaigns workspace is ready</h1>
+      <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 16px 0;">
+        Hi ${escapeHtml(greeting)} — your workspace for <strong>${escapeHtml(input.orgName)}</strong>
+        on Partners in Biz is set up and waiting for you.
+      </p>
+      <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 24px 0;">
+        Click the button below to set your password and sign in. From the portal you can
+        manage contacts, run email campaigns, and capture new leads.
+      </p>
+      <p style="text-align:center;margin:0 0 24px 0;">
+        <a href="${escapeAttr(input.setupLink)}"
+           style="display:inline-block;padding:12px 24px;background:#F59E0B;color:#111;text-decoration:none;font-weight:600;border-radius:8px;">
+          Set password &amp; sign in
+        </a>
+      </p>
+      <p style="font-size:12px;line-height:1.5;color:#6b7280;margin:0;">
+        Or paste this link in your browser:<br>
+        <a href="${escapeAttr(input.setupLink)}" style="color:#6b7280;word-break:break-all;">${escapeAttr(input.setupLink)}</a>
+      </p>
+    </div>
+    <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:16px;">
+      After signing in, your workspace lives at <a href="${escapeAttr(portalUrl)}" style="color:#9ca3af;">${escapeAttr(portalUrl)}</a>.
+    </p>
+  </div>
+</body></html>`
+
+  const text = `Hi ${greeting},
+
+Your workspace for ${input.orgName} on Partners in Biz is ready.
+
+Set your password and sign in: ${input.setupLink}
+
+After signing in, your workspace will be at ${portalUrl}.`
+
+  await getResendClient().emails.send({
+    from: FROM_ADDRESS,
+    to: input.to,
+    subject: `Your ${input.orgName} workspace is ready`,
+    html,
+    text,
+  })
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/"/g, '&quot;')
+}

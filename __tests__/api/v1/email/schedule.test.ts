@@ -15,6 +15,7 @@ jest.mock('@/lib/email/resend', () => ({
       send: jest.fn().mockResolvedValue({ data: { id: 'resend-sched-1' }, error: null }),
     },
   })),
+  sendCampaignEmail: jest.fn().mockResolvedValue({ ok: true, resendId: 'resend-sched-1' }),
   FROM_ADDRESS: 'peet@partnersinbiz.online',
   plainTextToHtml: jest.fn((t: string) => `<p>${t}</p>`),
   htmlToPlainText: jest.fn((h: string) => h),
@@ -87,6 +88,7 @@ describe('POST /api/v1/email/schedule', () => {
 
   it('creates a scheduled email doc and returns 201', async () => {
     const res = await SCHEDULE(makeReq('POST', {
+      orgId: 'org-test',
       to: 'client@example.com',
       subject: 'Future email',
       bodyText: 'See you later.',
@@ -101,6 +103,7 @@ describe('POST /api/v1/email/schedule', () => {
   it('does NOT call Resend on schedule', async () => {
     const { getResendClient } = require('@/lib/email/resend')
     await SCHEDULE(makeReq('POST', {
+      orgId: 'org-test',
       to: 'a@b.com', subject: 'Hi', bodyText: 'body',
       scheduledFor: '2099-01-01T00:00:00Z',
     }))
@@ -113,7 +116,7 @@ describe('POST /api/v1/email/schedule', () => {
 describe('PUT /api/v1/email/[id]', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockDb({ status: 'draft', subject: 'Old subject', deleted: false })
+    mockDb({ orgId: 'org-test', status: 'draft', subject: 'Old subject', deleted: false })
   })
 
   it('returns 404 when email does not exist', async () => {
@@ -138,7 +141,7 @@ describe('PUT /api/v1/email/[id]', () => {
 describe('DELETE /api/v1/email/[id]', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockDb({ status: 'draft', deleted: false })
+    mockDb({ orgId: 'org-test', status: 'draft', deleted: false })
   })
 
   it('soft-deletes and returns 200', async () => {

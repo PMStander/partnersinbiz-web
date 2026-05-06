@@ -11,8 +11,9 @@ const mockGenerateText = jest.fn()
 jest.mock('@/lib/firebase/admin', () => ({
   adminDb: { collection: mockCollection, doc: mockDoc },
 }))
-jest.mock('@/lib/auth/middleware', () => ({
-  withAuth: (_role: string, handler: Function) => handler,
+jest.mock('@/lib/api/auth', () => ({
+  withAuth: (_role: string, handler: Function) =>
+    (req: any, context?: any) => handler(req, { uid: 'ai-agent', role: 'ai' }, context),
 }))
 jest.mock('@/lib/ai/client', () => ({
   BRIEF_MODEL: 'anthropic/claude-haiku-4.5',

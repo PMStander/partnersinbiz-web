@@ -6,6 +6,7 @@ import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { Deal, DealInput, DealStage, Currency } from '@/lib/crm/types'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
@@ -13,8 +14,11 @@ import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 const VALID_STAGES: DealStage[] = ['discovery', 'proposal', 'negotiation', 'won', 'lost']
 const VALID_CURRENCIES: Currency[] = ['USD', 'EUR', 'ZAR']
 
-export const GET = withAuth('admin', async (req) => {
+export const GET = withAuth('client', async (req, user) => {
   const { searchParams } = new URL(req.url)
+  const scope = resolveOrgScope(user, searchParams.get('orgId'))
+  if (!scope.ok) return apiError(scope.error, scope.status)
+  const orgId = scope.orgId
   const stage = searchParams.get('stage') as DealStage | null
   const contactId = searchParams.get('contactId')
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '100'), 500)
@@ -22,6 +26,7 @@ export const GET = withAuth('admin', async (req) => {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query: any = adminDb.collection('deals').orderBy('createdAt', 'desc')
+  if (orgId) query = query.where('orgId', '==', orgId)
   if (stage && VALID_STAGES.includes(stage)) query = query.where('stage', '==', stage)
   if (contactId) query = query.where('contactId', '==', contactId)
 
@@ -36,7 +41,7 @@ export const GET = withAuth('admin', async (req) => {
   return apiSuccess(deals, 200, { total: deals.length, page, limit })
 })
 
-export const POST = withAuth('admin', async (req) => {
+export const POST = withAuth('client', async (req, user) => {
   const body = await req.json() as DealInput
   if (!body.title?.trim()) return apiError('Title is required')
   if (!body.contactId?.trim()) return apiError('contactId is required')
@@ -44,10 +49,12 @@ export const POST = withAuth('admin', async (req) => {
   if (body.currency && !VALID_CURRENCIES.includes(body.currency))
     return apiError('Invalid currency — use USD, EUR, or ZAR')
 
-  const orgId = typeof (body as { orgId?: unknown }).orgId === 'string'
+  const requestedOrgId = typeof (body as { orgId?: unknown }).orgId === 'string'
     ? ((body as { orgId?: string }).orgId as string).trim()
-    : ''
-  if (!orgId) return apiError('orgId is required — deals must belong to an organisation so webhooks and pipeline reports work', 400)
+    : null
+  const scope = resolveOrgScope(user, requestedOrgId)
+  if (!scope.ok) return apiError(scope.error, scope.status)
+  const orgId = scope.orgId
 
   const docRef = await adminDb.collection('deals').add({
     orgId,

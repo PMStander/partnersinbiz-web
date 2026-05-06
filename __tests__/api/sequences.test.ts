@@ -39,7 +39,7 @@ describe('GET /api/v1/sequences', () => {
       docs: [{ id: 'seq1', data: () => ({ name: 'Welcome', status: 'active', steps: [] }) }],
     })
     const { GET } = await import('@/app/api/v1/sequences/route')
-    const req = new NextRequest('http://localhost/api/v1/sequences', { headers: authHeader })
+    const req = new NextRequest('http://localhost/api/v1/sequences?orgId=org-test', { headers: authHeader })
     const res = await GET(req)
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -55,7 +55,7 @@ describe('POST /api/v1/sequences', () => {
     const req = new NextRequest('http://localhost/api/v1/sequences', {
       method: 'POST',
       headers: { ...authHeader, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Onboarding', description: '', status: 'draft', steps: [] }),
+      body: JSON.stringify({ orgId: 'org-test', name: 'Onboarding', description: '', status: 'draft', steps: [] }),
     })
     const res = await POST(req)
     expect(res.status).toBe(201)

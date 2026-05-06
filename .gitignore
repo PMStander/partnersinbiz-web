@@ -67,3 +67,4 @@ client-secret.json
 
 # Sentry Config File
 .env.sentry-build-plugin
+functions/node_modules/

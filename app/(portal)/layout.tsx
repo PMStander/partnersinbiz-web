@@ -16,15 +16,21 @@ interface NavItem {
 }
 
 const NAV_LINKS: NavItem[] = [
-  { href: '/portal/dashboard',  label: 'Dashboard',  icon: 'space_dashboard',  group: 'work' },
-  { href: '/portal/project',    label: 'Projects',   icon: 'rocket_launch',    group: 'work' },
-  { href: '/portal/social',     label: 'Social',     icon: 'campaign',         group: 'work' },
-  { href: '/portal/seo',        label: 'SEO',        icon: 'trending_up',      group: 'work' },
-  { href: '/portal/properties', label: 'Properties', icon: 'apartment',        group: 'data' },
-  { href: '/portal/reports',    label: 'Reports',    icon: 'analytics',        group: 'data' },
-  { href: '/portal/data',       label: 'Data',       icon: 'database',         group: 'data' },
-  { href: '/portal/messages',   label: 'Messages',   icon: 'forum',            group: 'comms' },
-  { href: '/portal/payments',   label: 'Payments',   icon: 'payments',         group: 'comms' },
+  { href: '/portal/dashboard',       label: 'Dashboard',      icon: 'space_dashboard',  group: 'work' },
+  { href: '/portal/project',         label: 'Projects',       icon: 'rocket_launch',    group: 'work' },
+  { href: '/portal/social',          label: 'Social',         icon: 'share',            group: 'work' },
+  { href: '/portal/seo',             label: 'SEO',            icon: 'trending_up',      group: 'work' },
+  { href: '/portal/contacts',        label: 'Contacts',       icon: 'contacts',         group: 'work' },
+  { href: '/portal/campaigns',       label: 'Campaigns',      icon: 'campaign',         group: 'work' },
+  { href: '/portal/capture-sources', label: 'Capture Sources', icon: 'inventory_2',     group: 'work' },
+  { href: '/portal/integrations',    label: 'Integrations',   icon: 'extension',        group: 'work' },
+  { href: '/portal/properties',      label: 'Properties',     icon: 'apartment',        group: 'data' },
+  { href: '/portal/reports',         label: 'Reports',        icon: 'analytics',        group: 'data' },
+  { href: '/portal/data',            label: 'Data',           icon: 'database',         group: 'data' },
+  { href: '/portal/segments',        label: 'Segments',       icon: 'filter_alt',       group: 'data' },
+  { href: '/portal/email-domains',   label: 'Email Domains',  icon: 'dns',              group: 'data' },
+  { href: '/portal/messages',        label: 'Messages',       icon: 'forum',            group: 'comms' },
+  { href: '/portal/payments',        label: 'Payments',       icon: 'payments',         group: 'comms' },
 ]
 
 const GROUP_LABELS: Record<NavItem['group'], string> = {

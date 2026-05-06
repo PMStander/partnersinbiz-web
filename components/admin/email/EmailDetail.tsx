@@ -1,5 +1,6 @@
 // components/admin/email/EmailDetail.tsx
 'use client'
+import { fmtTimestamp } from './fmtTimestamp'
 
 interface EmailDetailProps {
   email: {
@@ -66,6 +67,22 @@ export function EmailDetail({ email, loading }: EmailDetailProps) {
             <dd className="text-on-surface">{email.cc.join(', ')}</dd>
           </div>
         )}
+        {!!email.sentAt && (
+          <div className="flex gap-2">
+            <dt className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant w-12 pt-0.5">Sent</dt>
+            <dd className="text-on-surface">{fmtTimestamp(email.sentAt)}</dd>
+          </div>
+        )}
+        {!!email.scheduledFor && (
+          <div className="flex gap-2">
+            <dt className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant w-12 pt-0.5">Sched</dt>
+            <dd className="text-on-surface">{fmtTimestamp(email.scheduledFor)}</dd>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <dt className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant w-12 pt-0.5">Created</dt>
+          <dd className="text-on-surface">{fmtTimestamp(email.createdAt)}</dd>
+        </div>
       </dl>
 
       {/* Body */}

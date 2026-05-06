@@ -36,7 +36,7 @@ function mockDoc(data: object | null, exists = true) {
 
 describe('GET /api/v1/crm/contacts/:id', () => {
   it('returns contact when found', async () => {
-    mockDoc({ name: 'John', email: 'john@test.com', deleted: false })
+    mockDoc({ orgId: 'org-test', name: 'John', email: 'john@test.com', deleted: false })
     const res = await GET(makeReq('GET'), params)
     expect(res.status).toBe(200)
     const body = await res.json()
@@ -52,7 +52,7 @@ describe('GET /api/v1/crm/contacts/:id', () => {
 
 describe('PUT /api/v1/crm/contacts/:id', () => {
   it('updates contact and returns 200', async () => {
-    const updateMock = mockDoc({ name: 'John', email: 'john@test.com', deleted: false })
+    const updateMock = mockDoc({ orgId: 'org-test', name: 'John', email: 'john@test.com', deleted: false })
     const res = await PUT(makeReq('PUT', { name: 'John Updated', stage: 'contacted' }), params)
     expect(res.status).toBe(200)
     expect(updateMock).toHaveBeenCalled()
@@ -67,7 +67,7 @@ describe('PUT /api/v1/crm/contacts/:id', () => {
 
 describe('DELETE /api/v1/crm/contacts/:id', () => {
   it('soft-deletes contact and returns 200', async () => {
-    const updateMock = mockDoc({ name: 'John', deleted: false })
+    const updateMock = mockDoc({ orgId: 'org-test', name: 'John', deleted: false })
     const res = await DELETE(makeReq('DELETE'), params)
     expect(res.status).toBe(200)
     expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ deleted: true }))

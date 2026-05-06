@@ -8,14 +8,17 @@ import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
+import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 
 type Params = { params: Promise<{ id: string }> }
 
-export const PUT = withAuth('admin', async (req: NextRequest, _user, context) => {
+export const PUT = withAuth('client', async (req: NextRequest, user, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('emails').doc(id).get()
   if (!doc.exists) return apiError('Email not found', 404)
+  const scope = resolveOrgScope(user, (doc.data()?.orgId as string | undefined) ?? null)
+  if (!scope.ok) return apiError(scope.error, scope.status)
 
   const body = await req.json()
   await adminDb.collection('emails').doc(id).update({
@@ -25,10 +28,12 @@ export const PUT = withAuth('admin', async (req: NextRequest, _user, context) =>
   return apiSuccess({ id })
 })
 
-export const DELETE = withAuth('admin', async (_req: NextRequest, _user, context) => {
+export const DELETE = withAuth('client', async (_req: NextRequest, user, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('emails').doc(id).get()
   if (!doc.exists) return apiError('Email not found', 404)
+  const scope = resolveOrgScope(user, (doc.data()?.orgId as string | undefined) ?? null)
+  if (!scope.ok) return apiError(scope.error, scope.status)
 
   await adminDb.collection('emails').doc(id).update({
     deleted: true,

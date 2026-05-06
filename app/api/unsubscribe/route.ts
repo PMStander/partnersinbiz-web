@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
+import { verifyUnsubscribeToken } from '@/lib/email/unsubscribeToken'
+import { syncUnsubscribeToIntegrations } from '@/lib/crm/integrations/syncOptOut'
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')
@@ -12,7 +14,17 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  const docRef = adminDb.collection('contacts').doc(token)
+  const verified = verifyUnsubscribeToken(token)
+  if (!verified.ok) {
+    return new NextResponse(unsubscribePage('Invalid link', 'This unsubscribe link is invalid or has expired.'), {
+      status: 400,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })
+  }
+  const contactId = verified.contactId
+  const tokenCampaignId = verified.campaignId
+
+  const docRef = adminDb.collection('contacts').doc(contactId)
   const doc = await docRef.get()
 
   if (!doc.exists) {
@@ -22,23 +34,94 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  if (doc.data()?.unsubscribed) {
+  // Honor either the legacy boolean or the new timestamp signal as "already done"
+  const data = doc.data() ?? {}
+  const alreadyUnsubscribed = !!data.unsubscribed || !!data.unsubscribedAt
+  if (alreadyUnsubscribed) {
     return new NextResponse(
       unsubscribePage('Already unsubscribed', 'You are already unsubscribed from our emails.'),
       { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     )
   }
 
+  // 1. Mark the contact as unsubscribed
   await docRef.update({
     unsubscribed: true,
     unsubscribedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   })
 
+  // 2. Exit any active sequence enrollments for this contact and tally per-campaign hits
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const enrollSnap = await (adminDb.collection('sequence_enrollments') as any)
+    .where('contactId', '==', contactId)
+    .where('status', '==', 'active')
+    .get()
+
+  const campaignHits = new Map<string, number>()
+  for (const eDoc of enrollSnap.docs) {
+    const enrollment = eDoc.data() as { campaignId?: string }
+    await eDoc.ref.update({
+      status: 'exited',
+      exitReason: 'unsubscribed',
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+    const cid = enrollment.campaignId ?? ''
+    if (cid) campaignHits.set(cid, (campaignHits.get(cid) ?? 0) + 1)
+  }
+
+  // 3. Bump campaign.stats.unsubscribed for each affected campaign
+  for (const [campaignId, hits] of campaignHits.entries()) {
+    try {
+      await adminDb.collection('campaigns').doc(campaignId).update({
+        'stats.unsubscribed': FieldValue.increment(hits),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('[unsubscribe] failed to bump campaign stats', campaignId, err)
+    }
+  }
+
+  // 4. Propagate opt-out to CRM integrations (non-blocking)
+  const orgId = (data.orgId as string | undefined) ?? ''
+  if (orgId) {
+    syncUnsubscribeToIntegrations(contactId, orgId).catch((err) =>
+      console.error('[unsubscribe] opt-out sync failed', err)
+    )
+  }
+
+  // 5. Resolve campaign/org names for campaign-aware confirmation page
+  let campaignName: string | undefined
+  let orgName: string | undefined
+
+  if (tokenCampaignId) {
+    try {
+      const campSnap = await adminDb.collection('campaigns').doc(tokenCampaignId).get()
+      if (campSnap.exists) {
+        const campData = campSnap.data() as { name?: string; orgId?: string }
+        campaignName = campData.name || undefined
+        const campaignOrgId = campData.orgId
+        if (campaignOrgId) {
+          const orgSnap = await adminDb.collection('organizations').doc(campaignOrgId).get()
+          if (orgSnap.exists) {
+            orgName = (orgSnap.data() as { name?: string })?.name || undefined
+          }
+        }
+      }
+    } catch (err) {
+      // Non-fatal — fall back to generic copy
+      console.error('[unsubscribe] failed to resolve campaign/org for page', tokenCampaignId, err)
+    }
+  }
+
+  const confirmMessage = campaignName && orgName
+    ? `You have been successfully removed from ${campaignName} by ${orgName}. You will no longer receive emails from this campaign.`
+    : campaignName
+      ? `You have been successfully removed from ${campaignName}. You will no longer receive emails from this campaign.`
+      : 'You have been successfully removed from our email list. You will no longer receive marketing emails from us.'
+
   return new NextResponse(
-    unsubscribePage(
-      'You\'ve been unsubscribed',
-      'You have been successfully removed from our email list. You will no longer receive emails from Partners in Biz.'
-    ),
+    unsubscribePage('You\'ve been unsubscribed', confirmMessage),
     { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
   )
 }

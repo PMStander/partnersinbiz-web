@@ -49,6 +49,7 @@ function makeReq(body: object) {
 }
 
 const validPayload = {
+  orgId: 'org-test',
   to: 'client@example.com',
   subject: 'Hello from PiB',
   bodyText: 'This is the email body.',

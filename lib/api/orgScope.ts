@@ -1,0 +1,58 @@
+// lib/api/orgScope.ts
+//
+// Per-role orgId resolution. Used by routes that are open to both `admin`
+// and `client` roles to ensure clients can only access their own org's data.
+//
+// Behaviour:
+//   - admin / ai roles can pass any `?orgId=` (or `body.orgId`) and we
+//     trust it. They're operating the platform.
+//   - client roles MUST use the orgId stored on their user record (set
+//     when an OrgMember entry is created). If a `?orgId=` is supplied
+//     and it doesn't match, return 403.
+//   - If neither side supplies an orgId, return 400 with a helpful message.
+
+import type { ApiUser } from './types'
+
+export interface OrgScopeOk {
+  ok: true
+  orgId: string
+}
+
+export interface OrgScopeErr {
+  ok: false
+  status: 400 | 403
+  error: string
+}
+
+export type OrgScopeResult = OrgScopeOk | OrgScopeErr
+
+/**
+ * Resolve the orgId for a request given the authenticated user and an
+ * optional orgId from the URL/query/body.
+ *
+ * Pass `null` for `requestedOrgId` if the route doesn't accept one (rare —
+ * most list endpoints take `?orgId=`).
+ */
+export function resolveOrgScope(user: ApiUser, requestedOrgId: string | null): OrgScopeResult {
+  // Admin / ai: trust whatever was requested. Required if we're scoping by it.
+  if (user.role === 'admin' || user.role === 'ai') {
+    if (!requestedOrgId) {
+      return { ok: false, status: 400, error: 'orgId is required (admin role must scope explicitly)' }
+    }
+    return { ok: true, orgId: requestedOrgId }
+  }
+
+  // Client: forced to their bound org. Ignore mismatches loudly.
+  const userOrgId = user.orgId ?? ''
+  if (!userOrgId) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'No organisation membership — ask your account owner to invite you.',
+    }
+  }
+  if (requestedOrgId && requestedOrgId !== userOrgId) {
+    return { ok: false, status: 403, error: 'Cannot access a different organisation' }
+  }
+  return { ok: true, orgId: userOrgId }
+}

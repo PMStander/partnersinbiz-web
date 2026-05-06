@@ -81,8 +81,8 @@ export default function BrandPage() {
         const res = await fetch('/api/v1/organizations')
         if (!res.ok) throw new Error('Failed to fetch organizations')
 
-        const body = await res.json()
-        const foundOrg = body.data?.find((o: any) => o.slug === slug)
+        const body = await res.json() as { data?: Organization[] }
+        const foundOrg = body.data?.find((o) => o.slug === slug)
         if (!foundOrg) throw new Error('Organization not found')
 
         setOrg(foundOrg)
@@ -140,24 +140,56 @@ export default function BrandPage() {
     bannerUrl: setBannerUploading,
   }
 
+  async function persistBrandProfile(nextFormData: BrandProfile, options: { showSuccess?: boolean } = {}) {
+    if (!org) throw new Error('Organization not found')
+
+    const res = await fetch(`/api/v1/organizations/${org.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandProfile: nextFormData }),
+    })
+
+    const body = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(body.error || 'Failed to save brand profile')
+    }
+
+    setOrg((current) => current ? { ...current, brandProfile: nextFormData } : current)
+
+    if (options.showSuccess !== false) {
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 3000)
+    }
+  }
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'logoMarkUrl' | 'bannerUrl', folder: string) {
     const file = e.target.files?.[0]
     if (!file) return
     const setUploading = uploadStates[field]
     setUploading(true)
     try {
+      setSaveError(null)
+      setSuccess(false)
       const fd = new FormData()
       fd.append('file', file)
       fd.append('folder', folder)
+      if (org?.id) {
+        fd.append('orgId', org.id)
+        fd.append('relatedToType', 'organization')
+        fd.append('relatedToId', org.id)
+      }
       const res = await fetch('/api/v1/upload', { method: 'POST', body: fd })
       const body = await res.json()
       if (res.ok && body.data?.url) {
-        setFormData(prev => ({ ...prev, [field]: body.data.url }))
+        const nextFormData = { ...formData, [field]: body.data.url }
+        setFormData(nextFormData)
+        await persistBrandProfile(nextFormData)
       } else {
         setSaveError(body.error ?? 'Upload failed')
       }
-    } catch {
-      setSaveError('Upload failed')
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Upload failed')
     } finally {
       setUploading(false)
       // reset input so same file can be re-uploaded
@@ -208,23 +240,7 @@ export default function BrandPage() {
       setSuccess(false)
       setSaving(true)
 
-      const res = await fetch(`/api/v1/organizations/${org.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandProfile: formData }),
-      })
-
-      const body = await res.json()
-
-      if (!res.ok) {
-        throw new Error(body.error || 'Failed to save brand profile')
-      }
-
-      setSuccess(true)
-      setOrg({ ...org, brandProfile: formData })
-
-      // Hide success message after 3 seconds
-      setTimeout(() => setSuccess(false), 3000)
+      await persistBrandProfile(formData)
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'An error occurred')
     } finally {
@@ -259,6 +275,15 @@ export default function BrandPage() {
           style={{ borderColor: '#22c55e', backgroundColor: '#f0fdf4' }}
         >
           <p className="text-sm text-[#166534]">Brand profile saved successfully</p>
+        </div>
+      )}
+
+      {saveError && (
+        <div
+          className="pib-card border-l-4 p-4"
+          style={{ borderColor: '#ef4444', backgroundColor: '#fef2f2' }}
+        >
+          <p className="text-sm text-[#7f1d1d]">{saveError}</p>
         </div>
       )}
 
@@ -639,9 +664,6 @@ export default function BrandPage() {
               disabled={saving}
             />
           </div>
-
-          {/* Save Error */}
-          {saveError && <p className="text-xs text-[#ef4444]">{saveError}</p>}
 
           {/* Save Button */}
           <div className="pt-4">

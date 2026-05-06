@@ -13,6 +13,7 @@ export type SequenceStatus = 'draft' | 'active' | 'paused'
 
 export interface Sequence {
   id: string
+  orgId: string            // required after Phase 1 backfill
   name: string
   description: string
   status: SequenceStatus
@@ -25,10 +26,12 @@ export interface Sequence {
 export type SequenceInput = Omit<Sequence, 'id' | 'createdAt' | 'updatedAt'>
 
 export type EnrollmentStatus = 'active' | 'completed' | 'paused' | 'exited'
-export type ExitReason = 'replied' | 'unsubscribed' | 'manual' | 'completed'
+export type ExitReason = 'replied' | 'unsubscribed' | 'manual' | 'completed' | 'bounced'
 
 export interface SequenceEnrollment {
   id: string
+  orgId: string            // required after Phase 1 backfill
+  campaignId: string       // "" if direct sequence enrollment, populated when triggered by a Campaign
   sequenceId: string
   contactId: string
   status: EnrollmentStatus

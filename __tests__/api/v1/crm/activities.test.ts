@@ -25,6 +25,7 @@ beforeEach(() => {
 
 describe('POST /api/v1/crm/activities', () => {
   const valid = {
+    orgId: 'org-test',
     contactId: 'c1', dealId: '', type: 'note',
     summary: 'Called the client', metadata: {}, createdBy: 'uid-1',
   }

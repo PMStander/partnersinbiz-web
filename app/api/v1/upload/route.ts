@@ -33,8 +33,8 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
 
     await fileRef.save(buffer, {
       metadata: { contentType: file.type },
-      public: true,
     })
+    await fileRef.makePublic()
 
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`
 
