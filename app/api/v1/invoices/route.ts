@@ -1,4 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore'
+import type * as FirebaseFirestore from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
@@ -7,10 +8,57 @@ import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 export const dynamic = 'force-dynamic'
 
+type InvoiceListItem = {
+  id: string
+  createdAt?: unknown
+  billingOrgId?: string | null
+  [key: string]: unknown
+}
+
+function createdAtMillis(value: unknown): number {
+  if (!value) return 0
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    return Number.isNaN(parsed) ? 0 : parsed
+  }
+  if (typeof value === 'object') {
+    const timestamp = value as {
+      toMillis?: () => number
+      seconds?: number
+      _seconds?: number
+    }
+    if (typeof timestamp.toMillis === 'function') return timestamp.toMillis()
+    const seconds = timestamp.seconds ?? timestamp._seconds
+    if (typeof seconds === 'number') return seconds * 1000
+  }
+  return 0
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object') return false
+  return Object.getPrototypeOf(value) === Object.prototype
+}
+
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefined(item)) as T
+  }
+
+  if (!isPlainRecord(value)) return value
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .map(([key, entryValue]) => [key, stripUndefined(entryValue)]),
+  ) as T
+}
+
 export const GET = withAuth('client', async (req, user) => {
   const { searchParams } = new URL(req.url)
 
-  let query = adminDb.collection('invoices').orderBy('createdAt', 'desc') as any
+  let query: FirebaseFirestore.Query = adminDb.collection('invoices')
+  let billingOrgIdFilter: string | null = null
 
   if (user.role === 'client') {
     // Clients can only see invoices issued to their own org.
@@ -23,11 +71,22 @@ export const GET = withAuth('client', async (req, user) => {
     const orgId = searchParams.get('orgId')
     const billingOrgId = searchParams.get('billingOrgId')
     if (orgId) query = query.where('orgId', '==', orgId)
-    if (billingOrgId) query = query.where('billingOrgId', '==', billingOrgId)
+    if (billingOrgId) {
+      if (orgId) {
+        billingOrgIdFilter = billingOrgId
+      } else {
+        query = query.where('billingOrgId', '==', billingOrgId)
+      }
+    }
   }
 
-  const snapshot = await query.limit(50).get()
-  const invoices = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
+  const snapshot = await query.get()
+  const invoices = snapshot.docs
+    .map((doc): InvoiceListItem => ({ id: doc.id, ...doc.data() }))
+    .filter((invoice) => !billingOrgIdFilter || invoice.billingOrgId === billingOrgIdFilter)
+    .sort((a, b) => createdAtMillis(b.createdAt) - createdAtMillis(a.createdAt))
+    .slice(0, 50)
+
   return apiSuccess(invoices)
 })
 
@@ -123,7 +182,7 @@ export const POST = withAuth('admin', async (req, user) => {
     updatedAt: FieldValue.serverTimestamp(),
   }
 
-  const ref = await adminDb.collection('invoices').add(doc)
+  const ref = await adminDb.collection('invoices').add(stripUndefined(doc))
 
   try {
     await dispatchWebhook(body.orgId, 'invoice.created', {
