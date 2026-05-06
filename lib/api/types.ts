@@ -4,6 +4,10 @@ export interface ApiUser {
   uid: string
   role: ApiRole
   orgId?: string
+  // Platform-admin org restriction. Only meaningful when role === 'admin'.
+  // Empty/undefined = super admin (no restriction). Non-empty = restricted to
+  // these org ids (plus their home orgId).
+  allowedOrgIds?: string[]
 }
 
 export interface ApiMeta {

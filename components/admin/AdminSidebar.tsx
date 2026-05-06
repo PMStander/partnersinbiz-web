@@ -26,6 +26,7 @@ const OPERATOR_NAV: NavItem[] = [
   { label: 'Invoicing',   href: '/admin/invoicing',          icon: 'receipt_long' },
   { label: 'Recurring',   href: '/admin/invoicing/recurring', icon: 'autorenew' },
   { label: 'Quotes',      href: '/admin/quotes',             icon: 'request_quote' },
+  { label: 'Platform users', href: '/admin/platform-users',  icon: 'shield_person' },
   { label: 'Settings',    href: '/admin/settings',           icon: 'settings' },
 ]
 

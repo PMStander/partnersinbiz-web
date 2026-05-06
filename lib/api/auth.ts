@@ -70,8 +70,8 @@ async function _resolveUser(req: NextRequest): Promise<ApiUser | null> {
     // 2. Verify as Firebase ID token
     try {
       const decoded = await adminAuth.verifyIdToken(token)
-      const { role, orgId } = await getUserExtrasFromFirestore(decoded.uid)
-      return { uid: decoded.uid, role, orgId }
+      const extras = await getUserExtrasFromFirestore(decoded.uid)
+      return { uid: decoded.uid, ...extras }
     } catch {
       // fall through to cookie check
     }
@@ -83,8 +83,8 @@ async function _resolveUser(req: NextRequest): Promise<ApiUser | null> {
   if (cookie) {
     try {
       const decoded = await adminAuth.verifySessionCookie(cookie, true)
-      const { role, orgId } = await getUserExtrasFromFirestore(decoded.uid)
-      return { uid: decoded.uid, role, orgId }
+      const extras = await getUserExtrasFromFirestore(decoded.uid)
+      return { uid: decoded.uid, ...extras }
     } catch {
       return null
     }
@@ -93,12 +93,17 @@ async function _resolveUser(req: NextRequest): Promise<ApiUser | null> {
   return null
 }
 
-async function getUserExtrasFromFirestore(uid: string): Promise<{ role: ApiRole; orgId?: string }> {
+async function getUserExtrasFromFirestore(
+  uid: string,
+): Promise<{ role: ApiRole; orgId?: string; allowedOrgIds?: string[] }> {
   const doc = await adminDb.collection('users').doc(uid).get()
   if (!doc.exists) return { role: 'client' }
   const data = doc.data() ?? {}
   const role = data.role
   const orgId = typeof data.orgId === 'string' ? data.orgId : undefined
   const validRole: ApiRole = role === 'admin' || role === 'client' || role === 'ai' ? role : 'client'
-  return { role: validRole, orgId }
+  const allowedOrgIds = Array.isArray(data.allowedOrgIds)
+    ? (data.allowedOrgIds.filter((v: unknown) => typeof v === 'string' && v.length > 0) as string[])
+    : undefined
+  return { role: validRole, orgId, allowedOrgIds }
 }

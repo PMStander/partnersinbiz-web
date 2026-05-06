@@ -31,8 +31,17 @@ export const GET = withAuth('client', async (req, user) => {
       return bTs - aTs
     })
     .filter((org) => {
-      // AI agents and admins see all orgs; clients only see their own
-      if (user.role === 'ai' || user.role === 'admin') return true
+      // AI agents always see all orgs.
+      if (user.role === 'ai') return true
+      // Admins: super admins (no allowedOrgIds) see all; restricted admins
+      // see only their allowed orgs (plus their home org if set).
+      if (user.role === 'admin') {
+        const allowed = user.allowedOrgIds
+        if (!Array.isArray(allowed) || allowed.length === 0) return true
+        if (org.id === user.orgId) return true
+        return allowed.includes(org.id!)
+      }
+      // Clients: only orgs they are a member of.
       return isMember(org.members ?? [], user.uid)
     })
     .map((org): OrganizationSummary => ({
