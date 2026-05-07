@@ -203,27 +203,113 @@ Send a message. Body: `{ orgId, subject, body, threadId? }`.
 
 ### Brand profile
 
-Agents depend on this endpoint for every piece of content they generate.
+Agents depend on this endpoint for every piece of content, design, or copy they generate. **Always call `GET /agent/brand/[orgId]` before producing any output for a client.** The profile is the single source of truth.
 
 #### `GET /agent/brand/[orgId]` — auth: admin
-Returns:
+Returns the full brand profile. Key fields:
+
 ```json
-{ "orgId": "...", "name": "Acme", "industry": "...",
-  "brandProfile": { "voice": "...", "audience": "...", "personas": [...], "doNotDo": [...],
-                    "tagline": "...", "logoUrl": "...", "examples": [...] },
-  "brandColors": { "primary": "#...", "secondary": "#...", "accent": "#..." } }
+{
+  "orgId": "...", "name": "Acme", "industry": "...",
+  "brandProfile": {
+    "logoUrl": "...", "logoMarkUrl": "...", "faviconUrl": "...", "bannerUrl": "...",
+    "tagline": "Software your competitors will copy.",
+    "oneLiner": "We build X for Y so they can Z.",
+    "keyDifferentiators": ["EFT-first invoicing", "no Stripe", "same person from quote to launch"],
+    "toneOfVoice": "Direct, confident, honest. No jargon.",
+    "targetAudience": "Ambitious SMEs across SA, UK, US",
+    "personas": [
+      { "name": "The Founder", "role": "CEO / owner-operator", "painPoints": "..." }
+    ],
+    "doWords": ["ship", "build", "craft", "real", "honest"],
+    "dontWords": ["leverage", "synergy", "innovative", "world-class"],
+    "designAesthetic": ["minimal", "bold", "dark"],
+    "colorMode": "dark",
+    "competitors": [
+      { "url": "https://competitor.com", "relationship": "differentiate" },
+      { "url": "https://inspiration.com", "relationship": "inspire" }
+    ],
+    "imageryTypes": ["photography", "illustration"],
+    "imageryMoods": ["clean", "warm"],
+    "fonts": {
+      "heading": "Instrument Serif", "body": "Geist Sans",
+      "mono": "Geist Mono", "weights": "400, 600, 700",
+      "headingScale": "large"
+    },
+    "socialHandles": { "twitter": "@handle", "linkedin": "company/slug" },
+    "guidelines": "Free-form markdown guidelines..."
+  },
+  "brandColors": {
+    "primary": "#F5A623", "secondary": "#7C5CFF", "accent": "#F5A623",
+    "background": "#0A0A0B", "surface": "#141416",
+    "text": "#EDEDED", "textMuted": "#8B8B92", "border": "rgba(255,255,255,0.08)",
+    "success": "#4ADE80", "warning": "#F59E0B", "error": "#EF4444",
+    "notes": {
+      "primary": "Use only for CTAs and key highlights",
+      "secondary": "Gradient meshes and atmospheric accents only"
+    }
+  }
+}
 ```
 
 #### `PUT /agent/brand/[orgId]` — auth: admin
-Partial update — merges into `brandProfile` (top-level) and `settings.brandColors`. Requires at least one of `brandProfile` / `brandColors`.
+Partial update — merges into `brandProfile` (top-level) and `settings.brandColors`. Pass only the fields you want to update.
 
-Body:
+Body (any subset of the schema above):
 ```json
-{ "brandProfile": { "voice": "confident, warm", "tagline": "Grow with clarity" },
-  "brandColors": { "primary": "#1a5fb4" } }
+{
+  "brandProfile": {
+    "tagline": "Software your competitors will copy.",
+    "toneOfVoice": "Direct, confident, honest.",
+    "doWords": ["ship", "build"],
+    "designAesthetic": ["minimal", "bold"],
+    "personas": [{ "name": "The Founder", "role": "CEO", "painPoints": "..." }],
+    "competitors": [{ "url": "https://x.com", "relationship": "differentiate" }]
+  },
+  "brandColors": {
+    "primary": "#F5A623",
+    "background": "#0A0A0B",
+    "notes": { "primary": "CTAs only" }
+  }
+}
 ```
 
 Response: `{ orgId, updated: true }`.
+
+#### Brand profile field reference
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `tagline` | string | Short punchy line — hero headline |
+| `oneLiner` | string | 1-sentence what-we-do for intros and meta descriptions |
+| `keyDifferentiators` | string[] | Bullet points that set the brand apart |
+| `toneOfVoice` | string | How to write — style, register, things to avoid |
+| `targetAudience` | string | Who the brand serves |
+| `personas` | `{name, role, painPoints}[]` | Named personas for targeted content |
+| `doWords` | string[] | Words to actively use |
+| `dontWords` | string[] | Words to never use |
+| `designAesthetic` | string[] | Tags: minimal, bold, editorial, playful, corporate, luxury, tech, warm, dark, light |
+| `colorMode` | `light\|dark\|both` | Primary rendering mode for UI/web |
+| `competitors` | `{url, relationship: differentiate\|inspire}[]` | Reference brands |
+| `imageryTypes` | string[] | photography, illustration, icons, 3D/CGI, mixed |
+| `imageryMoods` | string[] | clean, gritty, warm, cool, minimal, rich, dramatic |
+| `fonts.heading` | string | Display/heading typeface |
+| `fonts.body` | string | Body copy typeface |
+| `fonts.mono` | string | Mono / label typeface |
+| `fonts.weights` | string | Font weights in use, e.g. `"400, 600, 700"` |
+| `fonts.headingScale` | `large\|medium\|compact` | Heading size preference |
+| `brandColors.primary` | hex | CTAs, key actions, brand highlights |
+| `brandColors.secondary` | hex | Supporting accents, gradients |
+| `brandColors.accent` | hex | Hover states, interactive elements |
+| `brandColors.background` | hex | Page/app background |
+| `brandColors.surface` | hex | Cards, panels, containers |
+| `brandColors.text` | hex | Primary body text |
+| `brandColors.textMuted` | hex | Secondary text, captions |
+| `brandColors.border` | hex/rgba | Lines, separators |
+| `brandColors.success` | hex | Positive states |
+| `brandColors.warning` | hex | Cautions |
+| `brandColors.error` | hex | Errors, destructive actions |
+| `brandColors.notes` | `Record<colorKey, string>` | Usage notes per colour key |
 
 ### Comments (unified)
 
@@ -506,9 +592,33 @@ PATCH /portal/enquiries/enq_123
 ### 4. Update brand profile (agent-driven)
 
 ```bash
-GET /agent/brand/org_abc      # read current
-PUT /agent/brand/org_abc      # merge partial update
-{ "brandProfile": { "voice": "...", "examples": ["..."] } }
+# Read first — always merge, never clobber
+GET /agent/brand/org_abc
+
+# Partial update — only include fields you want to change
+PUT /agent/brand/org_abc
+{
+  "brandProfile": {
+    "tagline": "Software your competitors will copy.",
+    "toneOfVoice": "Direct, confident, founder-voice.",
+    "doWords": ["ship", "build", "craft"],
+    "dontWords": ["leverage", "synergy"],
+    "designAesthetic": ["minimal", "bold", "dark"],
+    "colorMode": "dark",
+    "personas": [{ "name": "The Founder", "role": "CEO", "painPoints": "Needs to ship fast" }],
+    "competitors": [{ "url": "https://agency.com", "relationship": "differentiate" }],
+    "imageryTypes": ["photography"],
+    "imageryMoods": ["clean", "warm"],
+    "fonts": { "heading": "Instrument Serif", "body": "Geist Sans", "mono": "Geist Mono" }
+  },
+  "brandColors": {
+    "primary": "#F5A623",
+    "background": "#0A0A0B",
+    "surface": "#141416",
+    "text": "#EDEDED",
+    "notes": { "primary": "CTAs and key highlights only" }
+  }
+}
 ```
 
 ### 5. Product onboarding (Athleet)
