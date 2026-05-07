@@ -38,7 +38,7 @@
     },
     {
       "path": "/api/cron/crm-integrations",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/reports",
