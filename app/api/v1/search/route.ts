@@ -62,7 +62,7 @@ export const GET = withAuth('admin', async (req: NextRequest, _user: ApiUser) =>
     }))
 
   // Search projects: match on name, description
-  const projects = projectsSnap.docs
+  const matchedProjects = projectsSnap.docs
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((d: any) => ({ id: d.id, ...d.data() }))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,21 +73,10 @@ export const GET = withAuth('admin', async (req: NextRequest, _user: ApiUser) =>
       matchesQuery(d.description, q)
     )
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .slice(0, limit)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .map((d: any): SearchResult => {
-      // TODO: Look up org slug by orgId for better URLs
-      return {
-        id: d.id,
-        type: 'project',
-        title: d.name,
-        subtitle: d.description,
-        url: `/admin/projects/${d.id}`,
-      }
-    })
+    .slice(0, limit) as any[]
 
   // Search tasks: match on title, description
-  const tasks = tasksSnap.docs
+  const matchedTasks = tasksSnap.docs
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((d: any) => {
       const data = d.data()
@@ -103,16 +92,61 @@ export const GET = withAuth('admin', async (req: NextRequest, _user: ApiUser) =>
       matchesQuery(d.description, q)
     )
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .slice(0, limit)
+    .slice(0, limit) as any[]
+
+  // Batch-fetch org docs to resolve orgId → slug for correct URLs
+  const orgIdSet = new Set<string>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  matchedProjects.forEach((d: any) => { if (d.orgId) orgIdSet.add(d.orgId) })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  matchedTasks.forEach((d: any) => { if (d.orgId) orgIdSet.add(d.orgId) })
+
+  const orgSlugMap = new Map<string, string>()
+  if (orgIdSet.size > 0) {
+    const orgRefs = Array.from(orgIdSet).map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (id) => (adminDb.collection('organizations') as any).doc(id)
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const orgDocs = await (adminDb as any).getAll(...orgRefs)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    orgDocs.forEach((doc: any) => {
+      if (doc.exists) {
+        const data = doc.data()
+        if (data?.slug) orgSlugMap.set(doc.id, data.slug)
+      }
+    })
+  }
+
+  const projects = matchedProjects
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((d: any): SearchResult => {
-      // TODO: Resolve org slug via projectId for better URLs
+      const slug = d.orgId ? orgSlugMap.get(d.orgId) : undefined
+      const url = slug
+        ? `/admin/org/${slug}/projects/${d.id}`
+        : `/admin/projects/${d.id}`
+      return {
+        id: d.id,
+        type: 'project',
+        title: d.name,
+        subtitle: d.description,
+        url,
+      }
+    })
+
+  const tasks = matchedTasks
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((d: any): SearchResult => {
+      const slug = d.orgId ? orgSlugMap.get(d.orgId) : undefined
+      const url = slug
+        ? `/admin/org/${slug}/projects/${d.projectId}?task=${d.id}`
+        : `/admin/projects/${d.projectId}?task=${d.id}`
       return {
         id: d.id,
         type: 'task',
         title: d.title,
         subtitle: d.status,
-        url: `/admin/projects/${d.projectId}?task=${d.id}`,
+        url,
       }
     })
 

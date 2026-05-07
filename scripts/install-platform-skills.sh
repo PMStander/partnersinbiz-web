@@ -13,7 +13,7 @@ set -euo pipefail
 SRC="/Users/peetstander/Cowork/Partners in Biz — Client Growth/partnersinbiz-web/.claude/skills"
 DEST="/Users/peetstander/Cowork/.claude/skills"
 
-# Only the 9 platform-API skills get exposed Cowork-wide. Engineering
+# Only the platform-API skills get exposed Cowork-wide. Engineering
 # playbook skills (marketing, software-development) stay codebase-local —
 # they're for working ON the partnersinbiz-web codebase, not on clients.
 PLATFORM_SKILLS=(
@@ -24,6 +24,7 @@ PLATFORM_SKILLS=(
   email-outreach
   platform-ops
   project-management
+  properties
   seo-sprint-manager
   social-media-manager
 )

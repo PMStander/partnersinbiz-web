@@ -15,6 +15,7 @@ import type { Sequence } from '@/lib/sequences/types'
 import type { Contact } from '@/lib/crm/types'
 import { resolveSegmentContacts } from '@/lib/crm/segments'
 import type { ApiUser } from '@/lib/api/types'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -113,6 +114,17 @@ export const POST = withAuth('client', async (_req: NextRequest, user: ApiUser, 
     'stats.enrolled': FieldValue.increment(enrolledCount),
     updatedAt: FieldValue.serverTimestamp(),
   })
+
+  try {
+    await dispatchWebhook(campaign.orgId, 'campaign.launched', {
+      id: campaign.id,
+      name: campaign.name,
+      enrolled: enrolledCount,
+      audienceSize: contactIds.length,
+    })
+  } catch (err) {
+    console.error('[webhook-dispatch-error] campaign.launched', err)
+  }
 
   return apiSuccess({ enrolled: enrolledCount, audienceSize: contactIds.length })
 })

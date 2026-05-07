@@ -22,6 +22,8 @@ import {
   type CrmIntegrationSyncStats,
 } from '@/lib/crm/integrations/types'
 import { syncMailchimp } from '@/lib/crm/integrations/handlers/mailchimp'
+import { syncHubspot } from '@/lib/crm/integrations/handlers/hubspot'
+import { syncGmail } from '@/lib/crm/integrations/handlers/gmail'
 import type { ApiUser } from '@/lib/api/types'
 
 type Params = { params: Promise<{ id: string }> }
@@ -52,6 +54,16 @@ export const POST = withAuth('client', async (_req: NextRequest, user: ApiUser, 
   try {
     if (integration.provider === 'mailchimp') {
       const result = await syncMailchimp(integration)
+      stats = result.stats
+      ok = result.ok
+      if (!result.ok) error = result.error
+    } else if (integration.provider === 'hubspot') {
+      const result = await syncHubspot(integration)
+      stats = result.stats
+      ok = result.ok
+      if (!result.ok) error = result.error
+    } else if (integration.provider === 'gmail') {
+      const result = await syncGmail(integration)
       stats = result.stats
       ok = result.ok
       if (!result.ok) error = result.error

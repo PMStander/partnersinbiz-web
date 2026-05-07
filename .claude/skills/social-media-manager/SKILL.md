@@ -298,9 +298,9 @@ Rescheduling (`scheduledFor`/`scheduledAt`) automatically syncs the queue entry.
 
 Immediately publish a post, bypassing the schedule. Supported platforms: all standard platforms plus `youtube`, `mastodon`, `dribbble`. Returns `{ id, externalId, platform }`.
 
-#### `POST /posts/[id]/approve` — auth: admin (or client with approval role) — LEGACY single-stage
+#### `POST /posts/[id]/approve` — auth: admin (or client with approval role)
 
-Approve or reject a post in `pending_approval` status. **Prefer the two-stage flow below for new integrations.**
+Approve or reject a post in `pending_approval` status.
 
 Body: `{ "action": "approve" }` or `{ "action": "reject" }`
 
@@ -308,112 +308,6 @@ Body: `{ "action": "approve" }` or `{ "action": "reject" }`
 - `reject` → `status: "draft"`, clears approval fields
 
 Response: `{ "id": "post_xyz", "status": "approved" }`
-
----
-
-### Two-Stage Approval Flow
-
-Posts now move through `draft → qa_review → client_review → approved → (scheduled | vaulted)`. Internal team (us) does QA first; the client approves second. Either reject point sends the post to `regenerating`, where the AI rewrites from feedback and re-enters QA review.
-
-**Statuses (extended):** `draft, qa_review, client_review, regenerating, pending_approval (legacy alias of client_review), approved, vaulted, scheduled, publishing, published, partially_published, failed, cancelled`.
-
-**Per-org settings** under `organizations/{orgId}.settings.social`:
-- `requiresQaApproval: boolean` — default true
-- `requiresClientApproval: boolean` — default true
-- `defaultDeliveryMode: 'auto_publish' | 'download_only' | 'both'` — default `auto_publish`
-
-**Per-post fields** (added on top of the existing post type):
-- `requiresApproval: boolean`
-- `deliveryMode: 'auto_publish' | 'download_only' | 'both'`
-- `approval: { qaApprovedBy, qaApprovedAt, clientApprovedBy, clientApprovedAt, rejectionCount, regenerationCount, lastRejectionStage, lastRejectedAt, history[] }`
-- `originalContent: string | null` — preserved on first regeneration
-
-**Comment kinds:** `note` (default), `qa_rejection`, `client_rejection`, `agent_handoff`. Rejections from the new endpoints carry the right `kind` so the regeneration loop knows which feedback to act on.
-
-#### `POST /posts/[id]/submit` — auth: client
-
-Move a `draft` post into the approval flow. Looks up org settings and per-post `requiresApproval` to pick the next state (`qa_review`, `client_review`, or `approved`).
-
-Body: `{}` (empty)
-
-Response: `{ "id": "post_xyz", "status": "qa_review" }`
-
-#### `POST /posts/[id]/qa-approve` — auth: admin
-
-Internal QA approval. Transitions `qa_review → client_review` (or `approved` if `requiresClientApproval` is false). When transitioning straight to `scheduled`, also writes the `social_queue` entry so the publisher picks it up.
-
-Body: `{}`
-
-Response: `{ "id": "post_xyz", "status": "client_review" }`
-
-#### `POST /posts/[id]/qa-reject` — auth: admin
-
-Reject at QA with feedback. Writes a `qa_rejection` comment, increments `approval.rejectionCount`, sets `status: "regenerating"`, and triggers AI regeneration in the background. The agent rewrites the post from the feedback and transitions back to `qa_review`.
-
-Body: `{ "reason": "string (min 10 chars)" }`
-
-Response: `{ "id": "post_xyz", "status": "regenerating" }`
-
-#### `POST /posts/[id]/client-approve` — auth: client
-
-Final client approval. Transitions `client_review → approved/vaulted/scheduled` based on `deliveryMode` + whether `scheduledAt` is set:
-
-- `deliveryMode: 'auto_publish'` + scheduledAt → `scheduled` (queue entry created)
-- `deliveryMode: 'auto_publish'` no schedule → `approved`
-- `deliveryMode: 'download_only'` → `vaulted` (no auto-publish)
-- `deliveryMode: 'both'` + scheduledAt → `scheduled` (also visible in vault)
-- `deliveryMode: 'both'` no schedule → `vaulted`
-
-Body: `{}`
-
-Response: `{ "id": "post_xyz", "status": "scheduled" }`
-
-#### `POST /posts/[id]/client-reject` — auth: client
-
-Reject at client review. Writes a `client_rejection` comment, increments rejection count, sets `status: "regenerating"`, triggers regeneration.
-
-Body: `{ "reason": "string (min 10 chars)" }`
-
-Response: `{ "id": "post_xyz", "status": "regenerating" }`
-
-#### `POST /posts/[id]/regenerate` — auth: client
-
-Manually re-trigger regeneration on a stuck or pending post. Pulls all unresolved `qa_rejection`/`client_rejection` comments (`agentPickedUp: false`), feeds them back into Claude (Haiku 4.5) with the current post text, writes the new content, marks comments as picked up, posts an `agent_handoff` summary comment, and transitions back to `qa_review`.
-
-Body: `{}`
-
-Response: `{ "id": "post_xyz", "status": "qa_review", "regenerationCount": 2, "oldText": "...", "newText": "...", "feedbackUsed": 3 }`
-
-Errors: 400 if no unresolved feedback, 400 on invalid current status.
-
-#### `GET /vault/` — auth: client
-
-List approved-or-later posts available in the org's content vault. Returns posts with status in `[approved, vaulted, scheduled, publishing, published, partially_published]`.
-
-Query params (all optional): `platform`, `from` (ISO), `to` (ISO), `label`, `deliveryMode`.
-
-Response: array of `{ id, content, platforms, hashtags, deliveryMode, approvedAt, scheduledAt, publishedAt, status, media, labels }`. Sorted by `approvedAt desc`.
-
-#### `GET /posts/[id]/download` — auth: client
-
-Returns a JSON download bundle of a post (text + media URLs) with `Content-Disposition: attachment; filename="post-{id}.json"`. Designed for clients on `deliveryMode: download_only` who post the content themselves.
-
-Response body shape:
-```json
-{
-  "postId": "abc",
-  "orgId": "org_xyz",
-  "content": { "text": "..." },
-  "hashtags": ["#a", "#b"],
-  "platforms": ["twitter"],
-  "media": [{ "url": "...", "type": "image", "altText": "..." }],
-  "approvedAt": "...",
-  "downloadFormat": "json",
-  "generatedAt": "..."
-}
-```
-
-Logs `post.downloaded` audit entry on each call.
 
 #### `GET /posts/[id]/comments` — auth: client
 
@@ -473,6 +367,193 @@ Bulk create up to **50** posts. Accepts JSON or CSV.
 Expected columns: `content`, `platforms` (semicolon/pipe-separated), `scheduled_at`, `category`, `hashtags`, `tags`, `labels`
 
 Response: `{ "total": 5, "succeeded": 4, "failed": 1, "results": [{ "index": 0, "success": true, "id": "..." }, ...] }`
+
+---
+
+### Content Approval Flow
+
+The approval pipeline supports a two-stage review: **staff QA → client**. Which stages are active is controlled by per-org settings (`requiresQaApproval`, `requiresClientApproval`). Stages can be combined, skipped, or bypassed based on org configuration and per-post `requiresApproval` flag.
+
+#### Status Transitions
+
+```
+draft
+  └─ POST /submit ──► qa_review  (if requiresQa)
+                  ──► client_review  (if requiresClient only)
+                  ──► scheduled/vaulted  (if no approval required)
+
+qa_review
+  ├─ POST /qa-approve ──► client_review  (if requiresClient)
+  │                   ──► scheduled/vaulted  (if no client step)
+  └─ POST /qa-reject  ──► regenerating  (AI reruns, then back to qa_review)
+
+client_review
+  ├─ POST /client-approve ──► scheduled  (if scheduledAt set)
+  │                       ──► vaulted  (deliveryMode=download_only)
+  │                       ──► approved  (no date, auto_publish)
+  └─ POST /client-reject  ──► regenerating  (AI reruns, then back to qa_review)
+
+regenerating  (transient — AI is rewriting the post)
+  └─ (automated) ──► qa_review  (when regen completes)
+```
+
+`deliveryMode` values: `auto_publish` | `download_only` | `both`
+
+`vaulted` = approved content stored in the content vault for manual download/use.
+
+#### `POST /posts/[id]/submit` — auth: client
+
+Submit a `draft` post into the approval pipeline. The endpoint resolves the next status based on org settings.
+
+No body required (empty `{}` is fine).
+
+Response: `{ "id": "post_xyz", "status": "qa_review" }`
+
+Errors:
+- `400` — post is not in `draft` status
+
+#### `POST /posts/[id]/qa-approve` — auth: admin
+
+Staff QA approves the post. Transitions from `qa_review`.
+
+- If client review is required → status becomes `client_review`
+- If no client step → status becomes `scheduled` (or `vaulted` depending on `deliveryMode`)
+- If immediately scheduled, creates the queue entry.
+
+No body required.
+
+Response: `{ "id": "post_xyz", "status": "client_review" }`
+
+Errors:
+- `400` — invalid transition (post not in `qa_review`)
+
+#### `POST /posts/[id]/qa-reject` — auth: admin
+
+Staff QA rejects the post with feedback. Triggers automatic AI regeneration.
+
+Required body:
+```json
+{ "reason": "The tone is too casual. Make it more professional." }
+```
+
+- Writes a `qa_rejection` comment on the post (visible to agent via `GET /posts/[id]/comments`)
+- Increments `approval.rejectionCount`
+- Sets status to `regenerating`
+- Fires AI regeneration in the background — post returns to `qa_review` when done
+
+Response: `{ "id": "post_xyz", "status": "regenerating" }`
+
+#### `POST /posts/[id]/client-approve` — auth: client
+
+Client approves the post. Transitions from `client_review` (or legacy `pending_approval`).
+
+- Resolves final status based on `deliveryMode` and whether `scheduledAt` is set
+- Creates queue entry if status becomes `scheduled`
+
+No body required.
+
+Response: `{ "id": "post_xyz", "status": "scheduled" }`
+
+#### `POST /posts/[id]/client-reject` — auth: client
+
+Client rejects the post with feedback. Triggers automatic AI regeneration.
+
+Required body:
+```json
+{ "reason": "Please focus more on the product benefits, not the features." }
+```
+
+- Writes a `client_rejection` comment on the post
+- Increments `approval.rejectionCount`
+- Sets status to `regenerating`
+- Fires AI regeneration in the background — post returns to `qa_review` when done
+
+Response: `{ "id": "post_xyz", "status": "regenerating" }`
+
+#### `POST /posts/[id]/regenerate` — auth: client
+
+Manually trigger AI regeneration on a post. Use when you want to re-run the AI on a post that has unresolved rejection feedback without waiting for the automatic flow.
+
+Accepts posts in `qa_review`, `client_review`, or `pending_approval` (legacy). Body is optional / empty.
+
+The endpoint:
+1. Immediately sets status to `regenerating` (UI can show progress)
+2. Reads all rejection comments as feedback
+3. Runs AI to rewrite the post content
+4. Transitions back to `qa_review`
+
+Response:
+```json
+{
+  "id": "post_xyz",
+  "status": "qa_review",
+  "regenerationCount": 2,
+  "oldText": "Previous content...",
+  "newText": "Rewritten content...",
+  "feedbackUsed": 3
+}
+```
+
+Errors:
+- `400` — invalid transition or regeneration failure (status is reverted on failure)
+
+#### `GET /posts/[id]/download` — auth: client
+
+Download a post as a JSON bundle. Used for `deliveryMode: "download_only"` or `"both"` — gives the client a portable artefact with all post content.
+
+Response is served with `Content-Disposition: attachment; filename="post-{id}.json"` so browsers trigger a download.
+
+Downloaded JSON shape:
+```json
+{
+  "postId": "post_xyz",
+  "orgId": "org_abc123",
+  "content": { "text": "Post content here" },
+  "hashtags": ["#ai", "#marketing"],
+  "platforms": ["twitter", "linkedin"],
+  "media": [{ "url": "https://...", "type": "image", "altText": "" }],
+  "approvedAt": "2026-05-07T10:00:00Z",
+  "downloadFormat": "json",
+  "generatedAt": "2026-05-07T10:05:00Z"
+}
+```
+
+---
+
+### Content Vault
+
+The vault is a filtered view of posts that have passed final approval, regardless of whether they are scheduled for publishing. It surfaces content in statuses: `approved`, `scheduled`, `published`, `partially_published`, `vaulted`, `failed`.
+
+#### `GET /vault/` — auth: client
+
+List posts in the content vault for an org.
+
+Query params:
+- `orgId`
+- `platform` — filter by platform string
+- `label` — filter by label
+- `deliveryMode` — `auto_publish` | `download_only` | `both`
+- `from` — ISO 8601, filters by `approvedAt` (falls back to `scheduledAt` / `updatedAt`) ≥ this date
+- `to` — ISO 8601, same field ≤ this date
+
+**No pagination** — returns all matching posts sorted by `approvedAt` desc (falls back to `updatedAt`).
+
+Response data: Array of vault post objects:
+```json
+{
+  "id": "post_xyz",
+  "content": { "text": "..." },
+  "platforms": ["twitter"],
+  "hashtags": ["#ai"],
+  "deliveryMode": "auto_publish",
+  "approvedAt": "2026-05-07T10:00:00Z",
+  "scheduledAt": "2026-05-07T12:00:00Z",
+  "publishedAt": null,
+  "status": "scheduled",
+  "media": [],
+  "labels": []
+}
+```
 
 ---
 
@@ -554,11 +635,33 @@ Hard-deletes the media record (does not delete the underlying file from storage)
 
 #### `GET /platforms/` — auth: client
 
-List all supported platforms with capabilities and constraints.
+List all supported platforms with capabilities and constraints. Returns an array of platform constraint objects, each with an `active` boolean indicating whether the platform is currently wired for publishing.
+
+Query params: `orgId`
+
+Response: Array of platform objects (see `GET /platforms/[platform]` for shape).
 
 #### `GET /platforms/[platform]` — auth: client
 
-Get detailed info for a specific platform (character limits, media types, features).
+Get detailed constraint info for a specific platform. Useful for validating content before creating a post.
+
+Query params: `orgId`
+
+Response:
+```json
+{
+  "platform": "twitter",
+  "maxCharacters": 280,
+  "maxMediaItems": 4,
+  "supportedMediaTypes": ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4"],
+  "supportsThreads": true,
+  "supportsHashtags": true,
+  "supportsCarousel": false,
+  "active": true
+}
+```
+
+Returns `404` with `"Unknown platform: {name}"` for unsupported platform strings.
 
 ---
 
@@ -643,8 +746,20 @@ Response:
   },
   "byPlatform": { "twitter": 60, "linkedin": 40, "instagram": 42 },
   "approvalRate": 85,
-  "last30Days": 34
+  "last30Days": 34,
+  "last30DaysSeries": [
+    { "label": "W1", "value": 4 },
+    { "label": "W2", "value": 7 },
+    { "label": "W3", "value": 6 },
+    { "label": "W4", "value": 8 },
+    { "label": "W5", "value": 3 },
+    { "label": "W6", "value": 5 },
+    { "label": "W7", "value": 1 }
+  ]
 }
+```
+
+`last30DaysSeries` — 7 weekly buckets (W1 = oldest, W7 = most recent) of post counts by `createdAt`. Useful for sparkline/trend charts.
 ```
 
 ---
@@ -881,27 +996,27 @@ Response: `{ "versions": [{ "platform": "twitter", "text": "...", "hashtags": [.
 
 #### `POST /ai/image` — auth: admin
 
-Generate an image using AI (xAI Grok or Google Gemini Imagen 3). Provider is auto-selected based on which API key is configured; xAI takes priority.
+Generate an image using AI (xAI Grok `grok-2-image`). **xAI only** — Gemini/Imagen was removed 2026-05-04 due to runaway billing. The `provider` parameter is no longer accepted.
 
 Body:
 ```json
 {
   "prompt": "A professional product banner, modern design, blue tones",
-  "size": "1024x1024",
-  "provider": "xai"
+  "size": "1024x1024"
 }
 ```
 
+- `prompt` — required; max 4000 characters
 - `size`: `"1024x1024"` (square, default) | `"1024x1536"` (portrait) | `"1536x1024"` (landscape)
-- `provider`: `"xai"` | `"gemini"` — omit to auto-select
 
-Response: `{ "url": "https://... or data:URI", "revisedPrompt": "...", "provider": "xai" }`
+Response: `{ "url": "https://...", "revisedPrompt": "...", "provider": "xai" }`
 
-Note: Gemini returns a base64 data URI. Upload the result via `POST /media/` before attaching to a post.
+The `url` is a direct CDN URL from xAI. Upload it via `POST /media/` before attaching to a post if you need a stable Firebase Storage URL.
 
 Errors:
 - `429` — rate limit; retry later
 - `400` with "content policy" — rephrase the prompt
+- `500` — `XAI_API_KEY` not configured in environment
 
 #### `GET /ai/image-templates` — auth: none
 
@@ -1013,23 +1128,50 @@ Set `threadParts` instead of a plain content string. Media in `post.media[].url`
 1. POST /ai/generate  — get content options
 2. GET  /analytics/?view=best-times  — find best posting time
 3. POST /ai/hashtags  — generate hashtags
-4. GET  /ai/image-templates  — pick a template
-5. POST /ai/image  — generate image (returns URL or base64)
-6. POST /media/upload  — upload the binary to Firebase Storage (preferred over POST /media/)
+4. GET  /ai/image-templates  — pick a template, fill {{placeholders}}
+5. POST /ai/image  — generate image (returns xAI CDN URL)
+6. POST /media/upload  — re-upload to Firebase Storage for a stable URL (optional but recommended)
 7. POST /posts/  — create post with content, media URL, and time
 ```
 
-### 3. Post Approval Workflow
+### 5. Two-Stage Content Approval Workflow (QA → Client)
+
+This is the standard flow when both `requiresQaApproval` and `requiresClientApproval` are enabled for an org.
 
 ```
-1. POST /posts/  with status: "draft"
-2. GET  /posts/pending/  — admin reviews queue
-3. POST /posts/[id]/comments  — add review notes
-4. POST /posts/[id]/approve  { "action": "approve" }
-5. POST /posts/[id]/publish  — or wait for scheduled time
+1. POST /posts/                       — create with status: "draft"
+2. POST /posts/[id]/submit            — enter approval pipeline → status: "qa_review"
+3. GET  /posts/[id]/comments          — (agent) read any previous rejection feedback
+4. POST /posts/[id]/qa-approve        — staff approves → status: "client_review"
+   OR
+   POST /posts/[id]/qa-reject  { "reason": "..." }  → status: "regenerating"
+     └─ AI rewrites automatically → status: "qa_review" (back to step 4)
+5. POST /posts/[id]/client-approve    — client approves → status: "scheduled" or "vaulted"
+   OR
+   POST /posts/[id]/client-reject  { "reason": "..." }  → status: "regenerating"
+     └─ AI rewrites automatically → status: "qa_review" (back to step 4)
+6. POST /posts/[id]/publish           — or wait for scheduled time
 ```
 
-### 4. Set Up RSS Auto-Posting
+Legacy approval (single-stage via `/approve`):
+```
+POST /posts/[id]/approve  { "action": "approve" | "reject" }
+```
+Still works but does not trigger AI regeneration on reject.
+
+### 6. Content Vault Workflow
+
+For orgs with `deliveryMode: "download_only"` — content is approved but not auto-published.
+
+```
+1. POST /posts/          — create with status: "draft"
+2. POST /posts/[id]/submit  — enter pipeline
+3. (approval stages as above)
+4. GET  /vault/          — client browses approved content
+5. GET  /posts/[id]/download  — download specific post as JSON bundle
+```
+
+### 7. Set Up RSS Auto-Posting
 
 ```
 1. POST /rss/feeds/  — create feed with feedUrl, targetPlatforms[], postTemplate
@@ -1039,17 +1181,17 @@ Set `threadParts` instead of a plain content string. Media in `post.media[].url`
 5. POST /rss/feeds/[feedId]  { "action": "pause" | "resume" }
 ```
 
-### 5. Check Analytics and Best Posting Times
+### 8. Check Analytics and Best Posting Times
 
 ```
 1. GET /analytics/?orgId=org_abc123&view=best-times&platform=twitter
 2. GET /analytics/?orgId=org_abc123&platform=twitter  — post snapshots
 3. GET /analytics/[postId]  — per-post breakdown with latest per platform
 4. POST /analytics/[postId]  — force-refresh from platform
-5. GET /stats/?orgId=org_abc123  — quick summary
+5. GET /stats/?orgId=org_abc123  — quick summary (includes last30DaysSeries trend)
 ```
 
-### 6. Connect a New Social Account via OAuth
+### 9. Connect a New Social Account via OAuth
 
 ```
 1. Redirect user to: GET /oauth/[platform]?orgId=org_abc123
@@ -1061,7 +1203,7 @@ Set `threadParts` instead of a plain content string. Media in `post.media[].url`
 
 For Bluesky: skip OAuth. Create the account directly with `POST /accounts/` using app password credentials.
 
-### 7. Repurpose Content Across Platforms
+### 10. Repurpose Content Across Platforms
 
 ```
 1. POST /ai/repurpose  — pass `text` (original content) and `targetPlatforms`
@@ -1069,7 +1211,7 @@ For Bluesky: skip OAuth. Create the account directly with `POST /accounts/` usin
 3. POST /posts/bulk/  — create all platform variants
 ```
 
-### 8. Monitor Inbox Engagement
+### 11. Monitor Inbox Engagement
 
 ```
 1. GET /inbox/?orgId=org_abc123&status=unread

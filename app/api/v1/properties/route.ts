@@ -8,6 +8,7 @@ import { actorFrom } from '@/lib/api/actor'
 import { generateIngestKey } from '@/lib/properties/ingest-key'
 import { VALID_PROPERTY_TYPES, VALID_PROPERTY_STATUSES } from '@/lib/properties/types'
 import type { CreatePropertyInput } from '@/lib/properties/types'
+import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,7 +79,11 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
 
   try {
     const ref = await adminDb.collection('properties').add(doc)
-    // TODO: dispatch property.created webhook
+    try {
+      await dispatchWebhook(body.orgId, 'property.created', { id: ref.id, name: doc.name, domain: doc.domain, type: doc.type })
+    } catch (err) {
+      console.error('[webhook-dispatch-error] property.created', err)
+    }
     return apiSuccess({ id: ref.id, ...doc, ingestKey }, 201)
   } catch (err) {
     console.error('[properties-create-error]', err)

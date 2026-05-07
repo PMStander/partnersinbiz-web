@@ -3,19 +3,26 @@ name: platform-ops
 description: >
   Cross-cutting platform operations on Partners in Biz: API key management, global search,
   dashboard stats, activity feed, file uploads and library, workspace inbox (unified across all
-  resources), notifications, outbound webhooks with delivery history and replay, and the agent
-  manifest. Also the canonical reference for collaboration primitives (idempotency, actor tagging,
-  unified comments, mentions) that all other skills use. Use this skill whenever the user mentions
-  anything operational or cross-cutting, including: "dashboard stats", "platform stats",
-  "global search", "search across everything", "find a doc", "find a contact", "API key",
-  "create API key", "rotate key", "revoke key", "list keys", "upload a file", "file library",
-  "list files", "find file", "delete file", "system health", "uptime", "platform health",
-  "my inbox", "workspace inbox", "what needs my attention", "assigned to me", "pending approvals",
+  resources), notifications, outbound webhooks with delivery history and replay, the agent
+  manifest, platform staff management (super-admin), all report types (revenue, pipeline,
+  outstanding invoices, client lifetime value, expense summary, activity summary, team
+  utilization, monthly reports), and FX exchange rates. Also the canonical reference for
+  collaboration primitives (idempotency, actor tagging, unified comments, mentions) that all
+  other skills use. Use this skill whenever the user mentions anything operational or
+  cross-cutting, including: "dashboard stats", "platform stats", "global search",
+  "search across everything", "find a doc", "find a contact", "API key", "create API key",
+  "rotate key", "revoke key", "list keys", "upload a file", "file library", "list files",
+  "find file", "delete file", "system health", "uptime", "platform health", "my inbox",
+  "workspace inbox", "what needs my attention", "assigned to me", "pending approvals",
   "overdue items", "mentions", "mark as read", "snooze notification", "notifications",
   "mark all read", "create webhook", "outbound webhook", "subscribe to events", "HMAC verify",
-  "webhook delivery", "webhook history", "test webhook", "replay failed webhook", "disable webhook",
-  "agent manifest", "what can the agent do", "leave a comment", "@mention teammate",
-  "activity feed", "audit log", "recent activity". If in doubt, trigger.
+  "webhook delivery", "webhook history", "test webhook", "replay failed webhook",
+  "disable webhook", "agent manifest", "what can the agent do", "leave a comment",
+  "@mention teammate", "activity feed", "audit log", "recent activity", "platform users",
+  "add staff", "invite admin", "super admin", "allowedOrgIds", "restrict admin access",
+  "revenue report", "pipeline report", "outstanding invoices report", "client value",
+  "expense summary", "activity summary", "team utilization", "monthly report",
+  "generate report", "send report", "FX rates", "exchange rates", "currency rates". If in doubt, trigger.
 ---
 
 # Platform Ops — Partners in Biz Platform API
@@ -496,3 +503,425 @@ GET /webhooks/wh_xyz/deliveries?limit=50
 6. **Prefer soft-delete** — `DELETE` is soft by default; only use `?force=true` when you're certain.
 7. **Search is eventually consistent** — freshly-created items may not appear for ~1 min.
 8. **Activity log everything** — use `POST /activity` (auto-written by most routes) for a durable audit trail.
+
+---
+
+## Platform Users (super-admin staff management)
+
+These endpoints manage PiB **internal staff** (users with `role === 'admin'`). They are restricted to **super admins only** — an admin whose `allowedOrgIds` array is empty. A restricted admin (non-empty `allowedOrgIds`) cannot call these endpoints; this prevents silent self-elevation.
+
+### User model
+
+```json
+{
+  "uid": "firebase_uid",
+  "email": "staff@partnersinbiz.online",
+  "displayName": "Alice Smith",
+  "role": "admin",
+  "orgId": "PIB_PLATFORM_ORG_ID",
+  "allowedOrgIds": ["org_abc", "org_xyz"],
+  "isSuperAdmin": false,
+  "createdAt": "...",
+  "updatedAt": "..."
+}
+```
+
+`isSuperAdmin` is a derived field: `true` when `allowedOrgIds.length === 0`. It is never stored; it is computed on every read.
+
+### `allowedOrgIds` scoping concept
+
+- **Super admin** — `allowedOrgIds: []` (empty). Sees and manages every org on the platform.
+- **Restricted admin** — `allowedOrgIds: ["org_a", "org_b"]`. UI and API scope them to those orgs only.
+- To convert a restricted admin to super admin, PATCH with `allowedOrgIds: []`.
+- A super admin **cannot restrict their own account** via PATCH — they must ask a different super admin. This prevents accidental self-lockout.
+
+### `GET /admin/platform-users` — auth: super-admin
+
+Lists all users with `role === 'admin'`, sorted newest first.
+
+Response:
+```json
+[
+  { "uid": "...", "email": "...", "displayName": "...", "role": "admin",
+    "orgId": "...", "allowedOrgIds": ["org_abc"], "isSuperAdmin": false,
+    "createdAt": "...", "updatedAt": "..." }
+]
+```
+
+### `POST /admin/platform-users` — auth: super-admin
+
+Creates a new platform staff account. Finds or creates the Firebase Auth user, writes the `users` doc, then optionally sends a welcome email with a password-setup link.
+
+Body:
+```json
+{
+  "email": "newstaff@example.com",
+  "name": "Bob Jones",
+  "allowedOrgIds": ["org_abc"],
+  "sendWelcomeEmail": true
+}
+```
+
+- `allowedOrgIds` — omit or pass `[]` for a super admin; pass org IDs to restrict.
+- `sendWelcomeEmail` — defaults to `true`. Sends a branded email from the platform address with a Firebase password-reset link so the new user can set their own password.
+- If a user with this email already exists as a **non-admin** role (e.g. `member`), returns `409` — resolve in the team page first.
+
+Response (201):
+```json
+{
+  "uid": "...", "email": "...", "displayName": "...", "role": "admin",
+  "orgId": "PIB_PLATFORM_ORG_ID", "allowedOrgIds": [],
+  "isSuperAdmin": true,
+  "setupLink": "https://..."
+}
+```
+
+`setupLink` is the Firebase password-reset URL returned once at creation. Store or send it immediately — it is not re-exposed later.
+
+### `GET /admin/platform-users/[uid]` — auth: super-admin
+
+Returns a single platform admin by UID. Returns `404` if the UID exists but is not an admin.
+
+### `PATCH /admin/platform-users/[uid]` — auth: super-admin
+
+Updatable fields:
+- `name` — updates both Firestore `displayName` and Firebase Auth display name. Cannot be empty string.
+- `allowedOrgIds` — replaces the full list. Pass `[]` to promote to super admin. Deduplication and trimming applied automatically.
+
+Self-restriction guardrail: if `uid === caller.uid` and `allowedOrgIds` is non-empty, returns `400` — ask another super admin to do it.
+
+Response: updated user object.
+
+### `DELETE /admin/platform-users/[uid]` — auth: super-admin
+
+Deletes the Firebase Auth user (revokes all sessions) and removes the Firestore `users` doc. Cannot delete yourself — returns `400`.
+
+Response: `{ "uid": "...", "deleted": true }`.
+
+### Workflow: onboard a new staff member
+
+```bash
+# 1. Create the account (welcome email sent automatically)
+POST /admin/platform-users
+{ "email": "alice@example.com", "name": "Alice Smith",
+  "allowedOrgIds": ["org_client1", "org_client2"] }
+# → { uid, setupLink }
+
+# 2. If the email failed or they need a new link, use Firebase Console
+#    or re-POST with sendWelcomeEmail: true (idempotent — merges the doc)
+
+# 3. Promote to super admin later
+PATCH /admin/platform-users/<uid>
+{ "allowedOrgIds": [] }
+
+# 4. Off-board
+DELETE /admin/platform-users/<uid>
+```
+
+---
+
+## Reports
+
+Two separate report surfaces:
+
+1. **Snapshot reports** (`POST /reports`) — generates and stores a full monthly report doc (with KPIs, executive summary, brand snapshot). Listed via `GET /reports`.
+2. **Ad-hoc query reports** (`GET /reports/revenue`, `/pipeline`, etc.) — live queries, no persistence. Use these for dashboard widgets and agent decisions.
+
+### Snapshot reports
+
+#### `GET /reports?orgId=X` — auth: admin
+
+Lists previously generated report documents for an org.
+
+Query: `orgId` (required), `limit` (default 24, max 100).
+
+Response: `{ ok: true, reports: [...] }`.
+
+#### `POST /reports` — auth: admin
+
+Generates and stores a new report. Uses the org's timezone from the `organizations` collection (defaults to UTC).
+
+Body:
+```json
+{
+  "orgId": "org_abc",
+  "type": "monthly",
+  "month": "2026-04",
+  "start": "2026-04-01",
+  "end": "2026-04-30",
+  "propertyId": "prop_xyz"
+}
+```
+
+- `type` — `"monthly"` (default) or any `ReportType`.
+- `month` — `YYYY-MM` format. Resolved to the org's timezone month boundaries. Defaults to last completed month.
+- `start` / `end` — ISO dates for a custom range (overrides `month`).
+- `propertyId` — optional property scope; omit for org-wide.
+
+Response: `{ ok: true, report: { id, orgId, type, period, kpis, exec_summary, highlights, status, publicToken, brand, ... } }`.
+
+Note: `maxDuration` is 60s — report generation can be slow.
+
+#### `GET /reports/[id]` — auth: admin
+
+Fetches one report by ID. Returns `404` if not found.
+
+Response: `{ ok: true, report: {...} }`.
+
+#### `PATCH /reports/[id]` — auth: admin
+
+Editable fields on a stored report:
+- `exec_summary` (string)
+- `highlights` (string array, max 8 items)
+- `status` (`"draft"` | `"sent"` | `"archived"`)
+
+Response: `{ ok: true, report: { updated fields... } }`.
+
+#### `DELETE /reports/[id]` — auth: admin
+
+Soft-archives the report by setting `status: "archived"`. The doc is not removed.
+
+Response: `{ ok: true }`.
+
+#### `POST /reports/[id]/send` — auth: admin
+
+Emails the report to one or more recipients via Resend. Sends a branded HTML email with top-level KPI summary and a CTA button linking to the public report page (`/reports/<publicToken>`). Marks the stored report `status: "sent"`.
+
+Body:
+```json
+{ "to": ["client@example.com", "cfo@example.com"] }
+```
+
+Requirements: report must have a `publicToken` and `RESEND_API_KEY` must be configured.
+
+Response: `{ ok: true, link: "https://partnersinbiz.online/reports/<token>", recipients: [...] }`.
+
+Note: `maxDuration` is 30s.
+
+### Ad-hoc query reports
+
+All ad-hoc report endpoints are live queries — no stored state. Returns empty results gracefully when collections don't exist yet.
+
+#### `GET /reports/revenue` — auth: admin
+
+Revenue grouped into time buckets from paid invoices.
+
+Query:
+- `orgId` (required)
+- `from` (required, ISO date) — inclusive, matched against `paidAt`
+- `to` (required, ISO date) — inclusive
+- `groupBy` — `"month"` (default) | `"quarter"` | `"week"` | `"day"`
+
+Response:
+```json
+{
+  "from": "2026-01-01T00:00:00.000Z",
+  "to": "2026-04-30T23:59:59.000Z",
+  "groupBy": "month",
+  "buckets": [
+    { "label": "2026-01", "total": 45000, "count": 3 },
+    { "label": "2026-02", "total": 62000, "count": 5 }
+  ],
+  "grandTotal": 107000,
+  "currency": "ZAR"
+}
+```
+
+Mixed-currency response includes `"mixed": true` and per-bucket `byCurrency: { "ZAR": N, "USD": N }` instead of top-level `currency`.
+
+Bucket label formats: `YYYY-MM` (month), `YYYY-Www` (week, ISO), `YYYY-Qq` (quarter), `YYYY-MM-DD` (day).
+
+#### `GET /reports/pipeline` — auth: admin
+
+Deal pipeline snapshot grouped by stage.
+
+Query: `orgId` (required).
+
+Response:
+```json
+{
+  "byStage": {
+    "prospect":    { "count": 8,  "value": 80000 },
+    "proposal":    { "count": 4,  "value": 55000 },
+    "negotiation": { "count": 2,  "value": 30000 },
+    "won":         { "count": 12, "value": 140000 },
+    "lost":        { "count": 3,  "value": 25000 }
+  },
+  "totalOpen":      165000,
+  "totalClosedWon": 140000,
+  "totalClosedLost": 25000,
+  "winRate": 0.8
+}
+```
+
+`winRate` = `closedWonCount / (closedWonCount + closedLostCount)`. Excludes deleted deals.
+
+#### `GET /reports/outstanding` — auth: admin
+
+Outstanding (unpaid) invoices aged by `dueDate`. Statuses included: `sent`, `overdue`, `payment_pending_verification`.
+
+Query: `orgId` (required).
+
+Response:
+```json
+{
+  "buckets": {
+    "0-30":  { "count": 3, "total": 15000 },
+    "31-60": { "count": 1, "total": 8000  },
+    "61-90": { "count": 0, "total": 0     },
+    "90+":   { "count": 2, "total": 22000 }
+  },
+  "total": 45000,
+  "count": 6,
+  "currency": "ZAR"
+}
+```
+
+Invoices with no `dueDate` are placed in `0-30`. Mixed currencies add `"mixed": true` and remove top-level `currency`.
+
+#### `GET /reports/client-value` — auth: admin
+
+Lifetime paid invoice value ranked by client org.
+
+Query:
+- `orgId` (required) — billing org scope
+- `limit` (optional, default 20, max 100)
+
+Response:
+```json
+{
+  "clients": [
+    {
+      "clientOrgId": "org_abc",
+      "clientName":  "Acme Corp",
+      "lifetimeValue": 185000,
+      "invoiceCount": 14,
+      "lastInvoiceAt": "2026-04-10T00:00:00.000Z"
+    }
+  ],
+  "total": 185000
+}
+```
+
+Sorted descending by `lifetimeValue`. `clientName` is sourced from the snapshotted `clientDetails.name` field on each invoice.
+
+#### `GET /reports/expense-summary` — auth: admin
+
+Expenses grouped by category, project, or user within a date window.
+
+Query:
+- `orgId` (required)
+- `from` (ISO, optional — defaults to 30 days ago)
+- `to` (ISO, optional — defaults to now)
+- `groupBy` — `"category"` (default) | `"project"` | `"user"`
+
+Response:
+```json
+{
+  "from": "...", "to": "...", "groupBy": "category",
+  "buckets": [
+    { "label": "travel",    "total": 12000, "count": 5, "billable": 3, "reimbursable": 2 },
+    { "label": "software",  "total": 4500,  "count": 2, "billable": 2, "reimbursable": 0 }
+  ],
+  "grandTotal": 16500,
+  "currency": "ZAR"
+}
+```
+
+`billable` and `reimbursable` are counts (not amounts) of entries in the bucket with those flags set. Sorted descending by `total`. Returns empty buckets if the `expenses` collection doesn't exist.
+
+#### `GET /reports/activity-summary` — auth: admin
+
+Cross-module activity counts over a date window.
+
+Query:
+- `orgId` (required)
+- `from` (ISO, optional — defaults to 30 days ago)
+- `to` (ISO, optional — defaults to now)
+
+Response:
+```json
+{
+  "from": "...", "to": "...",
+  "counts": {
+    "socialPosts":      12,
+    "emailsSent":       84,
+    "invoicesCreated":   7,
+    "dealsUpdated":     15,
+    "contactsAdded":    23,
+    "tasksCompleted":   31
+  }
+}
+```
+
+Each sub-collection query is wrapped in `try/catch` — a missing collection or missing index returns `0` for that metric rather than failing the whole response.
+
+#### `GET /reports/team-utilization` — auth: admin
+
+Billable vs non-billable time per user from the `time_entries` collection (owned by the A7 time-tracking module).
+
+Query:
+- `orgId` (required)
+- `from` (ISO, optional — defaults to 30 days ago)
+- `to` (ISO, optional — defaults to now)
+
+Response:
+```json
+{
+  "users": [
+    {
+      "userId": "uid_abc",
+      "totalMinutes": 2400,
+      "billableMinutes": 1920,
+      "nonBillableMinutes": 480,
+      "utilizationPct": 80.0
+    }
+  ],
+  "totalMinutes": 2400,
+  "avgUtilizationPct": 80.0
+}
+```
+
+`utilizationPct` = `billableMinutes / totalMinutes * 100`, rounded to 2 decimal places. Users sorted descending by `totalMinutes`. Returns zeroed totals if `time_entries` doesn't exist yet.
+
+---
+
+## FX Rates
+
+#### `GET /fx/rates` — auth: public (no API key required)
+
+Returns cached FX-to-ZAR rates for a given date. Rates are not sensitive and are readable without authentication.
+
+Query:
+- `date` (optional, `YYYY-MM-DD`) — defaults to today.
+
+Response:
+```json
+{
+  "ok": true,
+  "date": "2026-05-07",
+  "base": "ZAR",
+  "source": "...",
+  "rates": {
+    "USD": 18.45,
+    "EUR": 19.82,
+    "GBP": 23.10
+  }
+}
+```
+
+`rates` maps currency codes to their value in the base currency (ZAR). Rates are pre-fetched and cached — this endpoint reads the cache, it does not trigger a live fetch.
+
+Error (400): `date must be YYYY-MM-DD`.
+Error (500): cache miss or upstream fetch failure.
+
+### Workflow: convert an invoice amount to ZAR
+
+```bash
+# 1. Get today's rates
+GET /fx/rates
+# → { rates: { USD: 18.45, EUR: 19.82 } }
+
+# 2. Multiply invoice.total by rates[invoice.currency]
+# e.g. USD 1000 * 18.45 = ZAR 18,450
+```

@@ -25,6 +25,9 @@ export type WebhookEvent =
   | 'payment.received'
   | 'expense.submitted'
   | 'task.completed'
+  | 'property.created'
+  | 'property.updated'
+  | 'campaign.launched'
 
 /**
  * List of valid event strings for runtime validation (e.g. POST body checks).
@@ -48,6 +51,9 @@ export const VALID_WEBHOOK_EVENTS: WebhookEvent[] = [
   'payment.received',
   'expense.submitted',
   'task.completed',
+  'property.created',
+  'property.updated',
+  'campaign.launched',
 ]
 
 export interface OutboundWebhook {
