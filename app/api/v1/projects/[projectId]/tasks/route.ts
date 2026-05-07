@@ -4,6 +4,11 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { logActivity } from '@/lib/activity/log'
+import {
+  buildProjectTaskCreateData,
+  notificationPriority,
+  taskOrderMillis,
+} from '@/lib/projects/taskPayload'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,22 +20,30 @@ export const GET = withAuth('client', async (req: NextRequest, user, ctx) => {
     .collection('projects')
     .doc(projectId)
     .collection('tasks')
-    .orderBy('order', 'asc')
     .get()
 
-  const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+  const tasks = snapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .sort((a, b) => taskOrderMillis((a as Record<string, unknown>).order) - taskOrderMillis((b as Record<string, unknown>).order))
   return apiSuccess(tasks)
 })
 
 export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
   const { projectId } = await (ctx as RouteContext).params
-  const body = await req.json().catch(() => ({}))
-  if (!body.title) return apiError('title is required', 400)
+  const body = await req.json().catch(() => ({})) as Record<string, unknown>
 
-  const doc = {
-    ...body,
-    projectId,
-    order: body.order ?? Date.now(),
+  const projectRef = adminDb.collection('projects').doc(projectId)
+  const projectDoc = await projectRef.get()
+  if (!projectDoc.exists) return apiError('Project not found', 404)
+  const project = projectDoc.data() ?? {}
+
+  const taskData = buildProjectTaskCreateData(body, projectId, typeof project.orgId === 'string' ? project.orgId : undefined)
+  if (!taskData.ok) return apiError(taskData.error, taskData.status ?? 400)
+
+  const doc: Record<string, unknown> = {
+    ...taskData.value,
+    reporterId: user.uid,
+    createdBy: user.uid,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }
@@ -41,9 +54,7 @@ export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
     .collection('tasks')
     .add(doc)
 
-  // Log activity event (fire and forget)
-  const projectDoc = await adminDb.collection('projects').doc(projectId).get()
-  const orgId = projectDoc.data()?.orgId
+  const orgId = typeof doc.orgId === 'string' ? doc.orgId : undefined
   if (orgId) {
     const actorName = user.uid === 'ai-agent'
       ? 'AI Agent'
@@ -55,11 +66,34 @@ export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
       actorId: user.uid,
       actorName,
       actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
-      description: `Created task: "${body.title}"`,
+      description: `Created task: "${doc.title}"`,
       entityId: ref.id,
       entityType: 'task',
-      entityTitle: body.title,
+      entityTitle: String(doc.title),
     }).catch(() => {})
+
+    const notifyUserIds = new Set<string>([
+      ...(Array.isArray(doc.assigneeIds) ? doc.assigneeIds.filter((id): id is string => typeof id === 'string') : []),
+      ...(Array.isArray(doc.mentionIds) ? doc.mentionIds.filter((id): id is string => typeof id === 'string') : []),
+    ])
+    for (const userId of notifyUserIds) {
+      if (userId === user.uid) continue
+      adminDb.collection('notifications').add({
+        orgId,
+        userId,
+        agentId: null,
+        type: 'task.assigned',
+        title: 'Task assigned to you',
+        body: String(doc.title),
+        link: `/admin/projects/${projectId}?task=${ref.id}`,
+        data: { projectId, taskId: ref.id },
+        status: 'unread',
+        priority: notificationPriority(doc.priority),
+        snoozedUntil: null,
+        readAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+      }).catch(() => {})
+    }
   }
 
   return apiSuccess({ id: ref.id }, 201)

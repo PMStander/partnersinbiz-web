@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -9,6 +9,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
@@ -18,42 +19,14 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable,
-  arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-
-// ── Types ─────────────────────────────────────────────────────────────────
-
-interface Attachment {
-  url: string
-  name: string
-  size?: number
-  type?: string
-}
-
-interface Task {
-  id: string
-  title: string
-  description?: string
-  priority?: string
-  columnId: string
-  labels?: string[]
-  attachments?: Attachment[]
-  dueDate?: any
-  order: number
-}
-
-interface Column {
-  id: string
-  name: string
-  color: string
-  order: number
-}
+import type { Column, Task, TeamMember } from './types'
 
 interface KanbanBoardProps {
   columns: Column[]
   tasks: Task[]
-  projectId: string
+  members?: TeamMember[]
   onTaskMove: (taskId: string, newColumnId: string, newOrder: number) => Promise<void>
   onTaskClick: (task: Task) => void
   onAddTask: (columnId: string) => void
@@ -65,27 +38,86 @@ const PRIORITY_STYLES: Record<string, { color: string; label: string }> = {
   urgent: { color: '#ef4444', label: 'Urgent' },
   high:   { color: 'var(--color-accent-v2)', label: 'High' },
   medium: { color: '#60a5fa', label: 'Medium' },
+  normal: { color: '#60a5fa', label: 'Normal' },
   low:    { color: 'var(--color-outline)', label: 'Low' },
+}
+
+function timestampToDate(value: unknown): Date | null {
+  if (!value) return null
+  if (value instanceof Date) return value
+  if (typeof value === 'string') {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+  if (typeof value === 'object') {
+    const timestamp = value as { toDate?: () => Date; seconds?: number; _seconds?: number }
+    if (typeof timestamp.toDate === 'function') return timestamp.toDate()
+    const seconds = timestamp.seconds ?? timestamp._seconds
+    if (typeof seconds === 'number') return new Date(seconds * 1000)
+  }
+  return null
+}
+
+function formatDueDate(value: unknown): string | null {
+  const date = timestampToDate(value)
+  if (!date) return null
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function isDueSoon(value: unknown): boolean {
+  const date = timestampToDate(value)
+  if (!date) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const limit = new Date(today)
+  limit.setDate(today.getDate() + 3)
+  return date >= today && date <= limit
+}
+
+function attachmentKind(task: Task): 'image' | 'video' | 'file' | null {
+  const first = task.attachments?.[0]
+  if (!first) return null
+  const type = (first.mimeType ?? first.type ?? '').toLowerCase()
+  if (type.startsWith('image/')) return 'image'
+  if (type.startsWith('video/')) return 'video'
+  return 'file'
+}
+
+function memberInitials(member?: TeamMember): string {
+  const label = member?.displayName || member?.email || '?'
+  return label
+    .split(/[ @.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || '?'
 }
 
 // ── Task Card ─────────────────────────────────────────────────────────────
 
 function TaskCard({
   task,
+  members,
   onClick,
   isDragging = false,
 }: {
   task: Task
+  members?: TeamMember[]
   onClick: () => void
   isDragging?: boolean
 }) {
   const priority = PRIORITY_STYLES[task.priority ?? 'medium']
   const attachmentCount = task.attachments?.length ?? 0
+  const dueLabel = formatDueDate(task.dueDate)
+  const kind = attachmentKind(task)
+  const assigneeIds = task.assigneeIds?.length ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : []
+  const checklistDone = task.checklist?.filter((item) => item.done).length ?? 0
+  const checklistTotal = task.checklist?.length ?? 0
 
   return (
     <div
       onClick={onClick}
-      className="pib-card cursor-pointer select-none transition-all duration-150 hover:border-[var(--color-accent-subtle)]"
+      className="pib-card cursor-pointer select-none transition-all duration-150 hover:border-[var(--color-accent-v2)]"
       style={{
         opacity: isDragging ? 0.5 : 1,
         borderLeft: `3px solid ${priority.color}`,
@@ -95,6 +127,12 @@ function TaskCard({
       <p className="text-sm font-medium text-on-surface mb-1 leading-snug">{task.title}</p>
       {task.description && (
         <p className="text-xs text-on-surface-variant line-clamp-2 mb-2">{task.description}</p>
+      )}
+      {kind === 'image' && task.attachments?.[0]?.url && (
+        <div className="mt-2 mb-2 aspect-video overflow-hidden rounded border border-[var(--color-card-border)] bg-[var(--color-surface-container)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={task.attachments[0].url} alt="" className="h-full w-full object-cover" />
+        </div>
       )}
       <div className="flex items-center gap-2 flex-wrap mt-2">
         <span
@@ -108,11 +146,50 @@ function TaskCard({
             {l}
           </span>
         ))}
-        {attachmentCount > 0 && (
-          <span className="text-[9px] text-on-surface-variant ml-auto">
-            📎 {attachmentCount}
-          </span>
-        )}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-on-surface-variant">
+        <div className="flex items-center gap-2 min-w-0">
+          {dueLabel && (
+            <span className={`inline-flex items-center gap-1 ${isDueSoon(task.dueDate) ? 'text-[var(--color-accent-v2)]' : ''}`}>
+              <span className="material-symbols-outlined text-[14px]">event</span>
+              {dueLabel}
+            </span>
+          )}
+          {checklistTotal > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">checklist</span>
+              {checklistDone}/{checklistTotal}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {attachmentCount > 0 && (
+            <span className="inline-flex items-center gap-0.5">
+              <span className="material-symbols-outlined text-[14px]">
+                {kind === 'video' ? 'movie' : kind === 'image' ? 'image' : 'attach_file'}
+              </span>
+              {attachmentCount}
+            </span>
+          )}
+          {assigneeIds.slice(0, 3).map((id) => {
+            const member = members?.find((m) => m.userId === id)
+            return (
+              <span
+                key={id}
+                title={member?.displayName || member?.email || id}
+                className="-ml-1 first:ml-0 grid h-5 w-5 place-items-center rounded-full border border-[var(--color-card-border)] bg-[var(--color-surface-container)] text-[9px] font-semibold text-on-surface"
+              >
+                {member?.photoURL ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={member.photoURL} alt="" className="h-full w-full rounded-full object-cover" />
+                ) : (
+                  memberInitials(member)
+                )}
+              </span>
+            )
+          })}
+          {assigneeIds.length > 3 && <span>+{assigneeIds.length - 3}</span>}
+        </div>
       </div>
     </div>
   )
@@ -120,7 +197,7 @@ function TaskCard({
 
 // ── Sortable Task Card ────────────────────────────────────────────────────
 
-function SortableTaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
+function SortableTaskCard({ task, members, onClick }: { task: Task; members?: TeamMember[]; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
 
   return (
@@ -130,7 +207,7 @@ function SortableTaskCard({ task, onClick }: { task: Task; onClick: () => void }
       {...attributes}
       {...listeners}
     >
-      <TaskCard task={task} onClick={onClick} isDragging={isDragging} />
+      <TaskCard task={task} members={members} onClick={onClick} isDragging={isDragging} />
     </div>
   )
 }
@@ -140,15 +217,18 @@ function SortableTaskCard({ task, onClick }: { task: Task; onClick: () => void }
 function KanbanColumn({
   column,
   tasks,
+  members,
   onTaskClick,
   onAddTask,
 }: {
   column: Column
   tasks: Task[]
+  members?: TeamMember[]
   onTaskClick: (task: Task) => void
   onAddTask: () => void
 }) {
   const taskIds = tasks.map(t => t.id)
+  const { setNodeRef, isOver } = useDroppable({ id: column.id })
 
   return (
     <div className="flex flex-col w-72 shrink-0">
@@ -177,9 +257,13 @@ function KanbanColumn({
 
       {/* Task drop zone */}
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col gap-2 min-h-24 flex-1">
+        <div
+          ref={setNodeRef}
+          className="flex flex-col gap-2 min-h-24 flex-1 rounded-lg transition-colors"
+          style={isOver ? { background: 'color-mix(in oklab, var(--color-accent-v2) 8%, transparent)' } : undefined}
+        >
           {tasks.map(task => (
-            <SortableTaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} />
+            <SortableTaskCard key={task.id} task={task} members={members} onClick={() => onTaskClick(task)} />
           ))}
           {tasks.length === 0 && (
             <div
@@ -197,9 +281,13 @@ function KanbanColumn({
 
 // ── Main Board ────────────────────────────────────────────────────────────
 
-export function KanbanBoard({ columns, tasks: initialTasks, projectId, onTaskMove, onTaskClick, onAddTask }: KanbanBoardProps) {
+export function KanbanBoard({ columns, tasks: initialTasks, members, onTaskMove, onTaskClick, onAddTask }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks)
   const [activeTask, setActiveTask] = useState<Task | null>(null)
+
+  useEffect(() => {
+    setTasks(initialTasks)
+  }, [initialTasks])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -228,7 +316,8 @@ export function KanbanBoard({ columns, tasks: initialTasks, projectId, onTaskMov
 
     // Determine target column
     const overTask = tasks.find(t => t.id === over.id)
-    const targetColumnId = overTask ? overTask.columnId : (over.id as string)
+    const overColumn = columns.find(c => c.id === over.id)
+    const targetColumnId = overTask ? overTask.columnId : overColumn ? overColumn.id : activeTask.columnId
 
     if (activeTask.columnId !== targetColumnId) {
       setTasks(prev => prev.map(t =>
@@ -246,10 +335,26 @@ export function KanbanBoard({ columns, tasks: initialTasks, projectId, onTaskMov
     if (!movedTask) return
 
     const overTask = tasks.find(t => t.id === over.id)
-    const targetColumnId = overTask ? overTask.columnId : (over.id as string)
-    const newOrder = overTask ? overTask.order - 0.5 : Date.now()
+    const overColumn = columns.find(c => c.id === over.id)
+    const targetColumnId = overTask ? overTask.columnId : overColumn ? overColumn.id : movedTask.columnId
+    const columnTasks = tasks
+      .filter(t => t.columnId === targetColumnId && t.id !== movedTask.id)
+      .sort((a, b) => a.order - b.order)
+    const targetIndex = overTask ? Math.max(0, columnTasks.findIndex(t => t.id === overTask.id)) : columnTasks.length
+    const previousOrder = targetIndex > 0 ? columnTasks[targetIndex - 1]?.order : undefined
+    const nextOrder = columnTasks[targetIndex]?.order
+    const newOrder =
+      typeof previousOrder === 'number' && typeof nextOrder === 'number'
+        ? (previousOrder + nextOrder) / 2
+        : typeof nextOrder === 'number'
+          ? nextOrder - 1
+          : typeof previousOrder === 'number'
+            ? previousOrder + 1
+            : Date.now()
 
-    // Optimistic update already applied in handleDragOver
+    setTasks(prev => prev.map(t =>
+      t.id === active.id ? { ...t, columnId: targetColumnId, order: newOrder } : t
+    ))
     await onTaskMove(movedTask.id, targetColumnId, newOrder)
   }
 
@@ -267,6 +372,7 @@ export function KanbanBoard({ columns, tasks: initialTasks, projectId, onTaskMov
             key={column.id}
             column={column}
             tasks={getTasksForColumn(column.id)}
+            members={members}
             onTaskClick={onTaskClick}
             onAddTask={() => onAddTask(column.id)}
           />
@@ -274,7 +380,7 @@ export function KanbanBoard({ columns, tasks: initialTasks, projectId, onTaskMov
       </div>
 
       <DragOverlay>
-        {activeTask ? <TaskCard task={activeTask} onClick={() => {}} /> : null}
+        {activeTask ? <TaskCard task={activeTask} members={members} onClick={() => {}} /> : null}
       </DragOverlay>
     </DndContext>
   )

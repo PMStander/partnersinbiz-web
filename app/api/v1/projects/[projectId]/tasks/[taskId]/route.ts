@@ -3,6 +3,10 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import {
+  buildProjectTaskUpdateData,
+  notificationPriority,
+} from '@/lib/projects/taskPayload'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,26 +14,51 @@ type RouteContext = { params: Promise<{ projectId: string; taskId: string }> }
 
 export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
   const { projectId, taskId } = await (ctx as RouteContext).params
-  const body = await req.json().catch(() => ({}))
+  const body = await req.json().catch(() => ({})) as Record<string, unknown>
 
   const ref = adminDb.collection('projects').doc(projectId).collection('tasks').doc(taskId)
   const doc = await ref.get()
   if (!doc.exists) return apiError('Task not found', 404)
 
-  // Validate attachments if provided
-  if (body.attachments !== undefined) {
-    if (!Array.isArray(body.attachments)) {
-      return apiError('Attachments must be an array', 400)
-    }
-    // Validate each attachment has required fields
-    for (const att of body.attachments) {
-      if (typeof att !== 'object' || !att.url || !att.name) {
-        return apiError('Each attachment must have at least url and name fields', 400)
+  const updates = buildProjectTaskUpdateData(body)
+  if (!updates.ok) return apiError(updates.error, updates.status ?? 400)
+
+  await ref.update({ ...updates.value, updatedAt: FieldValue.serverTimestamp() })
+
+  const existing = doc.data() ?? {}
+  const previousAssignees = new Set(Array.isArray(existing.assigneeIds) ? existing.assigneeIds : existing.assigneeId ? [existing.assigneeId] : [])
+  const nextAssignees = Array.isArray(updates.value.assigneeIds)
+    ? updates.value.assigneeIds.filter((id): id is string => typeof id === 'string')
+    : updates.value.assigneeId
+      ? [String(updates.value.assigneeId)]
+      : []
+  const newAssignees = nextAssignees.filter(id => !previousAssignees.has(id) && id !== user.uid)
+
+  if (newAssignees.length > 0) {
+    const projectDoc = await adminDb.collection('projects').doc(projectId).get()
+    const orgId = projectDoc.data()?.orgId
+    if (typeof orgId === 'string') {
+      const title = String(updates.value.title ?? existing.title ?? 'Task')
+      for (const userId of newAssignees) {
+        adminDb.collection('notifications').add({
+          orgId,
+          userId,
+          agentId: null,
+          type: 'task.assigned',
+          title: 'Task assigned to you',
+          body: title,
+          link: `/admin/projects/${projectId}?task=${taskId}`,
+          data: { projectId, taskId },
+          status: 'unread',
+          priority: notificationPriority(updates.value.priority ?? existing.priority),
+          snoozedUntil: null,
+          readAt: null,
+          createdAt: FieldValue.serverTimestamp(),
+        }).catch(() => {})
       }
     }
   }
 
-  await ref.update({ ...body, updatedAt: FieldValue.serverTimestamp() })
   return apiSuccess({ id: taskId })
 })
 
