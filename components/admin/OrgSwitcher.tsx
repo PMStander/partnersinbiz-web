@@ -52,8 +52,9 @@ export function OrgSwitcher() {
               onClick={() => {
                 setOrg(org.id, org.name)
                 setOpen(false)
-                // Preserve the current sub-page (projects, brand, etc.) under the new org slug
-                const subPath = pathname.replace(/^\/admin\/org\/[^/]+/, '') || '/dashboard'
+                // Preserve the current sub-page only when already inside an org route
+                const orgMatch = pathname.match(/^\/admin\/org\/[^/]+(.*)$/)
+                const subPath = orgMatch ? (orgMatch[1] || '/dashboard') : '/dashboard'
                 router.push(`/admin/org/${org.slug}${subPath}`)
               }}
               className={[
