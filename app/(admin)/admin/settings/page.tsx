@@ -4,6 +4,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { useOrg } from '@/lib/contexts/OrgContext'
+import { copyToClipboard } from '@/lib/utils/clipboard'
 
 export default function SettingsPage() {
   const { selectedOrgId, orgName } = useOrg()
@@ -11,7 +12,7 @@ export default function SettingsPage() {
 
   function copyOrgId() {
     if (!selectedOrgId) return
-    navigator.clipboard.writeText(selectedOrgId).then(() => {
+    copyToClipboard(selectedOrgId).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })

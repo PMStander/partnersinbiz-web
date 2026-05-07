@@ -4,7 +4,7 @@
  */
 import { NextRequest } from 'next/server'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
-import { adminDb } from '@/lib/firebase/admin'
+import { adminDb, adminAuth } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { Organization, OrgMember } from '@/lib/organizations/types'
@@ -29,17 +29,28 @@ export const GET = withAuth('admin', async (req, user, ctx) => {
   const org = orgDoc.data() as Organization
   const members = org.members ?? []
 
-  // Fetch user details for each member
+  // Fetch user details for each member — Firestore first, Auth fallback
   const membersWithDetails: MemberWithDetails[] = await Promise.all(
     members.map(async (member) => {
       const userDoc = await adminDb.collection('users').doc(member.userId).get()
       const userData = userDoc.data()
-      return {
-        ...member,
-        displayName: userData?.displayName,
-        email: userData?.email,
-        photoURL: userData?.photoURL,
+
+      let displayName = userData?.displayName as string | undefined
+      let email = userData?.email as string | undefined
+      const photoURL = userData?.photoURL as string | undefined
+
+      // Fall back to Firebase Auth when the Firestore doc is missing or incomplete
+      if (!displayName || !email) {
+        try {
+          const authUser = await adminAuth.getUser(member.userId)
+          displayName = displayName || authUser.displayName || undefined
+          email = email || authUser.email || undefined
+        } catch {
+          // user may not exist in Auth either — leave undefined
+        }
       }
+
+      return { ...member, displayName, email, photoURL }
     }),
   )
 

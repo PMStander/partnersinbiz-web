@@ -91,6 +91,11 @@ export default function ProjectDetailPage() {
   const [briefValue, setBriefValue] = useState('')
   const [editingDoc, setEditingDoc] = useState<ProjectDoc | null>(null)
   const [savingBrief, setSavingBrief] = useState(false)
+  const [settingsName, setSettingsName] = useState('')
+  const [settingsStatus, setSettingsStatus] = useState('discovery')
+  const [settingsDescription, setSettingsDescription] = useState('')
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsSaved, setSettingsSaved] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -102,6 +107,9 @@ export default function ProjectDetailPage() {
       setTasks(tBody.data ?? [])
       setDocs(dBody.data ?? [])
       setBriefValue(pBody.data?.brief ?? '')
+      setSettingsName(pBody.data?.name ?? '')
+      setSettingsStatus(pBody.data?.status ?? 'discovery')
+      setSettingsDescription(pBody.data?.description ?? '')
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [projectId])
@@ -137,6 +145,21 @@ export default function ProjectDetailPage() {
     setTasks(prev => prev.filter(t => t.id !== taskId))
     await fetch(`/api/v1/projects/${projectId}/tasks/${taskId}`, { method: 'DELETE' })
   }, [projectId])
+
+  const handleSaveSettings = async () => {
+    if (!settingsName.trim()) return
+    setSavingSettings(true)
+    setSettingsSaved(false)
+    await fetch(`/api/v1/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: settingsName.trim(), status: settingsStatus, description: settingsDescription }),
+    })
+    setProject(prev => prev ? { ...prev, name: settingsName.trim(), status: settingsStatus, description: settingsDescription } : null)
+    setSavingSettings(false)
+    setSettingsSaved(true)
+    setTimeout(() => setSettingsSaved(false), 2500)
+  }
 
   const handleSaveBrief = async () => {
     setSavingBrief(true)
@@ -471,14 +494,16 @@ export default function ProjectDetailPage() {
               <label className="block text-sm font-semibold text-on-surface mb-2">Project Name</label>
               <input
                 type="text"
-                defaultValue={project?.name}
+                value={settingsName}
+                onChange={e => setSettingsName(e.target.value)}
                 className="w-full px-4 py-2 text-sm bg-[var(--color-background)] border border-[var(--color-outline)] rounded text-on-surface focus:outline-none focus:border-[var(--color-accent-v2)]"
               />
             </div>
             <div>
               <label className="block text-sm font-semibold text-on-surface mb-2">Status</label>
               <select
-                defaultValue={project?.status}
+                value={settingsStatus}
+                onChange={e => setSettingsStatus(e.target.value)}
                 className="w-full px-4 py-2 text-sm bg-[var(--color-background)] border border-[var(--color-outline)] rounded text-on-surface focus:outline-none focus:border-[var(--color-accent-v2)]"
               >
                 <option value="discovery">Discovery</option>
@@ -492,12 +517,24 @@ export default function ProjectDetailPage() {
             <div>
               <label className="block text-sm font-semibold text-on-surface mb-2">Description</label>
               <textarea
-                defaultValue={project?.description}
+                value={settingsDescription}
+                onChange={e => setSettingsDescription(e.target.value)}
                 className="w-full px-4 py-2 text-sm bg-[var(--color-background)] border border-[var(--color-outline)] rounded text-on-surface focus:outline-none focus:border-[var(--color-accent-v2)]"
                 rows={4}
               />
             </div>
-            <button className="pib-btn-primary text-sm font-label">Save Settings</button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings || !settingsName.trim()}
+                className="pib-btn-primary text-sm font-label"
+              >
+                {savingSettings ? 'Saving...' : 'Save Settings'}
+              </button>
+              {settingsSaved && (
+                <span className="text-xs text-green-400">Saved</span>
+              )}
+            </div>
           </div>
         </div>
       )}

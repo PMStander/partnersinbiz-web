@@ -31,6 +31,7 @@ export interface PlatformUserView {
   isSuperAdmin: boolean
   createdAt?: unknown
   updatedAt?: unknown
+  lastSignInTime?: string | null
 }
 
 function sanitiseAllowedOrgIds(input: unknown): string[] {
@@ -52,9 +53,15 @@ export const GET = withAuth('admin', async (req, user) => {
 
   const snap = await adminDb.collection('users').where('role', '==', 'admin').get()
 
-  const users: PlatformUserView[] = snap.docs.map((doc) => {
+  // Fetch lastSignInTime from Firebase Auth for all users in parallel
+  const authResults = await Promise.allSettled(
+    snap.docs.map((doc) => adminAuth.getUser(doc.id)),
+  )
+
+  const users: PlatformUserView[] = snap.docs.map((doc, i) => {
     const data = doc.data() ?? {}
     const allowedOrgIds = sanitiseAllowedOrgIds(data.allowedOrgIds)
+    const authUser = authResults[i].status === 'fulfilled' ? authResults[i].value : null
     return {
       uid: doc.id,
       email: typeof data.email === 'string' ? data.email : '',
@@ -65,6 +72,7 @@ export const GET = withAuth('admin', async (req, user) => {
       isSuperAdmin: allowedOrgIds.length === 0,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
+      lastSignInTime: authUser?.metadata?.lastSignInTime ?? null,
     }
   })
 

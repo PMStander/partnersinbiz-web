@@ -23,7 +23,7 @@ export function CollapsibleSection({
   storageKey,
   label,
   icon,
-  defaultOpen = true,
+  defaultOpen = false,
   children,
 }: CollapsibleSectionProps) {
   const lsKey = `pib_nav_${storageKey}`

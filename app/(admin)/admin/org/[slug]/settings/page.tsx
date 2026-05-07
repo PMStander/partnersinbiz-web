@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { copyToClipboard } from '@/lib/utils/clipboard'
 
 interface OrgForm {
   // General settings
@@ -57,7 +58,7 @@ export default function OrgSettingsPage() {
 
   function copyOrgId() {
     if (!orgId) return
-    navigator.clipboard.writeText(orgId).then(() => {
+    copyToClipboard(orgId).then(() => {
       setCopiedId(true)
       setTimeout(() => setCopiedId(false), 2000)
     })

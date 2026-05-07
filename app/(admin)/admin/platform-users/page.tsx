@@ -13,6 +13,7 @@ interface PlatformUser {
   allowedOrgIds: string[]
   isSuperAdmin: boolean
   createdAt?: { _seconds?: number }
+  lastSignInTime?: string | null
 }
 
 interface OrgOption {
@@ -411,6 +412,13 @@ export default function PlatformUsersPage() {
                       <ScopeBadge user={u} />
                     </div>
                     <p className="text-xs text-on-surface-variant truncate">{u.email}</p>
+                    {u.lastSignInTime ? (
+                      <p className="text-[11px] text-on-surface-variant/60 mt-0.5">
+                        Last login: {new Date(u.lastSignInTime).toLocaleString()}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-on-surface-variant/40 mt-0.5">Never signed in</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {!isEditing && (

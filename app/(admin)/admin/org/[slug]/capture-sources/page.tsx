@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import type { CaptureSource, CaptureSourceType } from '@/lib/crm/captureSources'
 import { fmtTimestamp } from '@/components/admin/email/fmtTimestamp'
+import { copyToClipboard } from '@/lib/utils/clipboard'
 
 interface OrganizationSummary {
   id: string
@@ -50,7 +51,7 @@ function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }
     <button
       onClick={async () => {
         try {
-          await navigator.clipboard.writeText(value)
+          await copyToClipboard(value)
           setCopied(true)
           setTimeout(() => setCopied(false), 1500)
         } catch {

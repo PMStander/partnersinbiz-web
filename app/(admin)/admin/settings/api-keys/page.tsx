@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { copyToClipboard } from '@/lib/utils/clipboard'
 
 interface ApiKey {
   id: string
@@ -88,7 +89,7 @@ export default function ApiKeysPage() {
           <div className="flex gap-2">
             <code className="flex-1 text-xs bg-black px-3 py-2 rounded font-mono text-green-400 break-all">{createdKey}</code>
             <button
-              onClick={() => { navigator.clipboard.writeText(createdKey); setCreatedKey(null) }}
+              onClick={() => { copyToClipboard(createdKey); setCreatedKey(null) }}
               className="pib-btn-primary text-xs font-label shrink-0"
             >
               Copy & Dismiss

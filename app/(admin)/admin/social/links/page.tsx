@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
+import { copyToClipboard } from '@/lib/utils/clipboard'
 
 interface ShortenedLink {
   id: string
@@ -172,7 +173,7 @@ export default function AdminLinksPage() {
   }
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
+    copyToClipboard(text)
     setSuccess('Copied to clipboard!')
     setTimeout(() => setSuccess(''), 2000)
   }

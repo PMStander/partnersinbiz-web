@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import type { EmailDomain, EmailDomainStatus, EmailDomainDnsRecord } from '@/lib/email/domains'
+import { copyToClipboard } from '@/lib/utils/clipboard'
 
 interface OrganizationSummary {
   id: string
@@ -43,7 +44,7 @@ function CopyButton({ value }: { value: string }) {
     <button
       onClick={async () => {
         try {
-          await navigator.clipboard.writeText(value)
+          await copyToClipboard(value)
           setCopied(true)
           setTimeout(() => setCopied(false), 1500)
         } catch {

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { copyToClipboard } from '@/lib/utils/clipboard'
 
 interface OrgMember {
   userId: string
@@ -15,6 +16,12 @@ interface Organization {
   id: string
   name: string
   slug: string
+}
+
+interface PlatformUser {
+  uid: string
+  email: string
+  displayName: string
 }
 
 function Skeleton({ className = '' }: { className?: string }) {
@@ -87,12 +94,35 @@ export default function TeamPage() {
   // Add member form state
   const [addingMember, setAddingMember] = useState(false)
   const [addEmail, setAddEmail] = useState('')
+  const [addSearch, setAddSearch] = useState('')
   const [addRole, setAddRole] = useState('member')
   const [addError, setAddError] = useState<string | null>(null)
+  const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
+  const addSearchRef = useRef<HTMLDivElement>(null)
 
   // Updating role
   const [updatingRole, setUpdatingRole] = useState<string | null>(null)
   const [updatingError, setUpdatingError] = useState<string | null>(null)
+
+  // Fetch platform users once for autocomplete
+  useEffect(() => {
+    fetch('/api/v1/admin/platform-users')
+      .then((r) => r.json())
+      .then((b) => setPlatformUsers(b.data ?? []))
+      .catch(() => {})
+  }, [])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (addSearchRef.current && !addSearchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   // Load organization and members
   useEffect(() => {
@@ -178,6 +208,7 @@ export default function TeamPage() {
       // Add to local state
       setMembers([...members, body.data])
       setAddEmail('')
+      setAddSearch('')
       setAddRole('member')
     } catch (e) {
       setAddError(e instanceof Error ? e.message : 'An error occurred')
@@ -316,7 +347,7 @@ export default function TeamPage() {
                 <code className="text-xs text-on-surface break-all flex-1">{setupLink}</code>
                 <button
                   type="button"
-                  onClick={() => { navigator.clipboard.writeText(setupLink); }}
+                  onClick={() => { copyToClipboard(setupLink); }}
                   className="pib-btn-secondary text-xs font-label shrink-0"
                 >
                   Copy
@@ -330,19 +361,75 @@ export default function TeamPage() {
       {/* Add Member Form */}
       {!loading && org && (
         <div className="pib-card">
-          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-3">
+          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">
             Add Existing Member
           </p>
+          <p className="text-xs text-on-surface-variant mb-3">
+            Add a PiB staff member who already has an account. To give a client access, use &ldquo;Create Client Login&rdquo; above.
+          </p>
           <form onSubmit={handleAddMember} className="flex gap-2 flex-wrap">
-            <input
-              type="email"
-              placeholder="user@example.com"
-              value={addEmail}
-              onChange={(e) => setAddEmail(e.target.value)}
-              className="flex-1 min-w-[200px] px-3 py-2 rounded-md text-sm"
-              style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}
-              disabled={addingMember}
-            />
+            <div ref={addSearchRef} className="relative flex-1 min-w-[200px]">
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={addSearch}
+                onChange={(e) => {
+                  setAddSearch(e.target.value)
+                  setAddEmail(e.target.value)
+                  setShowDropdown(true)
+                }}
+                onFocus={() => setShowDropdown(true)}
+                className="w-full px-3 py-2 rounded-md text-sm"
+                style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}
+                disabled={addingMember}
+                autoComplete="off"
+              />
+              {showDropdown && addSearch.trim().length > 0 && (() => {
+                const q = addSearch.trim().toLowerCase()
+                const matches = platformUsers.filter(
+                  (u) =>
+                    !members.some((m) => m.email === u.email) &&
+                    (u.email.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q)),
+                )
+                return matches.length > 0 ? (
+                  <ul
+                    className="absolute z-20 top-full mt-1 w-full rounded-md shadow-lg overflow-hidden"
+                    style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}
+                  >
+                    {matches.map((u) => (
+                      <li
+                        key={u.uid}
+                        className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-on-surface/5 text-sm"
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          setAddEmail(u.email)
+                          setAddSearch(`${u.displayName} (${u.email})`)
+                          setShowDropdown(false)
+                        }}
+                      >
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                          style={{ backgroundColor: 'var(--color-accent-v2)', color: 'var(--color-on-surface)' }}
+                        >
+                          {(u.displayName || u.email)[0].toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-on-surface font-medium truncate">{u.displayName}</p>
+                          <p className="text-on-surface-variant text-xs truncate">{u.email}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div
+                    className="absolute z-20 top-full mt-1 w-full rounded-md px-3 py-2 text-xs text-on-surface-variant"
+                    style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-outline)' }}
+                  >
+                    No matching staff accounts found
+                  </div>
+                )
+              })()}
+            </div>
             <select
               value={addRole}
               onChange={(e) => setAddRole(e.target.value)}
