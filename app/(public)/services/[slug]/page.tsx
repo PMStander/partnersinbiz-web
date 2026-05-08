@@ -18,6 +18,7 @@ type Slug = (typeof SERVICES)[number]['slug']
 interface ServiceContent {
   headline: string
   intro: string
+  propertiesCallout?: boolean
   personas: { icon: string; title: string; body: string }[]
   deliverables: { icon: string; title: string; body: string }[]
   process: { step: string; title: string; body: string }[]
@@ -44,6 +45,7 @@ const CONTENT: Record<Slug, ServiceContent> = {
     headline: 'Marketing sites that perform under load — and rank under pressure.',
     intro:
       'A marketing site is a salesperson that works at 3am. We build the kind that opens the deal, not the kind that sits there. Sub-2s LCP, real lead capture, structured for search from the first commit.',
+    propertiesCallout: true,
     personas: [
       {
         icon: 'storefront',
@@ -70,6 +72,7 @@ const CONTENT: Record<Slug, ServiceContent> = {
       { icon: 'analytics', title: 'Analytics wired', body: 'Plausible, GA4, or our own analytics — your choice.' },
       { icon: 'mark_email_read', title: 'Lead capture', body: 'Forms posted to Resend, Slack, or your CRM.' },
       { icon: 'cloud_upload', title: 'Vercel deploy', body: 'Production deploy on your Vercel, your domain, your DNS.' },
+      { icon: 'tune', title: 'Properties control plane', body: 'Runtime config, kill switch, feature flags, analytics — change without redeploys.' },
     ],
     process: [
       { step: '01', title: 'Brief', body: 'A 60-minute call. Audience, goals, pages, references. Quote in three days.' },
@@ -110,6 +113,7 @@ const CONTENT: Record<Slug, ServiceContent> = {
     headline: 'Custom platforms shipped in weeks. Not quarters.',
     intro:
       'When the off-the-shelf SaaS does not fit and the spreadsheet has become a job, you need a real platform. We build production CRMs, dashboards, internal tools and bespoke SaaS — with the same engineering discipline a Series A team brings.',
+    propertiesCallout: true,
     personas: [
       {
         icon: 'view_kanban',
@@ -136,6 +140,7 @@ const CONTENT: Record<Slug, ServiceContent> = {
       { icon: 'verified_user', title: 'Audit log', body: 'Every action attributed, timestamped, and queryable.' },
       { icon: 'science', title: 'Tests + CI', body: 'Critical paths covered. PRs go through Vercel previews and CI.' },
       { icon: 'rocket_launch', title: 'Production launch', body: 'Monitoring, error tracking, on-call runbook.' },
+      { icon: 'tune', title: 'Properties wired in', body: 'Per-property analytics, remote config, and a kill switch from day one.' },
     ],
     process: [
       { step: '01', title: 'Discovery sprint', body: 'Two weeks. We map your workflow, sketch the data model, and write the spec.' },
@@ -175,6 +180,7 @@ const CONTENT: Record<Slug, ServiceContent> = {
     headline: 'Native-feel apps from a codebase you actually own.',
     intro:
       'A real mobile app — not a wrapped website. We build with React Native and Expo so iOS and Android share business logic, ship from one team, and stay in sync. Native-feel interactions, real offline support, and a path to the App Store and Play Store.',
+    propertiesCallout: true,
     personas: [
       {
         icon: 'devices',
@@ -201,6 +207,7 @@ const CONTENT: Record<Slug, ServiceContent> = {
       { icon: 'cloud_sync', title: 'Backend sync', body: 'Shared API with your web app — one source of truth.' },
       { icon: 'monitoring', title: 'Crash + analytics', body: 'Sentry, analytics events, session replay.' },
       { icon: 'store', title: 'Store submission', body: 'We handle TestFlight, Play Console, store assets, the lot.' },
+      { icon: 'tune', title: 'Properties for app surfaces', body: 'Remote-control App Store / Play Store URLs, kill switch, feature flags via Properties.' },
     ],
     process: [
       { step: '01', title: 'Scope + design', body: 'We define the v1 scope ruthlessly. Mobile rewards focus.' },
@@ -532,6 +539,23 @@ export default async function ServiceDetailPage({
               {content.intro}
             </p>
           </Reveal>
+          {content.propertiesCallout && (
+            <Reveal delay={200}>
+              <div className="mt-6 inline-flex items-center gap-3 bento-card !p-4 max-w-2xl">
+                <span className="material-symbols-outlined text-[var(--color-pib-accent)]">tune</span>
+                <p className="text-sm text-[var(--color-pib-text-muted)] text-pretty">
+                  Ships with{' '}
+                  <Link
+                    href="/properties"
+                    className="pib-link-underline text-[var(--color-pib-accent)]"
+                  >
+                    Properties
+                  </Link>{' '}
+                  — our runtime control plane for store URLs, feature flags, kill switch, and per-site analytics.
+                </p>
+              </div>
+            </Reveal>
+          )}
           <Reveal delay={240}>
             <div className="mt-10 flex flex-wrap gap-3">
               <Link href="/start-a-project" className="btn-pib-primary">

@@ -65,6 +65,7 @@ const TIERS: Tier[] = [
       'Auth + database + admin',
       'Daily Loom updates',
       'Launch checklist + handover',
+      'Properties: runtime config + analytics for the launched site',
       '60-day warranty',
     ],
     cta: { label: 'Start a project', href: '/start-a-project' },
@@ -79,6 +80,7 @@ const TIERS: Tier[] = [
       'Equity / retainer / fixed-scope options',
       'Direct access to Peet',
       'Quarterly business reviews',
+      'Properties control plane included',
     ],
     cta: { label: 'Book a call', href: SITE.cal.url },
   },
@@ -317,6 +319,56 @@ export default function PricingPage() {
               </Reveal>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Properties callout */}
+      <section id="properties" className="section pt-0">
+        <div className="container-pib">
+          <Reveal>
+            <div className="bento-card p-10 md:p-14 grid grid-cols-1 lg:grid-cols-12 gap-10">
+              <div className="lg:col-span-5">
+                <p className="eyebrow mb-4">Bundled · Properties</p>
+                <h3 className="h-display text-3xl md:text-4xl text-balance">
+                  Properties: <span className="text-[var(--color-pib-accent)]">runtime control plane</span> for the sites we ship.
+                </h3>
+                <p className="mt-6 text-[var(--color-pib-text-muted)] text-pretty">
+                  Included with every Web Application and Bespoke Build. Update store URLs, flip
+                  feature flags, see real analytics, and trigger nurture sequences — all without a
+                  redeploy.
+                </p>
+                <Link
+                  href="/properties"
+                  className="mt-6 inline-flex items-center gap-1.5 pib-link-underline text-[var(--color-pib-accent)] text-sm font-medium"
+                >
+                  Learn more about Properties
+                  <span className="material-symbols-outlined text-base">arrow_outward</span>
+                </Link>
+              </div>
+              <div className="lg:col-span-7">
+                <p className="text-xs uppercase tracking-widest text-[var(--color-pib-text-faint)] mb-4">
+                  What&rsquo;s included
+                </p>
+                <ul className="space-y-3">
+                  {[
+                    'Remote runtime config — change copy, URLs, JSON without a redeploy',
+                    'Per-property analytics dashboard with live event stream',
+                    'Feature flags scoped per property and per cohort',
+                    'Kill switch for incidents and planned outages',
+                    'Conversion events wired into linked email sequences',
+                    'Property-scoped short links for creator / affiliate attribution',
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-3 text-[var(--color-pib-text)]">
+                      <span className="material-symbols-outlined text-[var(--color-pib-accent)] mt-0.5 shrink-0">
+                        check_circle
+                      </span>
+                      <span className="text-pretty text-sm">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </Reveal>
         </div>
       </section>
 

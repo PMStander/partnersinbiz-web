@@ -184,6 +184,28 @@ export default function HomePage() {
               </Reveal>
             ))}
           </div>
+
+          <Reveal delay={SERVICES.length * 60}>
+            <Link
+              href="/properties"
+              className="bento-card mt-5 md:mt-6 group flex flex-col md:flex-row md:items-center gap-6 md:gap-10 p-8 md:p-10 relative overflow-hidden"
+            >
+              <span className="pill pill-accent absolute top-4 right-4 !text-[10px]">New</span>
+              <span className="material-symbols-outlined text-5xl text-[var(--color-pib-accent)] shrink-0">tune</span>
+              <div className="flex-1">
+                <h3 className="font-display text-2xl md:text-3xl mb-2 text-balance">
+                  Properties — runtime control for client sites &amp; apps
+                </h3>
+                <p className="text-[var(--color-pib-text-muted)] text-pretty">
+                  Update store URLs, run feature flags, see real analytics, and trigger nurture sequences across every client surface — without a single redeploy.
+                </p>
+              </div>
+              <span className="text-sm font-medium inline-flex items-center gap-1.5 text-[var(--color-pib-accent)] shrink-0">
+                Explore Properties
+                <span className="material-symbols-outlined text-base">arrow_outward</span>
+              </span>
+            </Link>
+          </Reveal>
         </div>
       </section>
 
