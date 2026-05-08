@@ -1,0 +1,236 @@
+---
+name: content-engine
+description: |
+  End-to-end content engine for any PiB client. Produces a research dossier, brand identity lock, 12-week calendar, blog posts (with AI-generated bodies), 12 weeks of multi-platform social posts, hero images, and 6 short-form videos in 3 formats each (vertical Reel, 16:9 YouTube, 15s Stories) — all written directly into the Partners in Biz platform as a `campaign` that the client can review, approve, or request changes on at `/portal/campaigns/[id]`. The agent / operator monitors progress and approves at `/admin/campaigns/[id]`. A public read-only sales preview is available at `/c/[shareToken]`.
+
+  Replaces the old `client-content-engine` skill which wrote to a separate Vercel preview site with localStorage approve buttons. Now there is one source of truth (Firestore via the PiB API), real audit logs, real tenant scoping, and shared records with the seo-sprint-manager skill.
+
+  Use whenever the user asks to "build content", "produce a content engine", "do marketing for a client", "write blogs and social posts", "produce videos and social media", "build a content calendar", or anything that smells like a multi-channel content production run for a PiB client. Especially trigger on phrases like "do all of it", "produce everything", "12-week content plan", or "campaign for [client]".
+---
+
+# Content Engine (platform-first)
+
+Take a PiB client from a research brief to ~75 production assets, all written into the platform as a single `campaign`. The pipeline output:
+
+- **1 research dossier** — audiences, voice, taglines, channel mix, citations (saved on `campaign.research`)
+- **1 brand identity lock** — palette, typography, aesthetic keywords, tone (saved on `campaign.brandIdentity`)
+- **N content pillars + 12-week calendar** — saved on `campaign.pillars` and `campaign.calendar`
+- **8 blog posts** — `seo_content` rows with AI-generated bodies in `seo_drafts`, status `review`, optionally linked to an active SEO sprint
+- **6 short-form videos** rendered locally (HyperFrames + ffmpeg + procedural music), each in 3 formats (vertical Reel, 16:9 YouTube, 15s Stories) — uploaded via `/social/media/upload` and registered as a single `social_post` per slot with `media[0].type === 'video'`
+- **12 weeks of social posts** — `social_post` rows, one per platform variant, status `pending_approval`, scheduled into `scheduledFor` slots from the calendar
+- **Hero images + social card backgrounds** — uploaded via `/social/media/upload`, attached to the right blogs / posts
+
+After the run, the agent prints:
+- The campaign cockpit URL (`/admin/campaigns/[id]`) for ops
+- The client portal URL (`/portal/campaigns/[id]`) for the client
+- The public share URL (`/c/[shareToken]`) for sales pitches
+
+The user's job is to give you the client's domain, brand, and any constraints. Your job is to execute the pipeline — most of it parallelised across subagents — and surface a campaign the client can review.
+
+## When to Use
+
+- "build content for [client]" / "produce a content engine"
+- "marketing materials for [client]" / "do all of it for [client]"
+- "create a 12-week content plan with blog posts and videos"
+- "I need a campaign with [N] posts and [M] videos"
+- "do this for our [app / SaaS product]"
+- Any time the user wants a multi-channel content production run for a PiB client
+
+The skill is also useful for **subsets** — e.g. just videos, just blogs, just the calendar. Each phase is independent enough to run alone; just create the campaign first so everything has a home.
+
+## Step 0 — Identify the Client Type (READ FIRST)
+
+Before any other phase, identify which of three categories the client falls into. This determines the pillar names, tone, blog structure, image style, and distribution channels for the rest of the run. The pipeline + scripts are identical across types — only the content templates differ.
+
+| Type | When to use | Examples | Read |
+|---|---|---|---|
+| **Service business** | Law, accounting, agencies, consultancies, advisors, brokers | AHS Law (default), small-business accountants, marketing agencies | [`references/client-types/service-business.md`](references/client-types/service-business.md) |
+| **Consumer app** | Mobile apps, B2C web apps, lifestyle/productivity tools, creator software | Lumen (speed reading), Velox, fitness apps, education apps | [`references/client-types/consumer-app.md`](references/client-types/consumer-app.md) |
+| **B2B SaaS** | Enterprise SaaS, vertical SaaS, dev tools, ops/HR/finance platforms | Loyalty Plus, Covalonic, sales tools | [`references/client-types/b2b-saas.md`](references/client-types/b2b-saas.md) |
+
+If unclear, ask the user **once**. Don't ask for more detail than that.
+
+After identifying, **read the relevant client-type file** before Phase 2. Mixed cases default to **B2B SaaS** for anything sold to a business, **service business** for anything where the company itself is the service.
+
+## The Pipeline (9 phases — platform-first)
+
+Run them in order. Phases 3–6 inside the production day can run heavily in parallel via subagents.
+
+| Phase | What | Output destination | Reference |
+|---|---|---|---|
+| **0. Identify client type** | service / consumer-app / B2B SaaS | (decision) | [`references/client-types/`](references/client-types/) |
+| **0a. Create campaign** | `POST /api/v1/campaigns` with `name`, `clientType`, empty placeholders | `campaigns/{id}` (capture `id` + `shareToken`) | (this file) |
+| **1. Research** | last30days + WebSearch on the client's domain | `PATCH /campaigns/[id]` with `{ research }` | [`references/01-research.md`](references/01-research.md) |
+| **2. Master plan** | Brand identity lock + pillars + 12-week calendar | `PATCH /campaigns/[id]` with `{ brandIdentity, pillars, calendar }` | [`references/02-master-plan.md`](references/02-master-plan.md) |
+| **3. Parallel writing wave** | Dispatch 8 blog writers + 6 video composers + social writer | `seo_content` + `seo_drafts` + `social_posts` (all with `campaignId`) | [`references/03-parallel-agents.md`](references/03-parallel-agents.md) |
+| **4. Image generation** | Imagen 4.0 + master style suffix | `/social/media/upload` → URLs attached to posts/blogs | [`references/04-image-generation.md`](references/04-image-generation.md) |
+| **5. Video production** | HyperFrames + ffmpeg + procedural music — runs LOCALLY | `/social/media/upload` × 3 → single `social_post` with multi-format `media[0]` | [`references/05-video-production.md`](references/05-video-production.md) |
+| **6. Social card backgrounds** | Reusable card images | `/social/media/upload` → URLs referenced on relevant posts | (covered in master plan) |
+| **7. Preview** | Public share URL: `https://partnersinbiz.online/c/[shareToken]` | (no work — already live the moment the campaign exists) | (this file) |
+| **8. Final summary** | Print campaign cockpit + portal + share URLs and asset counts | (stdout) | (this file) |
+
+**Always read the relevant reference file before executing the phase.** They contain the prompts, code snippets, and gotchas that took a real production run to learn.
+
+For **app-specific work** (consumer apps), Phase 4 has a parallel sibling — run the `aso-appstore-screenshots` skill alongside Phase 4 to produce App Store / Play Store screenshots. The two skills compose cleanly.
+
+## Auth + base URL
+
+```
+Authorization: Bearer ${AI_API_KEY}        # from env or ~/.env, NEVER hard-coded
+X-Org-Id: <org id resolved via GET /api/v1/organizations and slug match>
+Base URL: https://partnersinbiz.online/api/v1
+```
+
+The `ai` role bypasses tenant restrictions, so the engine can run for any client. Resolve `X-Org-Id` once at the start of a run from the client's slug or name and reuse it for every call.
+
+Idempotency: every write that could be retried uses an `Idempotency-Key` header. Keys follow the pattern `pib-engine-{campaignId}-{slot}-{platform}-{format}` so a retry on the same slot is safe.
+
+## API endpoints used
+
+```
+# Campaigns (Slice A)
+POST   /campaigns                              create campaign at start of run
+GET    /campaigns/[id]                         re-read after patches
+PATCH  /campaigns/[id]                         patch research, brand, pillars, calendar
+GET    /campaigns/[id]/assets                  roll-up to verify output
+
+# SEO (existing)
+GET    /seo/sprints?status=active&clientId={orgId}    find an active sprint to attach blogs to
+POST   /seo/sprints/{sprintId}/content                create blog (with campaignId)
+POST   /seo/content/[id]/draft                        generate AI body
+PATCH  /seo/content/[id]                              attach heroImageUrl
+
+# Social (existing)
+POST   /social/posts                                  create social post (with campaignId)
+PATCH  /social/posts/[id]                             attach media (image OR video multi-format)
+POST   /social/media/upload                           multipart upload, returns { url }
+
+# Tenant resolution
+GET    /organizations                                 resolve org id from slug
+```
+
+## How this composes with seo-sprint-manager
+
+Three explicit seams:
+
+1. **Active sprint linkage.** Phase 3 calls `GET /seo/sprints?status=active&clientId={orgId}` first. If a sprint exists, blogs are created via `POST /seo/sprints/{sprintId}/content` with `campaignId` set — they show up in BOTH the sprint pipeline and the campaign roll-up. If no active sprint, blogs are created via the campaign-only path and the run summary flags this so the operator can attach a sprint later.
+2. **Shared `seo_content` rows.** A blog written by content-engine is a real `seo_content` row with `campaignId` AND optionally `sprintId`. The seo-sprint-manager's daily flow (`/seo/today`, ranking checks, refresh suggestions) operates on the same row. There is one record, not two.
+3. **Refresh path.** When seo-sprint-manager later flags a blog for refresh, it works against the same `seo_content` ID. The campaign roll-up keeps showing the blog with its current draft. The campaign is a moment-in-time grouping; the SEO sprint is a continuously maintained strategy. They share the artefact.
+
+## Folder Structure to Create (much smaller now)
+
+Almost everything lives in the platform. The local workspace is now just for things that have to be rendered locally and for working scratch:
+
+```
+<client-workspace>/
+└── content-engine/
+    ├── tmp/                          ← scratch / partial JSON / cached research
+    ├── images/
+    │   └── blog/                     ← Imagen output BEFORE upload to /media/upload
+    └── videos/
+        ├── audio/
+        │   └── <slug>-underscore.{wav,mp3}    ← procedural music
+        ├── V1-…/{index.html, script.md, README.md, *.mp4}
+        ├── youtube/                  ← 16:9 horizontal cuts
+        └── stories/                  ← 15s vertical cuts
+```
+
+After each asset is uploaded to the platform, the local file is no longer the source of truth — `tmp/` and `images/blog/` can be cleaned up. `videos/` is worth keeping for re-render runs.
+
+## Brand Identity (Always Lock First)
+
+Before writing any content, lock the brand. These go on `campaign.brandIdentity`:
+
+| Element | Why it matters |
+|---|---|
+| Palette (hex codes for bg / accent / alert / text / muted) | Used in image prompts, video DESIGN.md, social card overlays, and by the platform-mockup review UI to render real-looking previews |
+| Typography (heading / body / numeric fonts) | Used in video compositions, social card design specs, and the review UI |
+| Logo URL + aesthetic keywords + tone | Used everywhere — image prompts, blog tone-of-voice block, social caption agents |
+
+Inspect the client's existing website source if available — `grep` for hex codes and `font-family`. That's faster than asking. If the client has no site, ask the user 4 questions: light or dark canvas, primary accent colour, headline font preference, mood (premium / playful / technical).
+
+Once locked, `PATCH /campaigns/[id]` with the brand identity. Every subsequent asset references this same record, so brand changes mid-run automatically re-render in the review UI mockups.
+
+## The Production Day Cadence
+
+A realistic single-day run looks like:
+
+- **Hour 0** (5 min): Phase 0a — create campaign, capture id + shareToken
+- **Hour 1**: Phase 1 (research) + Phase 2 (master plan) → both PATCH the campaign
+- **Hours 2–3**: Phase 3 (dispatch ~15 parallel agents → all 8 blogs + 6 video scripts + social posts come back, written straight into the platform)
+- **Hour 4**: Phase 4 (image gen, parallel via Imagen) + Phase 5 starts (video render, parallel via HyperFrames) + Phase 6 (social card backgrounds)
+- **Hour 5**: Music generation + multi-format video renders (YouTube horizontal + Stories 15s cuts) + uploads
+- **Hour 6**: Phase 7 — print the share URL. Phase 8 summary. Done.
+
+Spend most of your active time on Phase 3's prompts (the agent briefs determine quality) and on Phase 2's brand lock (the review UI mockups depend on it).
+
+## Bundled Scripts (use these — don't rewrite)
+
+1. **`scripts/generate-image.py`** — Imagen 4.0 wrapper. Auto-appends a configurable master style suffix to every prompt. Supported aspect ratios: `1:1, 9:16, 16:9, 4:3, 3:4` (NOT `3:2`). Output goes to local `images/blog/` first, then is uploaded via `/social/media/upload`.
+2. **`scripts/generate-underscore.py`** — Procedural music generator. Writes a 40-second cinematic underscore in Cmaj7. Outputs WAV; convert with `ffmpeg -i in.wav -c:a libmp3lame -b:a 192k out.mp3`.
+3. **`scripts/build-preview.py`** — **DEPRECATED / LEGACY.** Old throwaway-Vercel preview-site builder. Kept only for backfill flows (importing historical AHS Law / scrolledbrain content into a real campaign). Do not use for new runs.
+
+## Bundled Assets (copy these as starters)
+
+- **`assets/DESIGN-template.md`** — HyperFrames DESIGN.md skeleton with palette/typography/motion fields
+- **`assets/prompts-template.md`** — Image prompt library skeleton (master suffix + per-blog prompts)
+- **`assets/HOW-TO-USE-template.md`** — The 3-layer mental model guide (image → on-image text → caption)
+- **`assets/vercel.json`** — Legacy, only relevant for the deprecated preview builder
+
+## Phase summary output (end of run)
+
+After all phases complete, the skill prints:
+
+```
+Campaign created: <campaignId>
+Share URL: https://partnersinbiz.online/c/<shareToken>
+Admin cockpit: https://partnersinbiz.online/admin/campaigns/<campaignId>
+Client portal: https://partnersinbiz.online/portal/campaigns/<campaignId>
+
+Assets produced:
+  - Blogs: N (all in `review` status)
+  - Social posts: N (all in `pending_approval` status)
+  - Videos: N (with 3-format renders each)
+  - Images: N (attached to posts/blogs)
+
+SEO sprint: <linked sprintId | "no active sprint — flag for operator">
+
+Next step: <human> reviews at <admin cockpit url>, approves or requests changes.
+Approved assets schedule into the platform's social queue and SEO publish flow automatically.
+```
+
+## Critical Lessons (from the real run — preserved verbatim)
+
+These are the gotchas that cost real time on the AHS Law run. Don't repeat them.
+
+| Issue | Fix |
+|---|---|
+| HyperFrames lint error: composition not found | Use `index.html` as the filename, not `composition.html` |
+| Scenes invisible during render | Add `class="scene clip"` (the `clip` class is what enables timing-based visibility) |
+| Root composition warning | Add `data-start="0" data-duration="N"` to the root `<div data-composition-id="…">` |
+| Imagen rejects 3:2 aspect | Use `16:9` for blog heroes — it's close enough |
+| Imagen-3 returns 404 | The current model is `imagen-4.0-generate-001`, not `imagen-3.0-generate-002` |
+| Suno API "skill" requires manual web UI | Use `scripts/generate-underscore.py` for procedural music — good enough for B2B underscore |
+| macOS bash 3.2 doesn't support `declare -A` | Use shell functions or parallel arrays instead |
+| `awk` inside heredoc with double-quoted ffmpeg filter | Escaping mangles the awk script — hardcode values instead |
+| last30days X auth fails (HTTP 400) | The token may be expired; compensate with heavier WebSearch coverage |
+| Videos show blank / `<video>` tag | HyperFrames produces HTML — render to MP4 with the bundled ffmpeg script before uploading |
+| Old client brand bleeding into a new run | Read `campaign.brandIdentity` from the API at the start of every phase — never cache it across runs |
+| Same payload retried twice = duplicate post | Always set `Idempotency-Key: pib-engine-{campaignId}-{slot}-{platform}-{format}` on writes |
+| `/seo/content` 404 because no active sprint | Skip the sprint linkage and flag in the run summary; campaign-only path still works |
+| AI_API_KEY missing | Read from env; fall back to `~/.env`; never hard-code or log it |
+
+## Output to the User Each Phase
+
+After each phase, give the user a short status report — endpoints called, IDs returned, counts, any decisions. The user can interrupt mid-pipeline to redirect (different blog topic, different palette, different platforms). Don't ask for permission at every step — execute and report.
+
+After the final phase, print the **campaign cockpit URL**, the **client portal URL**, and the **public share URL** (see "Phase summary output" above), with asset counts and the SEO-sprint linkage status.
+
+## Reference Examples
+
+- **Partners in Biz** itself (service business / B2B SaaS hybrid): `/Users/peetstander/Cowork/Partners in Biz — Client Growth/` — canonical example.
+- **AHS Law** (service business): `/Users/peetstander/Cowork/AHS Law/` — older local-files-only example. Use only for content format reference, not as a template — it predates the platform-first flow.
+
+When in doubt about blog format: read an existing `seo_content` row + its `seo_drafts` body via the API.  
+When in doubt about social format: read an existing `social_post` row via the API.  
+When in doubt about video format: read [`references/05-video-production.md`](references/05-video-production.md).

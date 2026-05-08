@@ -7,7 +7,7 @@ import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
 
-const ALLOWED = ['title', 'type', 'targetKeywordId', 'targetUrl', 'publishDate', 'status', 'liUrl', 'xUrl', 'internalLinksAdded', 'phase'] as const
+const ALLOWED = ['title', 'type', 'targetKeywordId', 'targetUrl', 'publishDate', 'status', 'liUrl', 'xUrl', 'internalLinksAdded', 'phase', 'campaignId', 'pillarId'] as const
 
 export const PATCH = withAuth(
   'admin',

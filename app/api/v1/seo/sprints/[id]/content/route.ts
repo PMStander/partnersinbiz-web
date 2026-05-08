@@ -47,6 +47,8 @@ export const POST = withAuth(
       publishDate: body.publishDate ?? null,
       status: body.status ?? 'idea',
       internalLinksAdded: false,
+      campaignId: typeof body.campaignId === 'string' ? body.campaignId : null,
+      pillarId: typeof body.pillarId === 'string' ? body.pillarId : null,
       createdAt: FieldValue.serverTimestamp(),
       deleted: false,
       ...actorFrom(user),

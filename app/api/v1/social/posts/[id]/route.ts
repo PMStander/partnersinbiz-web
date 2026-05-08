@@ -100,6 +100,9 @@ export const PUT = withAuth('admin', withTenant(async (req, user, orgId, context
   if ('hashtags' in body) updates.hashtags = body.hashtags as string[]
   if ('media' in body) updates.media = body.media
   if ('accountIds' in body) updates.accountIds = body.accountIds
+  if ('campaignId' in body) updates.campaignId = body.campaignId
+  if ('pillarId' in body) updates.pillarId = body.pillarId
+  if ('audience' in body) updates.audience = body.audience
 
   await adminDb.collection('social_posts').doc(id).update(updates)
 

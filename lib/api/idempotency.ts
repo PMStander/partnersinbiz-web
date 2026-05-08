@@ -32,7 +32,10 @@ export function withIdempotency(handler: IdempotentHandler): IdempotentHandler {
     const idempotencyKey = req.headers.get('idempotency-key')
     if (!idempotencyKey) return handler(req, user, context)
 
-    const cacheKey = `${user.uid}:${req.nextUrl.pathname}:${idempotencyKey}`
+    // Firestore document IDs cannot contain '/'. Replace slashes from the
+    // pathname so deeper routes (e.g. /api/v1/foo/[id]/bar) don't blow up.
+    const safePath = req.nextUrl.pathname.replace(/\//g, '_')
+    const cacheKey = `${user.uid}:${safePath}:${idempotencyKey}`
     const docRef = adminDb.collection(COLLECTION).doc(cacheKey)
 
     const snap = await docRef.get()

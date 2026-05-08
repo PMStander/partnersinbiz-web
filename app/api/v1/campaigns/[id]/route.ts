@@ -11,10 +11,25 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { lastActorFrom } from '@/lib/api/actor'
 import type { Campaign } from '@/lib/campaigns/types'
 import type { ApiUser } from '@/lib/api/types'
 
+export const dynamic = 'force-dynamic'
+
 type Params = { params: Promise<{ id: string }> }
+
+// Allow-list for the content-engine campaign PATCH. Email-program campaigns
+// continue to use PUT above. PATCH is used by the content-engine review UI.
+const CONTENT_PATCH_FIELDS = [
+  'name',
+  'status',
+  'research',
+  'brandIdentity',
+  'pillars',
+  'calendar',
+  'shareEnabled',
+] as const
 
 export const GET = withAuth('client', async (_req: NextRequest, user: ApiUser, context?: unknown) => {
   const { id } = await (context as Params).params
@@ -74,6 +89,30 @@ export const PUT = withAuth('client', async (req: NextRequest, user: ApiUser, co
     updatedAt: FieldValue.serverTimestamp(),
   })
   return apiSuccess({ id })
+})
+
+export const PATCH = withAuth('client', async (req: NextRequest, user: ApiUser, context?: unknown) => {
+  const { id } = await (context as Params).params
+  const body = await req.json().catch(() => null)
+  if (!body) return apiError('Invalid JSON', 400)
+
+  const ref = adminDb.collection('campaigns').doc(id)
+  const snap = await ref.get()
+  if (!snap.exists || snap.data()?.deleted) return apiError('Campaign not found', 404)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const current = snap.data() as any
+  const scope = resolveOrgScope(user, (current.orgId as string | undefined) ?? null)
+  if (!scope.ok) return apiError(scope.error, scope.status)
+
+  const update: Record<string, unknown> = { ...lastActorFrom(user) }
+  for (const k of CONTENT_PATCH_FIELDS) {
+    if (k in body) update[k] = body[k]
+  }
+  if (Object.keys(update).length === 1) {
+    return apiError('No allowed fields to update', 400)
+  }
+  await ref.update(update)
+  return apiSuccess({ id, updated: Object.keys(update) })
 })
 
 export const DELETE = withAuth('client', async (_req: NextRequest, user: ApiUser, context?: unknown) => {
