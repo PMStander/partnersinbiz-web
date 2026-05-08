@@ -644,7 +644,7 @@ export default function BrandPage() {
               <input className={`${inputCls} flex-1`} value={competitorInput} onChange={e => setCompetitorInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (competitorInput.trim()) { set('competitors', [...(formData.competitors ?? []), { url: competitorInput.trim(), relationship: competitorRel }]); setCompetitorInput('') } } }}
                 placeholder="https://competitor.com" disabled={saving} />
-              <select className={`${inputCls} w-36 shrink-0`} value={competitorRel} onChange={e => setCompetitorRel(e.target.value as any)} disabled={saving}>
+              <select className="w-36 shrink-0 px-3 py-2 rounded-md text-sm bg-[var(--color-surface)] border border-[var(--color-outline)] text-on-surface focus:outline-none" value={competitorRel} onChange={e => setCompetitorRel(e.target.value as any)} disabled={saving}>
                 <option value="differentiate">Differentiate</option>
                 <option value="inspire">Inspire</option>
               </select>
