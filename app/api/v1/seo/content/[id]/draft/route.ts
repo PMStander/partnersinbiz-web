@@ -5,9 +5,11 @@ import { withIdempotency } from '@/lib/api/idempotency'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import { FieldValue } from 'firebase-admin/firestore'
+import { generateBlogDraft } from '@/lib/seo/tools/ai-generators'
 import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export const POST = withAuth(
   'admin',
@@ -20,17 +22,32 @@ export const POST = withAuth(
     const data = snap.data() as any
     if (user.role !== 'ai' && data.orgId !== user.orgId) return apiError('Access denied', 403)
 
-    // Persist a draft artifact (existing seo_drafts collection)
+    // Resolve the keyword string from the linked keyword doc, if any.
+    let keyword = ''
+    if (data.targetKeywordId) {
+      const kwSnap = await adminDb.collection('seo_keywords').doc(data.targetKeywordId).get()
+      if (kwSnap.exists) keyword = (kwSnap.data() as { keyword?: string } | undefined)?.keyword ?? ''
+    }
+    if (!keyword) keyword = (data.title as string) ?? ''
+
+    const draft = await generateBlogDraft({
+      title: data.title,
+      keyword,
+      targetUrl: data.targetUrl,
+      type: data.type,
+    })
+
     const draftRef = await adminDb.collection('seo_drafts').add({
       contentId: id,
       sprintId: data.sprintId,
       orgId: data.orgId,
-      title: data.title,
+      title: draft.title,
       type: data.type,
-      // For v1, the actual AI generation is delegated to /api/v1/seo/tools/title-generate
-      // and meta-generate. We just create the draft shell here.
+      body: draft.body,
+      metaDescription: draft.metaDescription,
+      wordCount: draft.wordCount,
+      generatedBy: draft.generatedBy,
       generatedAt: FieldValue.serverTimestamp(),
-      body: `<draft for "${data.title}" — call /api/v1/seo/tools/title-generate and /meta-generate for AI text>`,
       status: 'draft',
       createdAt: FieldValue.serverTimestamp(),
     })
@@ -40,6 +57,12 @@ export const POST = withAuth(
       draftPostId: draftRef.id,
       ...lastActorFrom(user),
     })
-    return apiSuccess({ id, draftPostId: draftRef.id })
+
+    return apiSuccess({
+      id,
+      draftPostId: draftRef.id,
+      wordCount: draft.wordCount,
+      generatedBy: draft.generatedBy,
+    })
   }),
 )

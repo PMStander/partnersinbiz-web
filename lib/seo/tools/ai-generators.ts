@@ -8,7 +8,7 @@
  * import Firebase or any Node-only module, so they are edge-compatible.
  */
 import { generateText } from 'ai'
-import { BRIEF_MODEL } from '@/lib/ai/client'
+import { BRIEF_MODEL, DRAFT_MODEL } from '@/lib/ai/client'
 
 // ---------------------------------------------------------------------------
 // Slug generator (deterministic — no AI needed)
@@ -118,4 +118,88 @@ export async function generateMetaCandidates(topic: string, keyword: string): Pr
   }
 
   return templateMetas(topic, keyword)
+}
+
+// ---------------------------------------------------------------------------
+// Blog draft body
+// ---------------------------------------------------------------------------
+
+export interface BlogDraft {
+  title: string
+  metaDescription: string
+  body: string
+  wordCount: number
+  generatedBy: 'ai' | 'template'
+}
+
+function templateBlogBody(title: string, keyword: string, targetUrl?: string): string {
+  const cta = targetUrl
+    ? `\n\n## Get started\n\n[Try Partners in Biz Properties](${targetUrl}) — set up a property in under five minutes.\n`
+    : ''
+  return `# ${title}\n\n_This is a placeholder draft. Replace with real copy before publishing._\n\nIf you're searching for ${keyword}, you're already past the "is this a problem?" stage. The question is which approach actually works at the scale you operate at.\n\n## Why ${keyword} matters\n\nShort intro on the pain.\n\n## The three ways teams handle this today\n\n1. Manually, in code — slow, brittle, requires a redeploy.\n2. With a generic CMS — clunky, opinionated, doesn't fit.\n3. With a dedicated control plane — what we built.\n\n## What good looks like\n\nWhat the ideal workflow feels like.\n\n## How Partners in Biz approaches it\n\nA short walkthrough of the relevant Properties feature, written in our voice.${cta}`
+}
+
+/**
+ * Generate a full blog post body in Markdown for a given title + target keyword.
+ * ~1200–1800 words. Falls back to a deterministic outline if the AI call fails.
+ *
+ * Voice + format are tuned for the Partners in Biz brand: founder-direct, no fluff,
+ * SA-English spelling, specific over generic. The Properties launch tagline strategy
+ * is honoured — the master tagline is hinted at but not forced into every post.
+ */
+export async function generateBlogDraft(opts: {
+  title: string
+  keyword: string
+  targetUrl?: string
+  type?: string
+}): Promise<BlogDraft> {
+  const { title, keyword, targetUrl, type = 'how-to' } = opts
+
+  try {
+    const { text } = await generateText({
+      model: DRAFT_MODEL,
+      system:
+        'You are a senior copywriter for Partners in Biz, a South African client-growth platform. ' +
+        'You write founder-direct, specific, no-fluff blog posts in British/SA English. ' +
+        'Output VALID Markdown ONLY — no preamble, no explanations, no code fences around the whole document. ' +
+        'Structure: a single H1 (the title), a punchy 2–3 sentence intro hook, 4–6 H2 sections with substantive prose under each, and a closing H2 with a clear next-step CTA. ' +
+        'Length: 1200–1800 words. Use the target keyword naturally in the H1, the first paragraph, at least two H2s, and the conclusion. ' +
+        'Do NOT use buzzwords like "leverage", "synergy", "unlock", "supercharge", or "in today\'s fast-paced world". ' +
+        'Cite real specifics (numbers, examples, named tools) over generic claims. When you reference Partners in Biz Properties, link it naturally to the targetUrl if provided.',
+      prompt:
+        `Title: ${title}\n` +
+        `Target keyword: ${keyword}\n` +
+        `Content type: ${type}\n` +
+        (targetUrl ? `Internal target URL: ${targetUrl}\n` : '') +
+        `\nWrite the full Markdown blog post now.`,
+      maxOutputTokens: 4000,
+    })
+
+    const body = text.trim()
+    const wordCount = body.split(/\s+/).filter(Boolean).length
+
+    if (wordCount >= 600 && body.includes('#')) {
+      // Pull a meta description from the first paragraph after the H1
+      const firstPara =
+        body
+          .split('\n')
+          .find((l) => l.trim().length > 80 && !l.startsWith('#'))
+          ?.trim() ?? ''
+      const metaDescription =
+        firstPara.length > 160 ? firstPara.slice(0, 157).trimEnd() + '…' : firstPara
+
+      return { title, metaDescription, body, wordCount, generatedBy: 'ai' }
+    }
+  } catch {
+    // AI unavailable — fall through
+  }
+
+  const body = templateBlogBody(title, keyword, targetUrl)
+  return {
+    title,
+    metaDescription: `${title} — a Partners in Biz guide on ${keyword}.`.slice(0, 160),
+    body,
+    wordCount: body.split(/\s+/).filter(Boolean).length,
+    generatedBy: 'template',
+  }
 }
