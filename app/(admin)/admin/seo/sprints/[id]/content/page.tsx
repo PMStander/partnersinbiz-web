@@ -59,7 +59,7 @@ export default async function ContentTab({ params }: { params: Promise<{ id: str
       ) : (
         <div className="card overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="text-xs text-left border-b bg-gray-50">
+            <thead className="text-xs text-left border-b border-[var(--color-pib-line)] bg-[var(--color-pib-surface-2)] text-[var(--color-pib-text-muted)] uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-2 w-8"></th>
                 <th className="px-4 py-2">Title</th>
