@@ -39,7 +39,7 @@ export function ContentRow({
 
   return (
     <>
-      <tr className="hover:bg-gray-50">
+      <tr className="hover:bg-[var(--color-row-hover)]">
         <td className="px-4 py-2">
           <button
             type="button"
@@ -72,7 +72,7 @@ export function ContentRow({
       </tr>
       {open && (
         <tr>
-          <td colSpan={8} className="bg-gray-50 px-6 py-4">
+          <td colSpan={8} className="bg-[var(--color-pib-surface-2)] px-6 py-4">
             {!draftPostId && (
               <div className="text-xs text-[var(--color-pib-text-muted)]">
                 No draft yet. Generate one via{' '}
@@ -95,7 +95,7 @@ export function ContentRow({
                     Meta: {draft.metaDescription}
                   </div>
                 )}
-                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans max-h-[600px] overflow-y-auto bg-white p-4 rounded border">
+                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans max-h-[600px] overflow-y-auto bg-[var(--color-pib-surface)] text-[var(--color-pib-text)] p-4 rounded border border-[var(--color-pib-line)]">
                   {draft.body}
                 </pre>
               </div>
