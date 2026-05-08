@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AnalyticsNav } from '@/components/admin/AnalyticsNav'
 
 interface LiveEvent {
@@ -24,7 +25,9 @@ const EVENT_COLORS: Record<string, string> = {
 const defaultColor = 'text-amber-400'
 
 export default function LivePage() {
-  const [propertyId, setPropertyId] = useState('')
+  const sp = useSearchParams()
+  const initialPid = sp?.get('propertyId') ?? ''
+  const [propertyId, setPropertyId] = useState(initialPid)
   const [active, setActive] = useState(false)
   const [events, setEvents] = useState<LiveEvent[]>([])
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -49,6 +52,15 @@ export default function LivePage() {
   }
 
   useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current) }, [])
+
+  useEffect(() => {
+    if (initialPid) {
+      setActive(true)
+      poll(initialPid)
+      intervalRef.current = setInterval(() => poll(initialPid), 5000)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="p-6 space-y-6">

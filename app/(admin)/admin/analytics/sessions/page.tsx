@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AnalyticsNav } from '@/components/admin/AnalyticsNav'
 
 interface Session {
@@ -34,9 +34,11 @@ function durationLabel(start: any, end: any): string {
 
 export default function SessionsPage() {
   const router = useRouter()
+  const sp = useSearchParams()
+  const initialPid = sp?.get('propertyId') ?? ''
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(false)
-  const [propertyId, setPropertyId] = useState('')
+  const [propertyId, setPropertyId] = useState(initialPid)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 

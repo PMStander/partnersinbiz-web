@@ -1,8 +1,8 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AnalyticsNav } from '@/components/admin/AnalyticsNav'
 
 interface AnalyticsEvent {
@@ -26,9 +26,11 @@ function formatTs(ts: any): string {
 
 export default function AnalyticsEventsPage() {
   const router = useRouter()
+  const sp = useSearchParams()
+  const initialPid = sp?.get('propertyId') ?? ''
   const [events, setEvents] = useState<AnalyticsEvent[]>([])
   const [loading, setLoading] = useState(false)
-  const [propertyId, setPropertyId] = useState('')
+  const [propertyId, setPropertyId] = useState(initialPid)
   const [eventFilter, setEventFilter] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')

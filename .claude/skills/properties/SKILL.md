@@ -215,6 +215,171 @@ Response:
 
 ---
 
+## Property Analytics
+
+All analytics endpoints accept `?propertyId=<id>` to scope results to a single property.
+Auth is `Authorization: Bearer $AI_API_KEY`. Base: `https://partnersinbiz.online`.
+
+### `GET /api/v1/analytics/sessions?propertyId=<id>&limit=100` — auth: admin
+
+Returns an array of session objects. Each session has fields:
+`distinctId`, `device`, `country`, `referrer`, `eventCount`, `startedAt`, `lastActivityAt`.
+
+```bash
+curl -s "https://partnersinbiz.online/api/v1/analytics/sessions?propertyId=$PROPERTY_ID&limit=100" \
+  -H "Authorization: Bearer $AI_API_KEY"
+```
+
+### `GET /api/v1/analytics/live?propertyId=<id>` — auth: admin
+
+Live event stream — events from the last **5 minutes**, capped at **100 events**.
+
+```bash
+curl -s "https://partnersinbiz.online/api/v1/analytics/live?propertyId=$PROPERTY_ID" \
+  -H "Authorization: Bearer $AI_API_KEY"
+```
+
+### `GET /api/v1/analytics/events?propertyId=<id>&limit=200&event=<optional>` — auth: admin
+
+Raw events for a property. Pass `event=<name>` to filter to a single event type.
+
+```bash
+curl -s "https://partnersinbiz.online/api/v1/analytics/events?propertyId=$PROPERTY_ID&limit=200" \
+  -H "Authorization: Bearer $AI_API_KEY"
+```
+
+### `GET /api/v1/analytics/users?propertyId=<id>` — auth: admin
+
+Distinct users (by `distinctId`) seen for this property.
+
+```bash
+curl -s "https://partnersinbiz.online/api/v1/analytics/users?propertyId=$PROPERTY_ID" \
+  -H "Authorization: Bearer $AI_API_KEY"
+```
+
+### Common queries
+
+- **Sessions in the last 7 days** — fetch sessions and filter client-side:
+  ```js
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recent = sessions.filter(s => new Date(s.startedAt).getTime() >= cutoff);
+  ```
+- **Unique users in the last 7 days**:
+  ```js
+  const uniques = new Set(recent.map(s => s.distinctId)).size;
+  ```
+- **Conversion events** — use the events endpoint with an `event` filter:
+  ```bash
+  curl -s "https://partnersinbiz.online/api/v1/analytics/events?propertyId=$PROPERTY_ID&event=conversion&limit=200" \
+    -H "Authorization: Bearer $AI_API_KEY"
+  ```
+
+---
+
+## Conversion Sequence
+
+A property can be linked to an email sequence via the `conversionSequenceId` field.
+The sequence is what enrolled users go through when they hit a conversion event on this property.
+
+### Linking a sequence
+
+```bash
+curl -s -X PUT "https://partnersinbiz.online/api/v1/properties/$PROPERTY_ID" \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "conversionSequenceId": "seq_xyz" }'
+```
+
+### Unlinking
+
+Pass `null` to detach:
+
+```bash
+curl -s -X PUT "https://partnersinbiz.online/api/v1/properties/$PROPERTY_ID" \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "conversionSequenceId": null }'
+```
+
+### Reading the linked sequence + enrollment summary
+
+There is no server-side aggregation endpoint yet — fetch both resources in parallel and
+aggregate counts client-side:
+
+```bash
+curl -s "https://partnersinbiz.online/api/v1/sequences/$SEQUENCE_ID" \
+  -H "Authorization: Bearer $AI_API_KEY"
+
+curl -s "https://partnersinbiz.online/api/v1/sequence-enrollments?sequenceId=$SEQUENCE_ID" \
+  -H "Authorization: Bearer $AI_API_KEY"
+```
+
+```js
+const [sequence, enrollments] = await Promise.all([getSeq(id), getEnrollments(id)]);
+const total = enrollments.length;
+const active = enrollments.filter(e => e.status === "active").length;
+const completed = enrollments.filter(e => e.status === "completed").length;
+const summary = { sequence: sequence.name, total, active, completed };
+```
+
+---
+
+## Creator Links
+
+Creator/affiliate links can be attributed to a property via the `propertyId` field on each
+link. This is the source of truth for attribution — the property's `creatorLinkPrefix` is
+only a UX hint for naming new slugs.
+
+### List links for a property
+
+```bash
+curl -s "https://partnersinbiz.online/api/v1/links?propertyId=$PROPERTY_ID&limit=100" \
+  -H "Authorization: Bearer $AI_API_KEY"
+```
+
+### Create a link
+
+`shortCode` is optional — a random one is generated if omitted, and slug clashes are
+auto-retried on the server.
+
+```bash
+curl -s -X POST "https://partnersinbiz.online/api/v1/links" \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "originalUrl": "https://scrolledbrain.com/download",
+    "propertyId": "'"$PROPERTY_ID"'",
+    "shortCode": "alex",
+    "utmSource": "creator",
+    "utmMedium": "social",
+    "utmCampaign": "launch"
+  }'
+```
+
+### Update a link
+
+Accepts any subset of `{ propertyId, originalUrl, utmSource, utmMedium, utmCampaign, utmTerm, utmContent }`.
+Pass `propertyId: null` to detach from the property.
+
+```bash
+curl -s -X PUT "https://partnersinbiz.online/api/v1/links/$LINK_ID" \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "utmCampaign": "spring-sale" }'
+```
+
+### Delete a link
+
+```bash
+curl -s -X DELETE "https://partnersinbiz.online/api/v1/links/$LINK_ID" \
+  -H "Authorization: Bearer $AI_API_KEY"
+```
+
+The property's `creatorLinkPrefix` field is now a UX hint for naming new link slugs —
+`propertyId` is the actual source of truth for attribution.
+
+---
+
 ## Connections
 
 Integration connections live under each property. Credentials are AES-256-GCM encrypted

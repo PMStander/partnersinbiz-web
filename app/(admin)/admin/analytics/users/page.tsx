@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { AnalyticsNav } from '@/components/admin/AnalyticsNav'
 
 interface UserRow {
@@ -14,7 +15,9 @@ interface UserRow {
 }
 
 export default function AnalyticsUsersPage() {
-  const [propertyId, setPropertyId] = useState('')
+  const sp = useSearchParams()
+  const initialPid = sp?.get('propertyId') ?? ''
+  const [propertyId, setPropertyId] = useState(initialPid)
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(false)
 
