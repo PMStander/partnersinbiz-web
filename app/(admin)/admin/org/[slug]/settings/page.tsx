@@ -14,6 +14,7 @@ interface OrgForm {
   status: string
   notificationEmail: string
   defaultApprovalRequired: boolean
+  timezone: string
   // Billing address
   line1: string
   line2: string
@@ -37,7 +38,7 @@ interface OrgForm {
 
 const emptyForm: OrgForm = {
   name: '', website: '', description: '', industry: '', billingEmail: '',
-  status: 'active', notificationEmail: '', defaultApprovalRequired: false,
+  status: 'active', notificationEmail: '', defaultApprovalRequired: false, timezone: '',
   line1: '', line2: '', city: '', state: '', postalCode: '', country: '',
   vatNumber: '', registrationNumber: '', phone: '',
   bankName: '', accountHolder: '', accountNumber: '', branchCode: '',
@@ -91,6 +92,7 @@ export default function OrgSettingsPage() {
           status: d.status ?? 'active',
           notificationEmail: settings.notificationEmail ?? '',
           defaultApprovalRequired: settings.defaultApprovalRequired ?? false,
+          timezone: settings.timezone ?? '',
           line1: addr.line1 ?? '',
           line2: addr.line2 ?? '',
           city: addr.city ?? '',
@@ -132,6 +134,7 @@ export default function OrgSettingsPage() {
         settings: {
           notificationEmail: form.notificationEmail,
           defaultApprovalRequired: form.defaultApprovalRequired,
+          timezone: form.timezone,
         },
         billingDetails: {
           address: {
@@ -248,6 +251,29 @@ export default function OrgSettingsPage() {
               <label htmlFor="defaultApproval" className="pib-label mb-0 cursor-pointer">
                 Require approval by default for new content
               </label>
+            </div>
+            <div>
+              <label className="pib-label">Timezone</label>
+              <select value={form.timezone} onChange={e => update('timezone', e.target.value)} className="pib-select">
+                <option value="" disabled>Select timezone…</option>
+                <option value="Africa/Johannesburg">Africa/Johannesburg (SAST, UTC+2)</option>
+                <option value="America/Chicago">America/Chicago (CST, UTC-6)</option>
+                <option value="America/Denver">America/Denver (MST, UTC-7)</option>
+                <option value="America/Los_Angeles">America/Los_Angeles (PST, UTC-8)</option>
+                <option value="America/New_York">America/New_York (EST, UTC-5)</option>
+                <option value="America/Sao_Paulo">America/Sao_Paulo (BRT, UTC-3)</option>
+                <option value="Asia/Dubai">Asia/Dubai (GST, UTC+4)</option>
+                <option value="Asia/Kolkata">Asia/Kolkata (IST, UTC+5:30)</option>
+                <option value="Asia/Shanghai">Asia/Shanghai (CST, UTC+8)</option>
+                <option value="Asia/Singapore">Asia/Singapore (SGT, UTC+8)</option>
+                <option value="Asia/Tokyo">Asia/Tokyo (JST, UTC+9)</option>
+                <option value="Australia/Sydney">Australia/Sydney (AEST, UTC+10)</option>
+                <option value="Europe/Amsterdam">Europe/Amsterdam (CET, UTC+1)</option>
+                <option value="Europe/London">Europe/London (GMT, UTC+0)</option>
+                <option value="Europe/Paris">Europe/Paris (CET, UTC+1)</option>
+                <option value="Pacific/Auckland">Pacific/Auckland (NZST, UTC+12)</option>
+                <option value="UTC">UTC</option>
+              </select>
             </div>
           </div>
         </div>

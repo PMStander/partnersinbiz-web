@@ -307,7 +307,72 @@ export default function BrandPage() {
       {loading ? (
         <div className="pib-card space-y-4">{[...Array(10)].map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
       ) : (
-        <form onSubmit={handleSave} className="space-y-6">
+        <>
+          {/* ── BRAND PREVIEW PANEL ──────────────────────────────────────── */}
+          <div className="pib-card space-y-5">
+            <h2 className="text-sm font-label uppercase tracking-widest text-on-surface-variant">Brand Preview</h2>
+
+            {/* Colour palette strip */}
+            <div>
+              <p className={labelCls}>Colour Palette</p>
+              <div className="flex flex-wrap gap-2">
+                {COLOR_DEFS.map(({ key, label }) => (
+                  <div key={key} className="flex flex-col items-center gap-1">
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 6,
+                        background: colors[key] || 'var(--color-surface-variant)',
+                        border: '1px solid var(--color-outline)',
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span style={{ fontSize: 9, color: 'var(--color-on-surface-variant)', textTransform: 'capitalize', lineHeight: 1.2, textAlign: 'center', maxWidth: 40 }}>
+                      {label.replace(' / ', '\n')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Typography sample */}
+            <div>
+              <p className={labelCls}>Typography Sample</p>
+              {(formData.fonts?.heading || formData.fonts?.body) ? (
+                <div className="rounded-lg border border-[var(--color-outline)] p-4 space-y-2 bg-[var(--color-surface)]">
+                  <p style={{ fontFamily: formData.fonts?.heading || 'inherit', fontSize: 18, lineHeight: 1.3, color: 'var(--color-on-surface)' }}>
+                    The quick brown fox
+                  </p>
+                  <p style={{ fontFamily: formData.fonts?.body || 'inherit', fontSize: 13, lineHeight: 1.5, color: 'var(--color-on-surface-variant)' }}>
+                    Jumps over the lazy dog. 0123456789.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-on-surface-variant italic">Set fonts above to see a type sample</p>
+              )}
+            </div>
+
+            {/* Design aesthetic tags */}
+            {(formData.designAesthetic?.length ?? 0) > 0 && (
+              <div>
+                <p className={labelCls}>Design Aesthetic</p>
+                <div className="flex flex-wrap gap-2">
+                  {(formData.designAesthetic ?? []).map(tag => (
+                    <span
+                      key={tag}
+                      className="px-3 py-1 rounded-full text-xs font-label"
+                      style={{ background: 'var(--color-accent-v2)', color: '#fff' }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={handleSave} className="space-y-6">
 
           {/* ── IDENTITY ─────────────────────────────────────────────────── */}
           <div className="pib-card space-y-4">
@@ -639,6 +704,7 @@ export default function BrandPage() {
             </button>
           </div>
         </form>
+        </>
       )}
     </div>
   )
