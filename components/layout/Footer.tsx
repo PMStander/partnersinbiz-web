@@ -111,8 +111,8 @@ export default function Footer() {
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <Link href="/privacy-policy" className="hover:text-[var(--color-pib-text-muted)] transition-colors">Privacy</Link>
             <Link href="/terms-of-service" className="hover:text-[var(--color-pib-text-muted)] transition-colors">Terms</Link>
-            <Link href="/llms.txt" className="hover:text-[var(--color-pib-text-muted)] transition-colors">llms.txt</Link>
-            <Link href="/sitemap.xml" className="hover:text-[var(--color-pib-text-muted)] transition-colors">Sitemap</Link>
+            <a href="/llms.txt" className="hover:text-[var(--color-pib-text-muted)] transition-colors">llms.txt</a>
+            <a href="/sitemap.xml" className="hover:text-[var(--color-pib-text-muted)] transition-colors">Sitemap</a>
             <span className="font-mono">v2026.04 · Made in Pretoria</span>
           </div>
         </div>
