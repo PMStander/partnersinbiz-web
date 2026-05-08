@@ -57,11 +57,13 @@ function buildUrlWithUtm(originalUrl: string, utmParams?: Record<string, string>
 }
 
 export interface CreateLinkOptions {
+  propertyId?: string
   utmSource?: string
   utmMedium?: string
   utmCampaign?: string
   utmTerm?: string
   utmContent?: string
+  customShortCode?: string
 }
 
 /**
@@ -80,12 +82,14 @@ export async function createShortLink(
     throw new Error('Invalid URL provided')
   }
 
-  const shortCode = await ensureUniqueCode(orgId, generateShortCode())
+  const seedCode = options.customShortCode?.trim() || generateShortCode()
+  const shortCode = await ensureUniqueCode(orgId, seedCode)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const shortUrl = `${appUrl}/l/${shortCode}`
 
   const doc = {
     orgId,
+    propertyId: options.propertyId || undefined,
     originalUrl,
     shortCode,
     shortUrl,

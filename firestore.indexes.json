@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "shortened_links",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "recurring_schedules",
       "queryScope": "COLLECTION",
       "fields": [

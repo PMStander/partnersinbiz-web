@@ -3,6 +3,7 @@ import type { Timestamp } from 'firebase-admin/firestore'
 export interface ShortenedLink {
   id: string
   orgId: string
+  propertyId?: string
   originalUrl: string
   shortCode: string // 6-8 char alphanumeric
   shortUrl: string // {APP_URL}/l/{shortCode}

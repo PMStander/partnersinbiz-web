@@ -22,12 +22,17 @@ export const GET = withAuth('client', withTenant(async (req, _user, orgId) => {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20', 10)))
   const offset = (page - 1) * limit
+  const propertyId = searchParams.get('propertyId') || undefined
 
-  const snapshot = await adminDb
+  let query = adminDb
     .collection('shortened_links')
-    .where('orgId', '==', orgId)
-    .orderBy('createdAt', 'desc')
-    .get()
+    .where('orgId', '==', orgId) as FirebaseFirestore.Query
+
+  if (propertyId) {
+    query = query.where('propertyId', '==', propertyId)
+  }
+
+  const snapshot = await query.orderBy('createdAt', 'desc').get()
 
   const totalCount = snapshot.size
   const links = snapshot.docs
@@ -79,6 +84,8 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId) => {
       orgId,
       body.originalUrl,
       {
+        propertyId: typeof body.propertyId === 'string' ? body.propertyId : undefined,
+        customShortCode: typeof body.shortCode === 'string' ? body.shortCode : undefined,
         utmSource: body.utmSource,
         utmMedium: body.utmMedium,
         utmCampaign: body.utmCampaign,
