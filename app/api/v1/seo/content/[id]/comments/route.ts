@@ -45,6 +45,7 @@ export const GET = withAuth(
         createdAt: c.createdAt,
         agentPickedUp: c.agentPickedUp ?? false,
         agentPickedUpAt: c.agentPickedUpAt ?? null,
+        anchor: c.anchor ?? null,
       }
     })
 
@@ -78,6 +79,29 @@ export const POST = withAuth(
       : user.uid
     const userRole = user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client'
 
+    // Optional anchor — agents and the UI use this to know exactly what the
+    // client commented on. Validated permissively; arbitrary fields are dropped.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawAnchor = body?.anchor as any
+    let anchor: {
+      type: 'text' | 'image'
+      text?: string
+      offset?: number
+      mediaUrl?: string
+    } | null = null
+    if (rawAnchor && (rawAnchor.type === 'text' || rawAnchor.type === 'image')) {
+      anchor = { type: rawAnchor.type }
+      if (rawAnchor.type === 'text' && typeof rawAnchor.text === 'string') {
+        anchor.text = String(rawAnchor.text).slice(0, 400)
+        if (typeof rawAnchor.offset === 'number' && rawAnchor.offset >= 0) {
+          anchor.offset = Math.floor(rawAnchor.offset)
+        }
+      }
+      if (rawAnchor.type === 'image' && typeof rawAnchor.mediaUrl === 'string') {
+        anchor.mediaUrl = String(rawAnchor.mediaUrl).slice(0, 1000)
+      }
+    }
+
     const commentRef = ref.collection('comments').doc()
     const commentData = {
       text: text.trim(),
@@ -86,6 +110,7 @@ export const POST = withAuth(
       userRole,
       createdAt: FieldValue.serverTimestamp(),
       agentPickedUp: false,
+      ...(anchor ? { anchor } : {}),
     }
     await commentRef.set(commentData)
 
@@ -100,7 +125,14 @@ export const POST = withAuth(
       statusFlipped = true
     }
 
-    // Activity log (fire and forget)
+    // Activity log (fire and forget). Include anchor preview so agents know
+    // what the client was looking at without re-fetching the comment.
+    const anchorPreview =
+      anchor?.type === 'text'
+        ? ` re: "${(anchor.text ?? '').slice(0, 60)}…"`
+        : anchor?.type === 'image'
+          ? ' re: image'
+          : ''
     logActivity({
       orgId: data.orgId,
       type: statusFlipped ? 'seo_content_changes_requested' : 'seo_content_commented',
@@ -108,8 +140,8 @@ export const POST = withAuth(
       actorName: displayName,
       actorRole: userRole,
       description: statusFlipped
-        ? `Requested changes on "${data.title ?? id}": "${text.trim().slice(0, 80)}"`
-        : `Commented on "${data.title ?? id}": "${text.trim().slice(0, 80)}"`,
+        ? `Requested changes on "${data.title ?? id}"${anchorPreview}: "${text.trim().slice(0, 80)}"`
+        : `Commented on "${data.title ?? id}"${anchorPreview}: "${text.trim().slice(0, 80)}"`,
       entityId: id,
       entityType: 'seo_content',
       entityTitle: data.title ?? id,

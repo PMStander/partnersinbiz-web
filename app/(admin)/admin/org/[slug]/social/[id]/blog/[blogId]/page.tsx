@@ -1,22 +1,20 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { BlogReaderCard } from '@/components/campaign-preview'
 import { OrgThemedFrame, useOrgBrand } from '@/components/admin/OrgThemedFrame'
+import {
+  SelectionPopover,
+  CommentComposer,
+  CommentList,
+  type AnchorTarget,
+  type InlineComment,
+} from '@/components/inline-comments'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObj = any
-
-interface Comment {
-  id: string
-  text: string
-  userId: string
-  userName: string
-  userRole: 'admin' | 'client' | 'ai'
-  createdAt: AnyObj
-}
 
 export default function BlogDetailPage() {
   const params = useParams()
@@ -60,11 +58,12 @@ function Detail({
   const router = useRouter()
   const { brand } = useOrgBrand()
   const [blog, setBlog] = useState<AnyObj | null>(null)
-  const [comments, setComments] = useState<Comment[]>([])
+  const [comments, setComments] = useState<InlineComment[]>([])
   const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState<null | 'approve' | 'reject'>(null)
-  const [feedbackText, setFeedbackText] = useState('')
-  const [showFeedback, setShowFeedback] = useState(false)
+  const [busy, setBusy] = useState<null | 'approve' | 'comment'>(null)
+  const [composerAnchor, setComposerAnchor] = useState<AnchorTarget | null>(null)
+
+  const bodyRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -75,7 +74,7 @@ function Detail({
       .then(([a, c]) => {
         const blogs = (a.data?.blogs ?? []) as AnyObj[]
         setBlog(blogs.find(b => b.id === blogId) ?? null)
-        setComments((c.data ?? []) as Comment[])
+        setComments((c.data ?? []) as InlineComment[])
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -102,6 +101,97 @@ function Detail({
     }
   }, [blog])
 
+  // Click-on-image-to-comment via event delegation. Also marks every <img>
+  // inside the body with a "💬 Comment on image" affordance on hover.
+  useEffect(() => {
+    const root = bodyRef.current
+    if (!root) return
+    const onClick = (e: MouseEvent) => {
+      const tgt = e.target as HTMLElement
+      if (tgt?.tagName === 'IMG') {
+        const img = tgt as HTMLImageElement
+        if (img.src) {
+          e.preventDefault()
+          setComposerAnchor({ kind: 'image', mediaUrl: img.src })
+        }
+      }
+    }
+    root.addEventListener('click', onClick)
+    return () => root.removeEventListener('click', onClick)
+  }, [previewBlog])
+
+  // Add hover-cursor on every image inside the body so it's discoverable
+  useEffect(() => {
+    const root = bodyRef.current
+    if (!root) return
+    const imgs = root.querySelectorAll('img')
+    imgs.forEach(img => {
+      img.style.cursor = 'pointer'
+      img.title = 'Click to comment on this image'
+    })
+  }, [previewBlog])
+
+  async function postComment(text: string, anchor: AnchorTarget) {
+    if (!text.trim()) return
+    setBusy('comment')
+    try {
+      const payload: AnyObj = { text: text.trim() }
+      if (anchor.kind === 'text') {
+        payload.anchor = { type: 'text', text: anchor.text }
+        if (typeof anchor.offset === 'number') payload.anchor.offset = anchor.offset
+      } else if (anchor.kind === 'image') {
+        payload.anchor = { type: 'image', mediaUrl: anchor.mediaUrl }
+      }
+      const r = await fetch(`/api/v1/seo/content/${blogId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!r.ok) throw new Error('comment failed')
+      const refreshed = await fetch(`/api/v1/seo/content/${blogId}/comments`).then(r => r.json())
+      setComments((refreshed.data ?? []) as InlineComment[])
+      setComposerAnchor(null)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  function scrollToAnchor(c: InlineComment) {
+    const root = bodyRef.current
+    if (!root || !c.anchor) return
+    if (c.anchor.type === 'text') {
+      const needle = c.anchor.text.slice(0, 60)
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+      let node: Node | null = walker.currentNode
+      while ((node = walker.nextNode())) {
+        if ((node.textContent ?? '').includes(needle)) {
+          const range = document.createRange()
+          const idx = node.textContent!.indexOf(needle)
+          range.setStart(node, idx)
+          range.setEnd(node, Math.min(node.textContent!.length, idx + needle.length))
+          const rect = range.getBoundingClientRect()
+          window.scrollTo({ top: rect.top + window.scrollY - 120, behavior: 'smooth' })
+          // Brief highlight via selection
+          const sel = window.getSelection()
+          sel?.removeAllRanges()
+          sel?.addRange(range)
+          window.setTimeout(() => sel?.removeAllRanges(), 1800)
+          return
+        }
+      }
+    }
+    if (c.anchor.type === 'image') {
+      const imageUrl = c.anchor.mediaUrl
+      const imgs = root.querySelectorAll('img')
+      const target = Array.from(imgs).find(img => img.src === imageUrl)
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        target.style.outline = '3px solid var(--org-accent, #F5A623)'
+        window.setTimeout(() => (target.style.outline = ''), 1800)
+      }
+    }
+  }
+
   async function approve() {
     if (busy) return
     setBusy('approve')
@@ -119,28 +209,8 @@ function Detail({
     }
   }
 
-  async function requestChanges() {
-    if (busy || !feedbackText.trim()) return
-    setBusy('reject')
-    try {
-      const r = await fetch(`/api/v1/seo/content/${blogId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: feedbackText.trim() }),
-      })
-      if (!r.ok) throw new Error('comment failed')
-      // Re-pull comments
-      const c = await fetch(`/api/v1/seo/content/${blogId}/comments`).then(r => r.json())
-      setComments((c.data ?? []) as Comment[])
-      setFeedbackText('')
-      setShowFeedback(false)
-    } finally {
-      setBusy(null)
-    }
-  }
-
   if (loading) {
-    return <div className="pib-skeleton h-96 max-w-4xl mx-auto rounded-2xl" />
+    return <div className="pib-skeleton h-96 max-w-7xl mx-auto rounded-2xl" />
   }
 
   if (!previewBlog) {
@@ -158,9 +228,10 @@ function Detail({
   }
 
   const isPublished = blog?.status === 'live' || blog?.status === 'published'
+  const anchoredCount = comments.filter(c => !!c.anchor).length
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto" style={{ color: 'var(--org-text, var(--color-pib-text))' }}>
+    <div className="space-y-8 max-w-7xl mx-auto" style={{ color: 'var(--org-text, var(--color-pib-text))' }}>
       {/* Header */}
       <header className="space-y-2">
         <Link
@@ -174,11 +245,63 @@ function Detail({
           style={{ color: 'var(--org-accent, var(--color-pib-accent))' }}
         >
           Blog Post · {isPublished ? 'Published' : 'Awaiting Review'}
+          {anchoredCount > 0 && (
+            <span className="ml-2 normal-case tracking-normal text-on-surface-variant">
+              · {anchoredCount} inline comment{anchoredCount === 1 ? '' : 's'}
+            </span>
+          )}
         </p>
       </header>
 
-      {/* The full blog reader */}
-      <BlogReaderCard blog={previewBlog} brand={brand} />
+      {/* Helper banner */}
+      {!isPublished && (
+        <div
+          className="pib-card p-4 text-xs leading-relaxed flex items-start gap-3"
+          style={{
+            borderColor: 'var(--org-accent, var(--color-pib-accent))',
+            background: 'rgba(245,166,35,0.06)',
+          }}
+        >
+          <span aria-hidden style={{ color: 'var(--org-accent, var(--color-pib-accent))' }}>
+            💬
+          </span>
+          <p>
+            <strong>Highlight any text</strong> to leave an inline comment, or{' '}
+            <strong>click an image</strong> to comment on it. The writer and our
+            agents see exactly which part you flagged.
+          </p>
+        </div>
+      )}
+
+      {/* Two-column layout: reader + comments sidebar */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start relative">
+        {/* Reader */}
+        <div ref={bodyRef} className="relative w-full overflow-hidden">
+          <SelectionPopover
+            containerRef={bodyRef}
+            onComment={text =>
+              setComposerAnchor({ kind: 'text', text })
+            }
+          />
+          <BlogReaderCard blog={previewBlog} brand={brand} />
+        </div>
+
+        {/* Sidebar */}
+        <aside className="lg:sticky lg:top-6 space-y-3">
+          <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
+            Comments ({comments.length})
+          </p>
+          <CommentList comments={comments} onScrollToAnchor={scrollToAnchor} />
+          <button
+            type="button"
+            onClick={() => setComposerAnchor({ kind: 'general' })}
+            disabled={isPublished}
+            className="w-full text-xs font-label px-3 py-2 rounded-md border border-[var(--org-border,var(--color-pib-line))] hover:bg-[var(--color-surface)] transition-colors disabled:opacity-50"
+          >
+            + General comment
+          </button>
+        </aside>
+      </div>
 
       {/* Approval bar */}
       {!isPublished && (
@@ -186,103 +309,35 @@ function Detail({
           <div>
             <p className="text-sm font-headline font-semibold">Ready to ship?</p>
             <p className="text-xs text-on-surface-variant">
-              Approve to publish, or leave feedback to send it back.
+              {comments.length === 0
+                ? 'Approve to publish, or highlight text / click an image to leave inline feedback.'
+                : `${comments.length} comment${comments.length === 1 ? '' : 's'} pending. Approve to publish anyway, or wait for the writer to address them.`}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowFeedback(v => !v)}
-              disabled={!!busy}
-              className="text-sm font-label px-4 py-2 rounded-md border border-[var(--org-border,var(--color-pib-line))] hover:bg-[var(--color-surface)] transition-colors disabled:opacity-50"
-            >
-              Request changes
-            </button>
-            <button
-              type="button"
-              onClick={approve}
-              disabled={!!busy}
-              className="text-sm font-label px-5 py-2 rounded-md transition-opacity disabled:opacity-50"
-              style={{
-                background: 'var(--org-accent, var(--color-pib-accent))',
-                color: '#000',
-              }}
-            >
-              {busy === 'approve' ? 'Publishing…' : 'Approve & publish'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={approve}
+            disabled={!!busy}
+            className="text-sm font-label px-5 py-2 rounded-md transition-opacity disabled:opacity-50"
+            style={{
+              background: 'var(--org-accent, var(--color-pib-accent))',
+              color: '#000',
+            }}
+          >
+            {busy === 'approve' ? 'Publishing…' : 'Approve & publish'}
+          </button>
         </section>
       )}
 
-      {/* Feedback panel */}
-      {showFeedback && !isPublished && (
-        <section className="pib-card p-5 space-y-3">
-          <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
-            Request changes
-          </p>
-          <textarea
-            value={feedbackText}
-            onChange={e => setFeedbackText(e.target.value)}
-            placeholder="What needs to change? Leave a specific note for the writer."
-            rows={4}
-            className="w-full text-sm bg-[var(--color-surface)] border border-[var(--color-outline)] rounded-md px-3 py-2 text-on-surface placeholder:text-on-surface-variant focus:outline-none"
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowFeedback(false)
-                setFeedbackText('')
-              }}
-              className="text-xs text-on-surface-variant hover:text-on-surface px-3 py-1.5"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={requestChanges}
-              disabled={!!busy || !feedbackText.trim()}
-              className="text-sm font-label px-4 py-2 rounded-md transition-opacity disabled:opacity-50"
-              style={{
-                background: 'var(--org-accent, var(--color-pib-accent))',
-                color: '#000',
-              }}
-            >
-              {busy === 'reject' ? 'Sending…' : 'Send feedback'}
-            </button>
-          </div>
-        </section>
-      )}
-
-      {/* Comments thread */}
-      {comments.length > 0 && (
-        <section className="space-y-3">
-          <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
-            Comments ({comments.length})
-          </p>
-          <ul className="space-y-3">
-            {comments.map(c => (
-              <li key={c.id} className="pib-card p-4">
-                <div className="flex items-center gap-2 text-xs text-on-surface-variant">
-                  <span className="font-medium text-on-surface">{c.userName}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wide bg-[var(--color-surface)]">
-                    {c.userRole}
-                  </span>
-                  <span className="ml-auto">{formatTs(c.createdAt)}</span>
-                </div>
-                <p className="text-sm mt-2 whitespace-pre-wrap">{c.text}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {/* Composer modal */}
+      {composerAnchor && (
+        <CommentComposer
+          anchor={composerAnchor}
+          busy={busy === 'comment'}
+          onCancel={() => setComposerAnchor(null)}
+          onSubmit={text => postComment(text, composerAnchor)}
+        />
       )}
     </div>
   )
-}
-
-function formatTs(ts: AnyObj): string {
-  const sec = ts?._seconds ?? ts?.seconds
-  if (!sec) return ''
-  const d = new Date(sec * 1000)
-  return d.toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }

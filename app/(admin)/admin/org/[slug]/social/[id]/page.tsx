@@ -558,14 +558,25 @@ function PlatformPanel({
 }
 
 function emptyCopy(label: string, kind: string): React.ReactNode {
+  const isVideo =
+    kind === 'short-vertical-video' ||
+    kind === 'long-form 16:9 video' ||
+    kind === '15-second story slides'
   return (
-    <span>
-      No {label} on this campaign yet.{' '}
-      <span className="block text-on-surface-variant text-xs mt-2">
-        The content-engine produces {kind} when a campaign is created with that
-        deliverable. Re-run it to add this format.
+    <div className="flex flex-col items-center gap-3">
+      <span aria-hidden className="text-3xl opacity-60">
+        {isVideo ? '🎬' : '📭'}
       </span>
-    </span>
+      <p className="text-sm">No {label} on this campaign yet.</p>
+      <p className="text-xs text-on-surface-variant max-w-md">
+        {isVideo
+          ? `This campaign was imported without ${kind} — videos are produced by the content-engine skill, not by social import. Run it on this client to generate ${kind}.`
+          : `The content-engine produces ${kind} when a campaign is created with that deliverable. Re-run it to add this format.`}
+      </p>
+      <code className="text-[11px] px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--org-border,var(--color-pib-line))]">
+        /content-engine
+      </code>
+    </div>
   )
 }
 
