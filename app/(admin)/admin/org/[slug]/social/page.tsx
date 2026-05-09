@@ -3,6 +3,17 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import {
+  InstagramFeedCard,
+  InstagramReelsCard,
+  InstagramStoriesCard,
+  FacebookFeedCard,
+  LinkedInPostCard,
+  TwitterPostCard,
+  YouTubeCard,
+  type PreviewSocialPost,
+  type PreviewMedia,
+} from '@/components/campaign-preview'
 
 type PostStatus = 'draft' | 'pending_approval' | 'approved' | 'scheduled' | 'published' | 'failed' | 'cancelled'
 type FilterTab = 'pending' | 'all' | 'published' | 'analytics'
@@ -23,14 +34,26 @@ interface SocialStats {
   last30Days: number
 }
 
+interface PostMedia {
+  type: 'image' | 'video' | 'gif' | 'carousel'
+  url: string
+  thumbnailUrl?: string
+  altText?: string
+  duration?: number
+}
+
 interface SocialPost {
   id: string
   content: { text: string; platformOverrides?: Record<string, any> } | string
   platforms: string[]
+  platform?: string
   status: PostStatus
   scheduledAt?: any
   createdAt?: any
   approvedBy?: string | null
+  media?: PostMedia[]
+  hashtags?: string[]
+  format?: 'feed' | 'reel' | 'story'
 }
 
 interface Comment {
@@ -71,6 +94,43 @@ const PLATFORM_COLORS: Record<string, string> = {
   pinterest: '#E60023',
 }
 
+function toPreviewPost(post: SocialPost): PreviewSocialPost {
+  const text = typeof post.content === 'string' ? post.content : post.content?.text ?? ''
+  const platform = (post.platform ?? post.platforms?.[0] ?? 'linkedin').toLowerCase()
+  const media: PreviewMedia[] = (post.media ?? []).map(m => {
+    if (m.type === 'video') {
+      return { type: 'video', url: m.url, thumbnailUrl: m.thumbnailUrl, durationSec: m.duration }
+    }
+    return { type: 'image', url: m.url, alt: m.altText }
+  })
+  return {
+    id: post.id,
+    content: text,
+    platform,
+    status: post.status,
+    media,
+    hashtags: post.hashtags,
+    scheduledFor: post.scheduledAt?._seconds
+      ? new Date(post.scheduledAt._seconds * 1000).toISOString()
+      : undefined,
+  }
+}
+
+function pickSocialCard(post: PreviewSocialPost, format?: 'feed' | 'reel' | 'story') {
+  const platform = (post.platform || '').toLowerCase()
+  const hasVideo = (post.media ?? []).some(m => m.type === 'video')
+  if (platform === 'instagram') {
+    if (format === 'reel' || hasVideo) return InstagramReelsCard
+    if (format === 'story') return InstagramStoriesCard
+    return InstagramFeedCard
+  }
+  if (platform === 'linkedin') return LinkedInPostCard
+  if (platform === 'twitter' || platform === 'x') return TwitterPostCard
+  if (platform === 'facebook') return FacebookFeedCard
+  if (platform === 'youtube') return YouTubeCard
+  return LinkedInPostCard
+}
+
 function PostCard({
   post,
   onApprove,
@@ -96,9 +156,10 @@ function PostCard({
   onCommentTextChange: (text: string) => void
   commentLoading: boolean
 }) {
-  const text = typeof post.content === 'string' ? post.content : post.content?.text ?? ''
   const status = STATUS_MAP[post.status] ?? { label: post.status, color: 'var(--color-outline)' }
   const isPending = post.status === 'pending_approval'
+  const previewPost = toPreviewPost(post)
+  const Card = pickSocialCard(previewPost, post.format)
 
   function getRoleColor(role: string): string {
     if (role === 'admin') return 'bg-amber-500'
@@ -130,7 +191,7 @@ function PostCard({
 
   return (
     <div
-      className="pib-card space-y-3"
+      className="pib-card space-y-3 w-fit max-w-full"
       style={isPending ? { borderColor: 'var(--color-accent-subtle)' } : {}}
     >
       {/* Header */}
@@ -154,8 +215,10 @@ function PostCard({
         </span>
       </div>
 
-      {/* Content */}
-      <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap line-clamp-4">{text}</p>
+      {/* Platform-specific preview card */}
+      <div className="flex justify-center">
+        <Card post={previewPost} />
+      </div>
 
       {/* Scheduled time */}
       {post.scheduledAt && (
@@ -362,7 +425,7 @@ export default function OrgSocialPage() {
     : posts
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -519,7 +582,7 @@ export default function OrgSocialPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
               {displayPosts.map(post => (
                 <PostCard
                   key={post.id}
