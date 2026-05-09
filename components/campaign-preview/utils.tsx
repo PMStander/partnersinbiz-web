@@ -82,12 +82,13 @@ export function PreviewImage({
 }
 
 /** Render hashtags into post body if not already inline. */
-export function withHashtags(content: string, hashtags?: string[]): string {
-  if (!hashtags || hashtags.length === 0) return content
-  const present = hashtags.filter((tag) => !content.includes(`#${tag.replace(/^#/, '')}`))
-  if (present.length === 0) return content
+export function withHashtags(content: string | null | undefined, hashtags?: string[]): string {
+  const safe = typeof content === 'string' ? content : ''
+  if (!hashtags || hashtags.length === 0) return safe
+  const present = hashtags.filter((tag) => !safe.includes(`#${tag.replace(/^#/, '')}`))
+  if (present.length === 0) return safe
   const formatted = present.map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ')
-  return `${content}\n\n${formatted}`
+  return safe ? `${safe}\n\n${formatted}` : formatted
 }
 
 /** Highlight #hashtags and @mentions in a body of text. */

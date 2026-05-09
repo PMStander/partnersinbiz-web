@@ -20,7 +20,10 @@ export function YouTubeCard({ post, brand }: YouTubeCardProps) {
   const video = getFirstVideo(post.media)
   const image = getFirstImage(post.media)
   const thumb = video?.thumbnailUrl || image?.url
-  const title = post.videoTitle || post.content.split('\n')[0] || 'Untitled video'
+  const title =
+    post.videoTitle ||
+    (typeof post.content === 'string' ? post.content.split('\n')[0] : '') ||
+    'Untitled video'
   const channel = post.channelName || post.authorName || 'Your Brand'
   const channelAvatar = post.channelAvatarUrl || post.authorAvatarUrl || brand?.logoUrl
   const time = relativeTime(post.scheduledFor)

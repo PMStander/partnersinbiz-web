@@ -16,6 +16,7 @@ import {
   type PreviewBlog,
   type PreviewBrand,
 } from '@/components/campaign-preview'
+import { VideoTriptych } from './VideoTriptych'
 
 type Filter = 'all' | 'social' | 'blogs' | 'videos'
 
@@ -134,12 +135,22 @@ export function AssetGrid({
   return (
     <div className="space-y-10">
       {showVideos && videos.length > 0 && (
-        <section className="space-y-4">
+        <section className="space-y-6">
           <h2 className="text-lg font-semibold">Videos ({videos.length})</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="space-y-8">
             {videos.map((post) => (
-              <div key={post.id} className="space-y-2">
-                <YouTubeCard post={post} brand={brand} />
+              <div key={post.id} className="card p-5 space-y-4">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-base font-medium">
+                    {(post as unknown as { title?: string }).title ??
+                      post.content?.slice(0, 80) ??
+                      'Untitled video'}
+                  </h3>
+                  <span className="text-xs text-[var(--color-pib-text-muted)] uppercase tracking-wide">
+                    {post.status ?? '—'}
+                  </span>
+                </div>
+                <VideoTriptych post={post} brand={brand} />
                 {actionsFor(post.id, 'video', post.status ?? 'draft')}
               </div>
             ))}
