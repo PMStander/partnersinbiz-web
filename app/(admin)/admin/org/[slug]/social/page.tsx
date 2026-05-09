@@ -241,6 +241,7 @@ function SocialIndex({
             return (
               <CampaignCard
                 key={c.id}
+                slug={slug}
                 campaign={c}
                 totals={totals}
                 heroUrl={heroUrl}
@@ -319,10 +320,12 @@ function StatTile({
 }
 
 function CampaignCard({
+  slug,
   campaign,
   totals,
   heroUrl,
 }: {
+  slug: string
   campaign: CampaignRow
   totals: { total: number; awaiting: number; published: number }
   heroUrl: string | null
@@ -331,7 +334,7 @@ function CampaignCard({
   const monthText = created ? MONTH_FMT.format(created) : '—'
   return (
     <Link
-      href={`/admin/campaigns/${campaign.id}/social`}
+      href={`/admin/org/${slug}/social/${campaign.id}`}
       className="group pib-card overflow-hidden hover:border-[var(--org-accent,var(--color-pib-accent))] transition-colors flex flex-col"
       style={{ padding: 0 }}
     >
