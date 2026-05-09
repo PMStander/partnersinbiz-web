@@ -397,6 +397,117 @@ Response:
 For non-campaign-bound posts, schedule individually via `PUT /posts/[id]`
 with `{ scheduledFor, status: "scheduled" }`.
 
+### Importing existing local content into a campaign (NEW — for any client workspace)
+
+Many Cowork clients (AHS Law, Lumen, Loyalty Plus, etc.) have local
+content folders from older runs — `marketing/social/*.md`, drafted
+captions in JSON, rendered videos under `marketing/videos/V*/`, hero
+images under `marketing/images/`. These need to land in the platform
+as a `campaign` so the client can review, approve, and bulk-schedule
+through the new flow.
+
+The agent that lives in that client's workspace runs this end-to-end —
+it has filesystem access to the local content + this skill (and
+`content-engine` for campaign creation).
+
+**Step 1 — find or create the campaign**
+
+```
+# Look for an active content-engine campaign for this org first
+GET /campaigns?orgId={orgId}&status=draft
+
+# If none, create one
+POST /campaigns
+{
+  "name": "Q2 Backfill — local social import",
+  "clientType": "service-business" | "consumer-app" | "b2b-saas",
+  "orgId": "{orgId}"
+}
+→ returns { id: campaignId, shareToken }
+```
+
+If you only have social posts (no blogs/videos to add), `clientType`
+just sets the brand-voice template. Pick whichever fits the client.
+
+**Step 2 — upload media (images + videos) to Firebase Storage**
+
+For every local image / video file referenced by a post, upload first
+so you have a stable URL on the platform:
+
+```
+POST /social/media/upload
+  multipart/form-data: file=@<path>, altText=<text>
+→ returns { id, url, type, mimeType }
+```
+
+For videos with multiple format cuts (vertical Reel / 16:9 YouTube /
+15s Stories), upload all three and use them in `media[0].{url,
+urlYoutube, urlStories}` per `references/05-video-production.md` in
+the content-engine skill.
+
+**Step 3 — bulk-create posts with the campaignId**
+
+```
+POST /social/posts/bulk
+{
+  "orgId": "{orgId}",
+  "posts": [
+    {
+      "content": "<caption text from local file>",
+      "platforms": ["instagram"],
+      "campaignId": "{campaignId}",
+      "format": "feed",
+      "media": [{ "type": "image", "url": "<from step 2>", "altText": "...", "order": 0 }],
+      "hashtags": ["..."],
+      "tags": ["..."]
+    }
+    // up to 50 per request
+  ]
+}
+```
+
+Posts created without `scheduledAt` land as `status: "draft"`. To put
+them straight into client review, also `POST /posts/[id]/submit` per
+post (or include `status: "pending_approval"` directly when creating).
+
+For chunks > 50, paginate: 50 per request, dedupe by `Idempotency-Key`
+header `import-{orgId}-{campaignId}-{batchIndex}`.
+
+**Step 4 — hand the campaign to the client for review**
+
+Tell the client to open the org-themed drill-in:
+
+```
+https://partnersinbiz.online/admin/org/{slug}/social/{campaignId}
+```
+
+Each post supports inline + image-anchored comments + WYSIWYG body
+editing. Per-asset Approve & per-campaign "Approve all" both work.
+The Marketing Preview UI groups posts by Reels / Stories / YouTube /
+LinkedIn / Facebook / Instagram tabs automatically based on platform
++ media metadata.
+
+**Step 5 — once approved, bulk-schedule**
+
+Use `POST /campaigns/[id]/schedule` (documented above). Run with
+`dryRun: true` first to preview the cadence.
+
+**What to tell the client (operator brief)**
+
+> "We've imported your existing social content into a campaign in the
+> platform. To take it live:
+> 1. Visit `/admin/org/{slug}/social/{campaignId}` — it's themed in your
+>    brand colours and groups everything by Reels / Stories / Posts.
+> 2. Highlight any text or click any image to leave inline comments;
+>    use 'Edit body' for blogs to make changes yourself.
+> 3. When you're happy, hit 'Approve all' or approve each post one by
+>    one. Reply with which Monday you want this to start going out.
+> 4. We'll bulk-schedule across that week's calendar in one go and the
+>    queue auto-publishes at the scheduled times."
+
+The agent then runs the schedule endpoint on the client's behalf with
+their preferred start date.
+
 #### `POST /posts/bulk/` — auth: admin
 
 Bulk create up to **50** posts. Accepts JSON or CSV.
