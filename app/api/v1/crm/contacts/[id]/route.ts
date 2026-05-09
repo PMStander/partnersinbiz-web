@@ -1,6 +1,7 @@
 /**
  * GET    /api/v1/crm/contacts/:id  — get one contact
- * PUT    /api/v1/crm/contacts/:id  — update contact
+ * PUT    /api/v1/crm/contacts/:id  — update contact (full replace)
+ * PATCH  /api/v1/crm/contacts/:id  — update contact (alias for PUT)
  * DELETE /api/v1/crm/contacts/:id  — soft delete (sets deleted: true)
  */
 import { NextRequest } from 'next/server'
@@ -54,6 +55,8 @@ export const PUT = withAuth('client', async (req, user, context) => {
 
   return apiSuccess({ id })
 })
+
+export const PATCH = PUT
 
 export const DELETE = withAuth('client', async (_req, user, context) => {
   const { id } = await (context as Params).params
