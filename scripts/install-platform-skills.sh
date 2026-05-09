@@ -13,13 +13,21 @@ set -euo pipefail
 SRC="/Users/peetstander/Cowork/Partners in Biz — Client Growth/partnersinbiz-web/.claude/skills"
 DEST="/Users/peetstander/Cowork/.claude/skills"
 
-# Only the platform-API skills get exposed Cowork-wide. Engineering
-# playbook skills (marketing, software-development) stay codebase-local —
-# they're for working ON the partnersinbiz-web codebase, not on clients.
+# Only the platform-API skills + the content-engine production pipeline get
+# exposed Cowork-wide. Engineering playbook skills (marketing,
+# software-development) stay codebase-local — they're for working ON the
+# partnersinbiz-web codebase, not on clients.
+#
+# content-engine is included because it's invoked from any client workspace
+# (AHS Law, Lumen, Loyalty Plus, etc.) — it replaces the old
+# `client-content-engine` user-level skill. Once this is symlinked the old
+# skill at ~/.claude/skills/client-content-engine/ should be deleted to
+# avoid two skills competing for the same triggers.
 PLATFORM_SKILLS=(
   analytics
   billing-finance
   client-manager
+  content-engine
   crm-sales
   email-outreach
   platform-ops
