@@ -1,608 +1,475 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import {
-  InstagramFeedCard,
-  InstagramReelsCard,
-  InstagramStoriesCard,
-  FacebookFeedCard,
-  LinkedInPostCard,
-  TwitterPostCard,
-  YouTubeCard,
-  type PreviewSocialPost,
-  type PreviewMedia,
-} from '@/components/campaign-preview'
+import { OrgThemedFrame, useOrgBrand } from '@/components/admin/OrgThemedFrame'
 
-type PostStatus = 'draft' | 'pending_approval' | 'approved' | 'scheduled' | 'published' | 'failed' | 'cancelled'
-type FilterTab = 'pending' | 'all' | 'published' | 'analytics'
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-interface SocialStats {
-  total: number
-  byStatus: {
-    draft: number
-    pending_approval: number
-    approved: number
-    scheduled: number
-    published: number
-    failed: number
-    cancelled: number
-  }
-  byPlatform: Record<string, number>
-  approvalRate: number
-  last30Days: number
+interface FirestoreTs {
+  _seconds: number
+  _nanoseconds?: number
+}
+
+interface CampaignRow {
+  id: string
+  orgId: string
+  name: string
+  status?: string
+  shareToken?: string
+  createdAt?: FirestoreTs
 }
 
 interface PostMedia {
   type: 'image' | 'video' | 'gif' | 'carousel'
   url: string
   thumbnailUrl?: string
-  altText?: string
-  duration?: number
 }
 
-interface SocialPost {
+interface PostRow {
   id: string
-  content: { text: string; platformOverrides?: Record<string, any> } | string
-  platforms: string[]
+  orgId: string
+  status: string
+  campaignId?: string | null
+  platforms?: string[]
   platform?: string
-  status: PostStatus
-  scheduledAt?: any
-  createdAt?: any
-  approvedBy?: string | null
   media?: PostMedia[]
-  hashtags?: string[]
-  format?: 'feed' | 'reel' | 'story'
+  createdAt?: FirestoreTs
+  scheduledAt?: FirestoreTs
 }
 
-interface Comment {
-  id: string
-  text: string
-  userId: string
-  userName: string
-  userRole: 'admin' | 'client' | 'ai'
-  createdAt: any
-  agentPickedUp: boolean
-  agentPickedUpAt?: any
+const MONTH_FMT = new Intl.DateTimeFormat('en-ZA', { month: 'long', year: 'numeric' })
+
+function tsToDate(ts?: FirestoreTs): Date | null {
+  if (!ts?._seconds) return null
+  return new Date(ts._seconds * 1000)
 }
 
-function Skeleton({ className = '' }: { className?: string }) {
-  return <div className={`pib-skeleton ${className}`} />
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-const STATUS_MAP: Record<PostStatus, { label: string; color: string }> = {
-  draft:            { label: 'Draft',            color: 'var(--color-outline)' },
-  pending_approval: { label: 'Needs Approval',   color: 'var(--color-accent-v2)' },
-  approved:         { label: 'Approved',         color: '#60a5fa' },
-  scheduled:        { label: 'Scheduled',        color: '#c084fc' },
-  published:        { label: 'Published',        color: '#4ade80' },
-  failed:           { label: 'Failed',           color: '#ef4444' },
-  cancelled:        { label: 'Cancelled',        color: 'var(--color-outline)' },
+function monthLabel(key: string): string {
+  const [y, m] = key.split('-').map(n => parseInt(n, 10))
+  return MONTH_FMT.format(new Date(y, m - 1, 1))
 }
 
-const PLATFORM_COLORS: Record<string, string> = {
-  twitter: '#1DA1F2',
-  x: '#000000',
-  linkedin: '#0A66C2',
-  instagram: '#E1306C',
-  facebook: '#1877F2',
-  tiktok: '#010101',
-  bluesky: '#0085FF',
-  threads: '#000000',
-  reddit: '#FF4500',
-  pinterest: '#E60023',
+// ---------------------------------------------------------------------------
+// Inner — wraps the hero/grid in OrgThemedFrame so brand colours flow
+// ---------------------------------------------------------------------------
+
+export default function OrgSocialIndexPage() {
+  const params = useParams()
+  const slug = params?.slug as string
+  const [orgId, setOrgId] = useState<string | null>(null)
+  const [orgName, setOrgName] = useState<string>('')
+
+  useEffect(() => {
+    fetch('/api/v1/organizations')
+      .then(r => r.json())
+      .then(body => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const org = (body.data ?? []).find((o: any) => o.slug === slug)
+        if (org) {
+          setOrgId(org.id)
+          setOrgName(org.name)
+        }
+      })
+      .catch(() => {})
+  }, [slug])
+
+  return (
+    <OrgThemedFrame orgId={orgId} className="-m-6 p-6 min-h-screen">
+      <SocialIndex slug={slug} orgId={orgId} orgName={orgName} />
+    </OrgThemedFrame>
+  )
 }
 
-function toPreviewPost(post: SocialPost): PreviewSocialPost {
-  const text = typeof post.content === 'string' ? post.content : post.content?.text ?? ''
-  const platform = (post.platform ?? post.platforms?.[0] ?? 'linkedin').toLowerCase()
-  const media: PreviewMedia[] = (post.media ?? []).map(m => {
-    if (m.type === 'video') {
-      return { type: 'video', url: m.url, thumbnailUrl: m.thumbnailUrl, durationSec: m.duration }
-    }
-    return { type: 'image', url: m.url, alt: m.altText }
-  })
-  return {
-    id: post.id,
-    content: text,
-    platform,
-    status: post.status,
-    media,
-    hashtags: post.hashtags,
-    scheduledFor: post.scheduledAt?._seconds
-      ? new Date(post.scheduledAt._seconds * 1000).toISOString()
-      : undefined,
-  }
-}
-
-function pickSocialCard(post: PreviewSocialPost, format?: 'feed' | 'reel' | 'story') {
-  const platform = (post.platform || '').toLowerCase()
-  const hasVideo = (post.media ?? []).some(m => m.type === 'video')
-  if (platform === 'instagram') {
-    if (format === 'reel' || hasVideo) return InstagramReelsCard
-    if (format === 'story') return InstagramStoriesCard
-    return InstagramFeedCard
-  }
-  if (platform === 'linkedin') return LinkedInPostCard
-  if (platform === 'twitter' || platform === 'x') return TwitterPostCard
-  if (platform === 'facebook') return FacebookFeedCard
-  if (platform === 'youtube') return YouTubeCard
-  return LinkedInPostCard
-}
-
-function PostCard({
-  post,
-  onApprove,
-  onReject,
-  loading,
-  comments,
-  isExpanded,
-  onToggleExpand,
-  onAddComment,
-  commentText,
-  onCommentTextChange,
-  commentLoading,
+function SocialIndex({
+  slug,
+  orgId,
+  orgName,
 }: {
-  post: SocialPost
-  onApprove: () => void
-  onReject: () => void
-  loading: boolean
-  comments: Comment[]
-  isExpanded: boolean
-  onToggleExpand: () => void
-  onAddComment: () => void
-  commentText: string
-  onCommentTextChange: (text: string) => void
-  commentLoading: boolean
+  slug: string
+  orgId: string | null
+  orgName: string
 }) {
-  const status = STATUS_MAP[post.status] ?? { label: post.status, color: 'var(--color-outline)' }
-  const isPending = post.status === 'pending_approval'
-  const previewPost = toPreviewPost(post)
-  const Card = pickSocialCard(previewPost, post.format)
+  const { brand } = useOrgBrand()
+  const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
+  const [posts, setPosts] = useState<PostRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [monthFilter, setMonthFilter] = useState<string>('all')
 
-  function getRoleColor(role: string): string {
-    if (role === 'admin') return 'bg-amber-500'
-    if (role === 'ai') return 'bg-amber-500'
-    return 'bg-gray-600'
-  }
+  useEffect(() => {
+    if (!orgId) return
+    setLoading(true)
+    const orgQs = `orgId=${encodeURIComponent(orgId)}`
+    Promise.all([
+      fetch(`/api/v1/campaigns?${orgQs}&limit=200`).then(r => r.json()),
+      fetch(`/api/v1/social/posts?${orgQs}&limit=500`).then(r => r.json()),
+    ])
+      .then(([c, p]) => {
+        const allCampaigns = (c.data ?? []) as CampaignRow[]
+        // Only content-engine campaigns surface here. Email campaigns share the
+        // collection but don't carry social_posts via campaignId.
+        const contentCampaigns = allCampaigns.filter(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (row: any) => row.clientType || row.shareToken,
+        )
+        setCampaigns(
+          contentCampaigns.sort((a, b) => {
+            const ad = tsToDate(a.createdAt)?.getTime() ?? 0
+            const bd = tsToDate(b.createdAt)?.getTime() ?? 0
+            return bd - ad
+          }),
+        )
+        setPosts((p.data ?? []) as PostRow[])
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [orgId])
 
-  function formatCommentTime(ts: any): string {
-    const d = tsToDate(ts)
-    if (!d) return '—'
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-    if (diffMins < 1) return 'now'
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    if (diffDays < 7) return `${diffDays}d ago`
-    return d.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
-  }
+  // Index posts by campaign for fast totals
+  const postsByCampaign = useMemo(() => {
+    const map = new Map<string, PostRow[]>()
+    for (const p of posts) {
+      const cid = p.campaignId ?? null
+      const key = cid ?? '__standalone__'
+      const arr = map.get(key) ?? []
+      arr.push(p)
+      map.set(key, arr)
+    }
+    return map
+  }, [posts])
 
-  function tsToDate(ts: any): Date | null {
-    if (!ts) return null
-    if (ts._seconds) return new Date(ts._seconds * 1000)
-    if (ts.seconds) return new Date(ts.seconds * 1000)
-    return new Date(ts)
-  }
+  // Month options from campaigns (newest first)
+  const monthOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of campaigns) {
+      const d = tsToDate(c.createdAt)
+      if (d) set.add(monthKey(d))
+    }
+    return Array.from(set).sort().reverse()
+  }, [campaigns])
+
+  // Apply month filter
+  const visibleCampaigns = useMemo(() => {
+    if (monthFilter === 'all') return campaigns
+    return campaigns.filter(c => {
+      const d = tsToDate(c.createdAt)
+      return d ? monthKey(d) === monthFilter : false
+    })
+  }, [campaigns, monthFilter])
+
+  // Top-line stats (always across all posts in this org, regardless of month)
+  const stats = useMemo(() => {
+    const total = posts.length
+    const awaiting = posts.filter(p => p.status === 'pending_approval').length
+    const published = posts.filter(p => p.status === 'published').length
+    const cutoff = Date.now() - 30 * 24 * 3600 * 1000
+    const last30 = posts.filter(p => {
+      const d = tsToDate(p.createdAt) ?? tsToDate(p.scheduledAt)
+      return d ? d.getTime() >= cutoff : false
+    }).length
+    return { total, awaiting, published, last30 }
+  }, [posts])
+
+  const standalonePosts = postsByCampaign.get('__standalone__') ?? []
 
   return (
     <div
-      className="pib-card space-y-3 w-fit max-w-full"
-      style={isPending ? { borderColor: 'var(--color-accent-subtle)' } : {}}
+      className="space-y-8 max-w-7xl mx-auto"
+      style={{ color: 'var(--org-text, var(--color-pib-text))' }}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          {(post.platforms ?? []).map(p => (
-            <span
-              key={p}
-              className="text-[9px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full"
-              style={{ background: `${PLATFORM_COLORS[p] ?? '#666'}20`, color: PLATFORM_COLORS[p] ?? 'var(--color-on-surface-variant)' }}
-            >
-              {p}
-            </span>
+      {/* Hero */}
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">
+            Workspace · Social
+          </p>
+          <h1 className="text-3xl md:text-4xl font-headline font-bold">
+            {orgName || 'Social Media'}
+          </h1>
+          <p className="text-sm text-on-surface-variant mt-1">
+            Campaigns and standalone posts produced for {orgName || 'this client'}.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={monthFilter}
+            onChange={e => setMonthFilter(e.target.value)}
+            className="text-sm bg-[var(--color-surface)] border border-[var(--color-outline)] rounded-md px-3 py-2 text-on-surface focus:outline-none"
+            aria-label="Filter campaigns by month"
+          >
+            <option value="all">All time</option>
+            {monthOptions.map(k => (
+              <option key={k} value={k}>
+                {monthLabel(k)}
+              </option>
+            ))}
+          </select>
+          <Link href="/admin/social/compose" className="pib-btn-primary text-sm font-label">
+            + Compose Post
+          </Link>
+        </div>
+      </header>
+
+      {/* Stat tiles */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatTile label="Awaiting Approval" value={stats.awaiting} accent />
+        <StatTile label="Total Social" value={stats.total} />
+        <StatTile label="Published" value={stats.published} />
+        <StatTile label="Last 30 Days" value={stats.last30} />
+      </section>
+
+      {/* Campaign cards + Standalone */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="pib-skeleton h-56 rounded-2xl" />
           ))}
         </div>
-        <span
-          className="text-[9px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
-          style={{ background: `${status.color}20`, color: status.color }}
-        >
-          {status.label}
-        </span>
-      </div>
+      ) : (
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {visibleCampaigns.map(c => {
+            const campaignPosts = postsByCampaign.get(c.id) ?? []
+            const totals = computeTotals(campaignPosts)
+            const heroUrl = pickHero(campaignPosts)
+            return (
+              <CampaignCard
+                key={c.id}
+                campaign={c}
+                totals={totals}
+                heroUrl={heroUrl}
+              />
+            )
+          })}
 
-      {/* Platform-specific preview card */}
-      <div className="flex justify-center">
-        <Card post={previewPost} />
-      </div>
+          <StandaloneCard
+            slug={slug}
+            count={standalonePosts.length}
+            totals={computeTotals(standalonePosts)}
+          />
 
-      {/* Scheduled time */}
-      {post.scheduledAt && (
-        <p className="text-xs text-on-surface-variant">
-          Scheduled: {new Date(post.scheduledAt._seconds * 1000).toLocaleString()}
+          {visibleCampaigns.length === 0 && (
+            <EmptyState monthFilter={monthFilter} />
+          )}
+        </section>
+      )}
+
+      {/* Diagnostic: brand applied? */}
+      {brand && (
+        <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">
+          Theme · {orgName} brand applied
         </p>
-      )}
-
-      {/* Approval actions */}
-      {isPending && (
-        <div className="flex gap-2 pt-1 border-t border-[var(--color-card-border)]">
-          <button
-            onClick={onApprove}
-            disabled={loading}
-            className="pib-btn-primary text-xs font-label flex-1"
-          >
-            {loading ? 'Saving…' : '✓ Approve'}
-          </button>
-          <button
-            onClick={onReject}
-            disabled={loading}
-            className="text-xs font-label px-4 py-2 rounded-[var(--radius-btn)] border transition-colors flex-1"
-            style={{ borderColor: '#ef4444', color: '#ef4444' }}
-          >
-            ✕ Reject
-          </button>
-        </div>
-      )}
-
-      {/* Comments toggle */}
-      <button
-        onClick={onToggleExpand}
-        className="text-xs text-on-surface-variant hover:text-[var(--color-accent-v2)] cursor-pointer mt-2"
-      >
-        Comments ({comments.length})
-      </button>
-
-      {/* Comment thread */}
-      {isExpanded && (
-        <div className="mt-3 border-t border-[var(--color-outline-variant)] pt-3 space-y-2">
-          {/* Existing comments */}
-          {comments.map(comment => (
-            <div key={comment.id} className="flex gap-2 text-xs">
-              <div className={`${getRoleColor(comment.userRole)} rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 text-white text-[10px] font-bold`}>
-                {comment.userName.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1 flex-wrap">
-                  <span className="font-medium text-on-surface">{comment.userName}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{
-                    background: comment.userRole === 'admin' ? 'rgba(245, 183, 0, 0.15)' : comment.userRole === 'ai' ? 'rgba(245, 183, 0, 0.15)' : 'rgba(100, 116, 139, 0.15)',
-                    color: comment.userRole === 'admin' ? 'var(--color-accent-v2)' : comment.userRole === 'ai' ? 'var(--color-accent-v2)' : 'var(--color-on-surface-variant)',
-                  }}>
-                    {comment.userRole}
-                  </span>
-                  <span className="text-on-surface-variant ml-auto flex-shrink-0">{formatCommentTime(comment.createdAt)}</span>
-                </div>
-                <p className="text-on-surface mt-1">{comment.text}</p>
-              </div>
-            </div>
-          ))}
-
-          {/* Comment input */}
-          <div className="flex gap-2 mt-2 pt-2 border-t border-[var(--color-outline-variant)]">
-            <input
-              type="text"
-              value={commentText}
-              onChange={(e) => onCommentTextChange(e.target.value)}
-              placeholder="Add a comment..."
-              className="flex-1 bg-transparent border border-[var(--color-outline-variant)] rounded-[var(--radius-btn)] px-2 py-1.5 text-xs text-on-surface placeholder-on-surface-variant focus:outline-none focus:border-[var(--color-accent-v2)] focus:bg-[rgba(245,183,0,0.05)]"
-              disabled={commentLoading}
-            />
-            <button
-              onClick={onAddComment}
-              disabled={commentLoading || !commentText.trim()}
-              className="pib-btn-primary text-xs px-3 py-1.5"
-              style={{
-                opacity: (commentLoading || !commentText.trim()) ? 0.6 : 1,
-                cursor: (commentLoading || !commentText.trim()) ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {commentLoading ? 'Sending…' : 'Send'}
-            </button>
-          </div>
-        </div>
       )}
     </div>
   )
 }
 
-export default function OrgSocialPage() {
-  const params = useParams()
-  const slug = params.slug as string
+// ---------------------------------------------------------------------------
+// Pieces
+// ---------------------------------------------------------------------------
 
-  const [posts, setPosts] = useState<SocialPost[]>([])
-  const [stats, setStats] = useState<SocialStats | null>(null)
-  const [orgId, setOrgId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [tab, setTab] = useState<FilterTab>('pending')
-  const [commentsByPostId, setCommentsByPostId] = useState<Record<string, Comment[]>>({})
-  const [expandedPostId, setExpandedPostId] = useState<string | null>(null)
-  const [commentTextByPostId, setCommentTextByPostId] = useState<Record<string, string>>({})
-  const [commentLoading, setCommentLoading] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch(`/api/v1/organizations`)
-      .then(r => r.json())
-      .then(body => {
-        const org = (body.data ?? []).find((o: any) => o.slug === slug)
-        const fetchedOrgId = org?.id ?? null
-        if (fetchedOrgId) setOrgId(fetchedOrgId)
-        return fetchedOrgId
-      })
-      .then(fetchedOrgId => {
-        if (!fetchedOrgId) return
-        const orgQs = `orgId=${encodeURIComponent(fetchedOrgId)}`
-        return Promise.all([
-          fetch(`/api/v1/social/posts?limit=50&${orgQs}`)
-            .then(r => r.json())
-            .then(body => setPosts(body.data ?? [])),
-          fetch(`/api/v1/social/stats?${orgQs}`)
-            .then(r => r.json())
-            .then(body => setStats(body.data ?? null))
-            .catch(() => {}),
-        ])
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [slug])
-
-  async function handleAction(postId: string, action: 'approve' | 'reject') {
-    setActionLoading(postId)
-    try {
-      const res = await fetch(`/api/v1/social/posts/${postId}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      })
-      const body = await res.json()
-      if (body.data?.status) {
-        setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: body.data.status as PostStatus } : p))
-      }
-    } finally {
-      setActionLoading(null)
-    }
+function computeTotals(posts: PostRow[]) {
+  return {
+    total: posts.length,
+    awaiting: posts.filter(p => p.status === 'pending_approval').length,
+    published: posts.filter(p => p.status === 'published').length,
   }
+}
 
-  async function handleToggleCommentThread(postId: string) {
-    if (expandedPostId === postId) {
-      // Collapsing
-      setExpandedPostId(null)
-    } else {
-      // Expanding
-      setExpandedPostId(postId)
-      // Fetch comments if not already loaded
-      if (!(postId in commentsByPostId)) {
-        try {
-          const res = await fetch(`/api/v1/social/posts/${postId}/comments`)
-          const body = await res.json()
-          if (body.data) {
-            setCommentsByPostId(prev => ({ ...prev, [postId]: body.data }))
-          }
-        } catch (err) {
-          console.error('Failed to fetch comments:', err)
-        }
-      }
-    }
+function pickHero(posts: PostRow[]): string | null {
+  for (const p of posts) {
+    const m = (p.media ?? []).find(m => m.type === 'image' && m.url)
+    if (m) return m.url
   }
+  return null
+}
 
-  async function handleAddComment(postId: string) {
-    const text = commentTextByPostId[postId]?.trim()
-    if (!text) return
-
-    setCommentLoading(postId)
-    try {
-      const res = await fetch(`/api/v1/social/posts/${postId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      })
-      const body = await res.json()
-      if (body.data) {
-        setCommentsByPostId(prev => ({
-          ...prev,
-          [postId]: [...(prev[postId] ?? []), body.data],
-        }))
-        setCommentTextByPostId(prev => ({ ...prev, [postId]: '' }))
-      }
-    } catch (err) {
-      console.error('Failed to add comment:', err)
-    } finally {
-      setCommentLoading(null)
-    }
-  }
-
-  const pendingPosts = posts.filter(p => p.status === 'pending_approval')
-  const publishedPosts = posts.filter(p => p.status === 'published')
-
-  const displayPosts = tab === 'pending'
-    ? pendingPosts
-    : tab === 'published'
-    ? publishedPosts
-    : posts
-
+function StatTile({
+  label,
+  value,
+  accent,
+}: {
+  label: string
+  value: number
+  accent?: boolean
+}) {
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Workspace / Social</p>
-          <h1 className="text-2xl font-headline font-bold text-on-surface">Social Media</h1>
-        </div>
-        <Link href="/admin/social/compose" className="pib-btn-primary text-sm font-label">
-          + Compose Post
-        </Link>
-      </div>
+    <div className="pib-card">
+      <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-2">
+        {label}
+      </p>
+      <p
+        className="text-3xl font-headline font-bold"
+        style={
+          accent && value > 0
+            ? { color: 'var(--org-accent, var(--color-pib-accent))' }
+            : undefined
+        }
+      >
+        {value}
+      </p>
+    </div>
+  )
+}
 
-      {/* Summary */}
-      {!loading && (
-        <div className="grid grid-cols-3 gap-4">
-          <div className="pib-card">
-            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Needs Approval</p>
-            <p className="text-2xl font-headline font-bold" style={{ color: pendingPosts.length > 0 ? 'var(--color-accent-v2)' : 'var(--color-on-surface)' }}>
-              {pendingPosts.length}
-            </p>
+function CampaignCard({
+  campaign,
+  totals,
+  heroUrl,
+}: {
+  campaign: CampaignRow
+  totals: { total: number; awaiting: number; published: number }
+  heroUrl: string | null
+}) {
+  const created = tsToDate(campaign.createdAt)
+  const monthText = created ? MONTH_FMT.format(created) : '—'
+  return (
+    <Link
+      href={`/admin/campaigns/${campaign.id}/social`}
+      className="group pib-card overflow-hidden hover:border-[var(--org-accent,var(--color-pib-accent))] transition-colors flex flex-col"
+      style={{ padding: 0 }}
+    >
+      {/* Hero */}
+      <div
+        className="aspect-[16/9] w-full relative"
+        style={{
+          background: heroUrl
+            ? undefined
+            : 'linear-gradient(135deg, var(--org-surface, var(--color-pib-surface)) 0%, var(--org-bg, var(--color-pib-bg)) 100%)',
+        }}
+      >
+        {heroUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={heroUrl}
+            alt={campaign.name}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+              No hero image yet
+            </span>
           </div>
-          <div className="pib-card">
-            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Total Posts</p>
-            <p className="text-2xl font-headline font-bold text-on-surface">{posts.length}</p>
-          </div>
-          <div className="pib-card">
-            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Published</p>
-            <p className="text-2xl font-headline font-bold text-on-surface">{publishedPosts.length}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-[var(--color-card-border)] overflow-x-auto">
-        {([
-          { key: 'pending', label: `Needs Approval (${pendingPosts.length})` },
-          { key: 'all',     label: `All Posts (${posts.length})` },
-          { key: 'published', label: `Published (${publishedPosts.length})` },
-          { key: 'analytics', label: 'Analytics' },
-        ] as { key: FilterTab; label: string }[]).map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={[
-              'px-4 py-2 text-sm font-label border-b-2 -mb-px transition-colors whitespace-nowrap',
-              tab === t.key
-                ? 'border-[var(--color-accent-v2)] text-on-surface'
-                : 'border-transparent text-on-surface-variant hover:text-on-surface',
-            ].join(' ')}
+        )}
+        {totals.awaiting > 0 && (
+          <span
+            className="absolute top-3 left-3 text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded-full"
+            style={{
+              background: 'var(--org-accent, var(--color-pib-accent))',
+              color: '#000',
+            }}
           >
-            {t.label}
-          </button>
-        ))}
+            {totals.awaiting} awaiting
+          </span>
+        )}
       </div>
-
-      {/* Analytics Tab */}
-      {tab === 'analytics' && !loading && stats && (
-        <div className="space-y-6">
-          {/* Stat Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="pib-card">
-              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-2">Total Posts</p>
-              <p className="text-3xl font-headline font-bold text-on-surface">{stats.total}</p>
-            </div>
-            <div className="pib-card">
-              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-2">Published</p>
-              <p className="text-3xl font-headline font-bold text-on-surface">{stats.byStatus.published}</p>
-            </div>
-            <div className="pib-card">
-              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-2">Approval Rate</p>
-              <p className="text-3xl font-headline font-bold" style={{ color: 'var(--color-accent-v2)' }}>{stats.approvalRate}%</p>
-            </div>
-            <div className="pib-card">
-              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-2">Last 30 Days</p>
-              <p className="text-3xl font-headline font-bold text-on-surface">{stats.last30Days}</p>
-            </div>
-          </div>
-
-          {/* Platform Breakdown */}
-          {Object.keys(stats.byPlatform).length > 0 && (
-            <div className="pib-card space-y-4">
-              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Platform Breakdown</p>
-              <div className="space-y-3">
-                {Object.entries(stats.byPlatform).map(([platform, count]) => {
-                  const percentage = stats.total > 0 ? (count / stats.total) * 100 : 0
-                  return (
-                    <div key={platform} className="flex items-center gap-3">
-                      <span className="text-xs w-20 text-on-surface-variant capitalize font-medium">{platform}</span>
-                      <div className="flex-1 h-2 rounded-full bg-outline-variant overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${percentage}%`, background: 'var(--color-accent-v2)' }}
-                        />
-                      </div>
-                      <span className="text-xs text-on-surface font-medium w-12 text-right">{count}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Status Breakdown */}
-          <div className="pib-card space-y-4">
-            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Status Breakdown</p>
-            <div className="space-y-2">
-              {Object.entries(stats.byStatus).map(([status, count]) => (
-                count > 0 && (
-                  <div key={status} className="flex items-center justify-between">
-                    <span className="text-sm text-on-surface capitalize">{status.replace(/_/g, ' ')}</span>
-                    <span className="text-sm font-headline font-bold text-on-surface">{count}</span>
-                  </div>
-                )
-              ))}
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="pib-card">
-            <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-3">Actions</p>
-            <div className="flex flex-wrap gap-2">
-              {(['pending_approval', 'draft', 'scheduled', 'published'] as const).map(status => {
-                const count = stats.byStatus[status]
-                if (count === 0) return null
-                return (
-                  <button
-                    key={status}
-                    onClick={() => {
-                      if (status === 'pending_approval') setTab('pending')
-                      else if (status === 'published') setTab('published')
-                      else setTab('all')
-                    }}
-                    className="pib-btn-secondary text-xs font-label"
-                  >
-                    View {status.replace(/_/g, ' ')} ({count})
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+      {/* Body */}
+      <div className="p-5 space-y-3 flex-1 flex flex-col">
+        <div>
+          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+            {monthText}
+          </p>
+          <h3 className="text-base font-headline font-semibold mt-1 line-clamp-2">
+            {campaign.name}
+          </h3>
         </div>
-      )}
+        <div className="text-xs text-on-surface-variant flex items-center gap-3 mt-auto">
+          <span>{totals.total} social</span>
+          <span>·</span>
+          <span>{totals.published} published</span>
+        </div>
+        <p
+          className="text-xs font-label uppercase tracking-widest mt-1 group-hover:translate-x-0.5 transition-transform"
+          style={{ color: 'var(--org-accent, var(--color-pib-accent))' }}
+        >
+          Review →
+        </p>
+      </div>
+    </Link>
+  )
+}
 
-      {/* Posts */}
-      {tab !== 'analytics' && (
-        <>
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[1,2,3,4].map(i => <Skeleton key={i} className="h-48" />)}
-            </div>
-          ) : displayPosts.length === 0 ? (
-            <div className="pib-card py-12 text-center">
-              <p className="text-on-surface-variant text-sm">
-                {tab === 'pending' ? 'No posts waiting for approval. 🎉' : 'No posts found.'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 justify-items-center">
-              {displayPosts.map(post => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  onApprove={() => handleAction(post.id, 'approve')}
-                  onReject={() => handleAction(post.id, 'reject')}
-                  loading={actionLoading === post.id}
-                  comments={commentsByPostId[post.id] ?? []}
-                  isExpanded={expandedPostId === post.id}
-                  onToggleExpand={() => handleToggleCommentThread(post.id)}
-                  onAddComment={() => handleAddComment(post.id)}
-                  commentText={commentTextByPostId[post.id] ?? ''}
-                  onCommentTextChange={(text) => setCommentTextByPostId(prev => ({ ...prev, [post.id]: text }))}
-                  commentLoading={commentLoading === post.id}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
+function StandaloneCard({
+  slug,
+  count,
+  totals,
+}: {
+  slug: string
+  count: number
+  totals: { total: number; awaiting: number; published: number }
+}) {
+  return (
+    <Link
+      href={`/admin/org/${slug}/social/standalone`}
+      className="group pib-card overflow-hidden hover:border-[var(--org-accent,var(--color-pib-accent))] transition-colors flex flex-col"
+      style={{ padding: 0 }}
+    >
+      <div
+        className="aspect-[16/9] w-full relative flex items-center justify-center"
+        style={{
+          background:
+            'linear-gradient(135deg, var(--org-surface, var(--color-pib-surface)) 0%, var(--org-bg, var(--color-pib-bg)) 100%)',
+        }}
+      >
+        <div className="text-center px-4">
+          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+            Not part of a campaign
+          </p>
+          <p className="text-2xl font-headline font-bold mt-1">{count}</p>
+          <p className="text-xs text-on-surface-variant">standalone posts</p>
+        </div>
+        {totals.awaiting > 0 && (
+          <span
+            className="absolute top-3 left-3 text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded-full"
+            style={{
+              background: 'var(--org-accent, var(--color-pib-accent))',
+              color: '#000',
+            }}
+          >
+            {totals.awaiting} awaiting
+          </span>
+        )}
+      </div>
+      <div className="p-5 space-y-3 flex-1 flex flex-col">
+        <div>
+          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+            Standalone
+          </p>
+          <h3 className="text-base font-headline font-semibold mt-1">
+            Composed manually
+          </h3>
+        </div>
+        <div className="text-xs text-on-surface-variant flex items-center gap-3 mt-auto">
+          <span>{totals.total} social</span>
+          <span>·</span>
+          <span>{totals.published} published</span>
+        </div>
+        <p
+          className="text-xs font-label uppercase tracking-widest mt-1 group-hover:translate-x-0.5 transition-transform"
+          style={{ color: 'var(--org-accent, var(--color-pib-accent))' }}
+        >
+          Open →
+        </p>
+      </div>
+    </Link>
+  )
+}
+
+function EmptyState({ monthFilter }: { monthFilter: string }) {
+  return (
+    <div className="pib-card md:col-span-2 lg:col-span-2 py-12 text-center">
+      <p className="text-on-surface-variant text-sm">
+        {monthFilter === 'all'
+          ? 'No campaigns yet. Run the content-engine skill to produce one.'
+          : `No campaigns created in ${monthLabel(monthFilter)}.`}
+      </p>
     </div>
   )
 }
