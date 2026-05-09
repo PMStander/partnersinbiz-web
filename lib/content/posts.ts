@@ -904,6 +904,232 @@ Performance budgets, real analytics from day one, accessible defaults, and an ac
 ## What is not worth paying more for
 A custom CMS for a site that needs eight pages updated twice a year. Use Sanity. Move on.`,
   },
+  {
+    slug: 'website-kill-switch-client-sites',
+    title: "Adding a kill switch to your client's site in under a minute",
+    description:
+      'A 45-second Cloudflare Worker that takes any client site offline cleanly — with the right HTTP status code so SEO does not suffer.',
+    category: 'Build Notes',
+    readingTime: '7 min',
+    datePublished: '2026-05-11',
+    cover: '/images/blog/B7-website-maintenance.png',
+    tags: ['Cloudflare', 'Operations', 'Agency'],
+    body: `Most agency owners find out their site maintenance process is broken at the worst possible time — a client calls in a panic at 9 PM because their e-commerce store is showing half-built pages to real customers. A website kill switch fixes that before it becomes your problem.
+
+The concept is simple: a single toggle that immediately takes a site offline or redirects visitors to a holding page, without touching the codebase, without SSH access, and without waiting for a developer to wake up. Here is exactly how to set one up, and why every client site you manage should have one in place before the next round of changes goes live.
+
+---
+
+## What a Website Kill Switch Actually Does
+
+A kill switch does not delete anything. It does not roll back code. It simply intercepts traffic at a layer above your application — typically at the DNS, CDN, or server configuration level — and reroutes it to a static holding page or a maintenance notice.
+
+The practical result: a visitor who would have seen a broken checkout or a half-migrated WordPress install instead sees a clean "We'll be back shortly" page. Your client's brand stays intact. Google's crawler, depending on how you configure the response, either waits politely or de-indexes nothing, because you've served the right HTTP status code (more on that shortly).
+
+The three most common implementation layers are:
+
+- **CDN-level rules** (Cloudflare is the most widely used, with a free tier that covers most small business clients)
+- **WordPress maintenance mode plugins** (Maintenance by WebFactory, WP Maintenance Mode)
+- **Hosting-level redirect rules** via \`.htaccess\` or Nginx config
+
+Each has a different time-to-activate and a different level of control. The sub-one-minute method below uses Cloudflare, because it requires zero code changes and works regardless of what CMS or framework sits underneath.
+
+---
+
+## The Sub-One-Minute Method Using Cloudflare Workers
+
+If your client's domain is already proxied through Cloudflare (the orange cloud is active in the DNS dashboard), this takes about 45 seconds once you've done it once.
+
+**Step 1 — Open Cloudflare Workers & Pages.** Log into your Cloudflare dashboard, select the client's account, and navigate to Workers & Pages → Create Application → Create Worker.
+
+**Step 2 — Paste a small Worker script.** It only needs to do three things:
+
+- Define a single boolean — \`KILL_SWITCH = true\` — that you flip when you want the site offline.
+- When the switch is on, return a static HTML response with HTTP \`503 Service Unavailable\` and a \`Retry-After\` header.
+- When the switch is off, transparently \`fetch(request)\` so traffic passes through to the origin as normal.
+
+**Step 3 — Deploy and attach a route.** Click Deploy, then go to the Worker's settings and add a route matching \`*yourdomain.co.za/*\`. That wildcard covers every page on the site.
+
+To restore the site, go back to the Worker, change \`KILL_SWITCH\` to \`false\`, and redeploy. Cloudflare propagates the change globally in under 30 seconds.
+
+The \`503\` status code with a \`Retry-After\` header is the correct choice here. Google's Search Console documentation explicitly states that a 503 tells Googlebot the downtime is temporary. Pages will not be removed from the index for maintenance periods under a few days.
+
+---
+
+## Why the HTTP Status Code Matters More Than Most Agencies Realise
+
+If you redirect to a holding page using a \`200 OK\` or a \`301 Moved Permanently\`, you create real SEO problems. A \`200\` on a holding page tells Google the maintenance page *is* the content, which can cause it to index "We'll be back shortly" as the canonical page for your client's homepage. A \`301\` tells Google the site has permanently moved.
+
+Use \`503 Service Unavailable\` with \`Retry-After\`. Full stop.
+
+There is a secondary consideration: your client's active ad campaigns. If they're running Google Ads or Meta Ads, traffic hitting a maintenance page still costs money. Before you flip any website kill switch, notify the client to pause active campaigns, or do it yourself if you have access. A 30-minute maintenance window on a R15,000/month ad spend account is not trivial.
+
+---
+
+## Building a Reusable Kill Switch Template for Multiple Clients
+
+If you manage more than three or four client sites, the one-off Worker method above becomes repetitive. The smarter approach is a Cloudflare Worker template saved as a draft in your own Cloudflare account, which you clone and deploy to each new client site during onboarding.
+
+Some agencies go a step further and build a simple internal dashboard — a private URL with basic auth — that lets a non-technical team member flip the switch without logging into Cloudflare. This takes an afternoon to build using Cloudflare's REST API and a tool like Retool or even a plain HTML form with a serverless function behind it. The endpoint you need is \`PUT https://api.cloudflare.com/client/v4/accounts/{account_id}/workers/scripts/{script_name}\` — pass the updated Worker script as the request body. Wrap it in a simple toggle UI, and your account manager can activate a maintenance window on any client site in about 10 seconds.
+
+For agencies listing their client services on [Partners in Biz Properties](/properties), this kind of operational infrastructure is the difference between looking like a freelancer and looking like a proper agency. Prospective clients reading your listing want to see that you have processes, not just skills.
+
+---
+
+## The WordPress Alternative (When You Don't Control DNS)
+
+Not every client site is proxied through Cloudflare. Some clients manage their own DNS and are reluctant to change it. For those situations, a WordPress plugin is the fastest option.
+
+**WP Maintenance Mode** (free, 900,000+ active installs) and **Maintenance by WebFactory** (also free, 200,000+ installs) both offer:
+
+- One-click activation from the WordPress admin dashboard
+- A customisable holding page
+- Whitelisting of logged-in users (so your team can still see the live site while visitors see maintenance)
+- Basic countdown timer for managed expectations
+
+The limitation: someone with WordPress admin access must activate it. If the site is down hard — database connection failure, white screen of death — the plugin is inaccessible. That is why the Cloudflare-level kill switch is preferable as a primary tool. The WordPress plugin is a useful backup for routine maintenance where the site is still functional.
+
+---
+
+## What to Include in Your Client's Maintenance Holding Page
+
+The technical side is handled, but the holding page itself deserves thought. A blank white screen with "503" is not acceptable. A well-built holding page includes:
+
+- **A plain-language message** — "We're updating a few things and will be back by [time]. Thank you for your patience." Specific times reduce repeat visits from frustrated users.
+- **Contact information** — An email address or WhatsApp number, especially for e-commerce clients whose customers may have active orders.
+- **Brand consistency** — The client's logo and primary brand colour. You can inline these into the Worker script or host a static HTML file on Cloudflare Pages.
+- **No countdown timer unless you're confident about the window** — A timer that expires while the site is still down damages trust more than no timer at all.
+
+For clients with active social media followings, it is also worth drafting a holding post they can publish while the site is down. A 30-second tweet or Instagram story prevents the support inbox from filling up with "Is your website broken?" messages.
+
+---
+
+## Set It Up Before You Need It
+
+The worst time to build a website kill switch is at 10 PM when a client's site is mid-migration and 400 error pages are going out to real customers. The best time is during onboarding, when nobody is panicking and you can test it properly.
+
+Make it a non-negotiable part of your client intake checklist: domain proxied through Cloudflare, Worker deployed, route confirmed, kill switch tested by actually flipping it for 60 seconds in a low-traffic window. Add a note to the client's internal documentation with instructions for who to call and what happens when it's activated.
+
+If you manage client sites as part of a broader service offering — design, development, SEO, hosting — your service listing on [Partners in Biz Properties](/properties) is a good place to spell out that this kind of operational discipline is built into what you charge for. Clients looking for an agency to trust with their online presence want specifics, and "we have a tested website kill switch procedure" is a specific worth mentioning.
+
+A website kill switch is not a complicated tool. It is a 45-second setup that saves you hours of damage control, protects your client's SEO, and gives you a way to act decisively when something goes wrong. Build it once per client, test it once, and you will never have the 9 PM panic call again.`,
+  },
+  {
+    slug: 'manage-multiple-client-websites',
+    title: 'How to manage 10+ client websites without losing your mind',
+    description:
+      'The agencies that scale past ten clients do not have better people. They have better infrastructure. Here is the actual stack and process.',
+    category: 'Industry POV',
+    readingTime: '8 min',
+    datePublished: '2026-05-13',
+    cover: '/images/our-process-hero.png',
+    tags: ['Agency', 'Operations', 'Strategy'],
+    body: `Most agency owners hit a wall somewhere between client number six and client number ten. The chaos isn't a sign you're failing — it's a sign your systems haven't caught up with your growth. Here's how to actually manage multiple client sites at scale, without working weekends or missing a renewal deadline again.
+
+---
+
+## Why Managing Multiple Client Sites Falls Apart So Quickly
+
+The problem is rarely skill. It's architecture.
+
+When you land your first few clients, you build each website in whatever way feels right at the time. Different hosting providers, different WordPress themes, different plugin stacks, different login credentials stored in a shared Google Sheet that three people can edit. It works — until it doesn't.
+
+By the time you're managing eight or ten client sites, you're not running a web agency anymore. You're running a memory palace, holding together dozens of individual systems through sheer willpower. One team member leaves, one password gets changed without being updated, one client forgets to tell you their domain renewed on a different card — and suddenly you're in reactive firefighting mode.
+
+The agencies that scale past ten, twenty, or fifty clients don't have better people. They have better infrastructure. That means standardised hosting environments, centralised dashboards, documented processes, and clear client communication workflows that don't depend on anyone's inbox.
+
+---
+
+## Standardise Your Hosting Stack Before You Take on Another Client
+
+If you're currently hosting client websites across a mix of Afrihost, Hetzner, GoDaddy, and whatever the client "already had when they came to you," stop adding to that pile right now.
+
+Pick one or two managed hosting providers and move everything there over the next six months. In the South African market, Cloudflare for DNS combined with a managed WordPress host like Kinsta, Pressable, or WP Engine gives you a solid foundation. Kinsta's MyKinsta dashboard, for example, lets you manage all sites from a single interface, monitor uptime, run backups, and push updates — without logging into each site individually.
+
+The short-term admin of migrating six sites is nothing compared to the long-term cost of maintaining six different hosting relationships, six different billing cycles, and six different support lines when something breaks at 11pm.
+
+If your clients are on shared hosting that you don't control, you have a sales and positioning problem as much as a technical one. Build a managed hosting retainer into your service offering. Clients pay a monthly fee; you control the environment. This is how you create predictable revenue and predictable infrastructure at the same time.
+
+---
+
+## Use a Central Dashboard to Manage Multiple Client Sites Daily
+
+Once your hosting is consolidated, the next layer is site management tooling. This is where agencies either save or waste hours every week.
+
+MainWP is the most popular self-hosted option for WordPress agencies. You install it on a single WordPress instance you control, then connect all your client sites to it. From one screen, you can push plugin updates across 40 sites simultaneously, monitor for broken links, run security scans, and pull uptime reports. It's free for the core plugin, with paid extensions for specific functions.
+
+ManageWP (now part of GoDaddy Pro) is the hosted alternative and is widely used in SA agencies managing WordPress at scale. Their Business plan at around $1 per site per month gives you automated monthly reports you can white-label and send to clients — which is a useful touchpoint that reminds clients you exist and are actively working.
+
+For non-WordPress sites, or mixed environments, Cloudflare's dashboard handles DNS and security across all domains centrally. Pair it with UptimeRobot (free for up to 50 monitors) and you have real-time alerting if any client site goes down.
+
+The goal is a single morning check — not 15 separate logins. If your current setup requires you to open more than two or three browser tabs to see the health of your entire client portfolio, your dashboard layer needs work.
+
+---
+
+## Document Everything, Template Anything That Repeats
+
+The most expensive thing in a web agency isn't software. It's undocumented tribal knowledge.
+
+When every new client site is set up differently, every maintenance task requires someone who remembers how that particular site was built. That person becomes a bottleneck. If they're sick, on leave, or they resign, you have a problem.
+
+The fix is aggressive documentation, built from the start of each client relationship.
+
+Create a standard client site brief that captures: hosting login, domain registrar and renewal date, DNS provider, CMS credentials, theme and builder used, any custom plugins or integrations, backup schedule, and the client's primary technical contact. Store this in Notion or Confluence — somewhere the whole team can access, not in a single person's LastPass vault.
+
+Then template your recurring processes. Plugin update checklist. Monthly report template. New site launch checklist. Security incident response steps. These don't need to be elaborate — a simple Notion page with 12 checkboxes is infinitely better than relying on memory.
+
+Agencies that have solid process documentation can onboard a new team member in two days instead of two months. More importantly, they can take on a new client without the founder being involved in every technical decision.
+
+---
+
+## Build a Client Communication System That Runs Itself
+
+One of the most underestimated time drains when you manage multiple client sites is reactive communication. Clients emailing to ask if their site is up. Clients asking when the last backup was. Clients wondering why their plugin update broke something.
+
+You can eliminate most of this with proactive, automated communication.
+
+Set up automated monthly reports through ManageWP or MainWP's reporting extension. These go out on the first of each month and show the client uptime percentage, number of plugin updates applied, backup status, and security scan results. Clients feel informed; you don't spend time writing individual emails.
+
+For billing and renewals, use a tool like Xero or FreshBooks with recurring invoice automation. Set calendar reminders 90 days before each domain or hosting renewal — that's enough lead time to sort payment issues before anything expires.
+
+For client requests and change management, get off email. Implement a simple ticketing system. Freshdesk has a free tier that works well for smaller agencies. Clients submit requests through a form; you prioritise them in a queue; nothing falls through the cracks in someone's inbox.
+
+The goal is that a client can find out the status of their site, submit a request, and receive an update — without you personally being involved in any of those steps.
+
+---
+
+## Structure Your Client Portfolio Like a Property Portfolio
+
+Here's a mental model that changes how most agency owners think about scale: treat your client websites the way a property investor treats a portfolio.
+
+A property investor doesn't manage each building with a different strategy, a different bank, and a different contractor. They standardise. Same finance structure, same maintenance crews, same inspection schedule, same reporting cadence. Each property generates predictable income with predictable overhead.
+
+Your client websites can work the same way. Each site has a fixed monthly retainer. Same hosting environment. Same update schedule. Same reporting. Predictable revenue, predictable workload, easy to delegate.
+
+This is exactly the thinking behind [Partners in Biz Properties](/properties) — a structured approach to managing client digital assets as a portfolio rather than a collection of one-off projects. When clients are positioned as ongoing relationships with clear monthly deliverables, you manage multiple client sites without the chaos that comes from treating every engagement as a fresh emergency.
+
+The agencies that genuinely scale past 20 or 30 clients aren't doing more work. They've made each additional client incrementally cheaper to serve, because the infrastructure and systems already exist.
+
+---
+
+## Where to Start If You're Already in the Weeds
+
+If you're reading this while managing 10+ client sites on a patchwork of systems, here's a practical sequence — don't try to fix everything at once.
+
+**Week one:** Audit your current stack. List every client site, its hosting provider, domain registrar, CMS, and where the credentials are stored. Make this a spreadsheet. The act of writing it down will immediately show you the chaos, which is useful.
+
+**Month one:** Pick your hosting standard and identify the three or four clients easiest to migrate. Do those first. Build the process, then repeat.
+
+**Month two:** Implement a central dashboard (MainWP or ManageWP) and connect every site you've consolidated. Set up UptimeRobot monitoring.
+
+**Month three:** Build your documentation templates. New client onboarding doc. Monthly report template. Incident response checklist.
+
+**Month four onwards:** Start positioning new clients on retainer agreements that include managed hosting. This is how you fund the infrastructure you've built.
+
+Managing multiple client sites at scale isn't complicated — but it does require you to stop solving problems one by one and start building systems that solve entire categories of problems permanently. The agencies doing this well are quieter than you'd expect. No drama, no weekend emergencies, no founder burnout. Just a clean portfolio of clients on predictable, profitable arrangements.
+
+If you want to explore how Partners in Biz structures client digital portfolios for exactly this kind of sustainable scale, [start with Properties](/properties) and see how the model applies to your agency.`,
+  },
 ]
 
 export function getPostBySlug(slug: string): Post | null {
