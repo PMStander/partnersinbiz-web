@@ -262,33 +262,26 @@ export default function OrgSocialPage() {
   const [commentLoading, setCommentLoading] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/v1/organizations`)
-        .then(r => r.json())
-        .then(body => {
-          const org = (body.data ?? []).find((o: any) => o.slug === slug)
-          if (org) {
-            setOrgId(org.id)
-            return org.id
-          }
-          return null
-        }),
-      fetch('/api/v1/social/posts?limit=50')
-        .then(r => r.json())
-        .then(body => {
-          setPosts(body.data ?? [])
-        }),
-    ])
-      .then(([fetchedOrgId]) => {
-        // Fetch stats if we have an orgId
-        if (fetchedOrgId) {
-          return fetch(`/api/v1/social/stats?orgId=${fetchedOrgId}`)
+    fetch(`/api/v1/organizations`)
+      .then(r => r.json())
+      .then(body => {
+        const org = (body.data ?? []).find((o: any) => o.slug === slug)
+        const fetchedOrgId = org?.id ?? null
+        if (fetchedOrgId) setOrgId(fetchedOrgId)
+        return fetchedOrgId
+      })
+      .then(fetchedOrgId => {
+        if (!fetchedOrgId) return
+        const orgQs = `orgId=${encodeURIComponent(fetchedOrgId)}`
+        return Promise.all([
+          fetch(`/api/v1/social/posts?limit=50&${orgQs}`)
             .then(r => r.json())
-            .then(body => {
-              setStats(body.data ?? null)
-            })
-            .catch(() => {})
-        }
+            .then(body => setPosts(body.data ?? [])),
+          fetch(`/api/v1/social/stats?${orgQs}`)
+            .then(r => r.json())
+            .then(body => setStats(body.data ?? null))
+            .catch(() => {}),
+        ])
       })
       .catch(() => {})
       .finally(() => setLoading(false))
