@@ -3,19 +3,34 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import { POSTS, getPostBySlug, type Post } from '@/lib/content/posts'
+import { getFirestorePostBySlug, listLiveSlugs } from '@/lib/content/posts-firestore'
 import { SITE } from '@/lib/seo/site'
 import { JsonLd, articleSchema, breadcrumbSchema } from '@/lib/seo/schema'
 import { Reveal } from '@/components/marketing/Reveal'
 
 interface Params { params: Promise<{ slug: string }> }
 
-export function generateStaticParams() {
-  return POSTS.map((p) => ({ slug: p.slug }))
+/**
+ * Resolve a slug from either the legacy hardcoded array or Firestore
+ * (seo_content where status='live'). Firestore is the source of truth for
+ * any post produced by the SEO content engine.
+ */
+async function resolvePost(slug: string): Promise<Post | null> {
+  const fromArray = getPostBySlug(slug)
+  if (fromArray) return fromArray
+  return getFirestorePostBySlug(slug)
+}
+
+export async function generateStaticParams() {
+  const fromArray = POSTS.map(p => p.slug)
+  const fromFirestore = await listLiveSlugs().catch(() => [])
+  const all = Array.from(new Set([...fromArray, ...fromFirestore]))
+  return all.map(slug => ({ slug }))
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params
-  const post = getPostBySlug(slug)
+  const post = await resolvePost(slug)
   if (!post) return { title: 'Post not found' }
   const url = `${SITE.url}/insights/${post.slug}`
   return {
@@ -186,7 +201,7 @@ function renderBody(body: string) {
 
 export default async function InsightPostPage({ params }: Params) {
   const { slug } = await params
-  const post = getPostBySlug(slug)
+  const post = await resolvePost(slug)
   if (!post) notFound()
 
   const breadcrumb = breadcrumbSchema([

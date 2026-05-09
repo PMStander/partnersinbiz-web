@@ -353,6 +353,50 @@ Query params: `limit` (default 5, max 100)
 
 Response: Array of `{ id, content (120 chars), platform, orgId, orgName, scheduledAt }`.
 
+#### `POST /campaigns/[id]/schedule` — auth: client (NEW — bulk schedule)
+
+Bulk-schedule every `approved` social_post + video on a content-engine
+campaign across the campaign's `calendar` (preferred) or a cadence. Use
+this instead of PATCHing posts one at a time for content-engine campaigns.
+
+Body (all fields optional):
+```json
+{
+  "startDate": "2026-05-12T09:00:00+02:00",
+  "mode": "auto",
+  "cadence": { "postsPerDay": 1, "hours": ["09:00"], "daysOfWeek": [1,3,5] },
+  "platforms": ["instagram", "linkedin"],
+  "includePending": false,
+  "timezone": "Africa/Johannesburg",
+  "dryRun": true
+}
+```
+
+- `mode`: `'auto'` (default — calendar slots if present else cadence), `'calendar'` (slots from `campaign.calendar` only), `'cadence'` (skip calendar, use cadence rules).
+- `daysOfWeek`: 0=Sun..6=Sat. Default Mon/Wed/Fri.
+- `includePending`: also schedule `pending_approval` posts and auto-approve them. Default `false` — recommended only when you trust the campaign content.
+- `dryRun`: preview the schedule without writing. Always run once with `dryRun: true` first.
+
+Each scheduled post gets `scheduledFor`, `status='scheduled'`, and a
+matching `social_queue` entry — the cron worker (`/api/cron/social`,
+5 min interval) publishes them via the connected OAuth provider.
+
+Response:
+```json
+{
+  "scheduled": [{ "postId": "...", "platform": "instagram", "scheduledFor": "...", "status": "scheduled" }],
+  "skipped": [],
+  "totals": { "scheduled": 36, "skipped": 0, "eligible": 36 },
+  "startDate": "2026-05-12T07:00:00.000Z",
+  "endDate": "2026-08-04T07:00:00.000Z",
+  "mode": "auto",
+  "dryRun": false
+}
+```
+
+For non-campaign-bound posts, schedule individually via `PUT /posts/[id]`
+with `{ scheduledFor, status: "scheduled" }`.
+
 #### `POST /posts/bulk/` — auth: admin
 
 Bulk create up to **50** posts. Accepts JSON or CSV.

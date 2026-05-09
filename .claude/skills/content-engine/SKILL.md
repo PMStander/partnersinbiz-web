@@ -149,7 +149,39 @@ on the entity — if a client has edited recently, confirm with the operator
 before clobbering their changes. Treat the post-edit body as the new source
 of truth.
 
-### Review URLs (NEW — prefer the org-scoped routes)
+### Taking a campaign live (NEW — bulk schedule + auto-publish to /insights)
+
+After approval, two endpoints turn the campaign into live distribution:
+
+```
+POST /api/v1/campaigns/[id]/schedule
+  body: { startDate?, mode?: 'auto'|'calendar'|'cadence', cadence?: { postsPerDay, hours, daysOfWeek }, platforms?, includePending?, dryRun? }
+```
+
+Bulk-schedules every `approved` social_post + video on the campaign across
+the campaign's `calendar` (preferred) or a configurable cadence. Each post
+gets `scheduledFor` + `status='scheduled'` plus a matching `social_queue`
+entry — the existing `/api/cron/social` worker (5 min interval Cloud Function
++ daily Vercel cron) picks them up and publishes via the connected OAuth
+provider. Use `dryRun: true` first to preview the schedule.
+
+```
+POST /api/v1/seo/content/[id]/publish
+  → now also persists a `slug` on seo_content
+```
+
+The public reader at `/insights/[slug]` queries `seo_content` where
+`status='live'` AND `slug == ?` and hydrates the body from `seo_drafts`.
+Approving a blog now actually publishes it to the public site — no manual
+`lib/content/posts.ts` edit. The slug is derived from `body.slug` →
+`data.slug` → `targetUrl` path → slugified title, in that order.
+
+For end-of-run handoff, point the operator at:
+1. Connect social accounts: `/portal/social/accounts`
+2. Bulk schedule: `POST /api/v1/campaigns/[id]/schedule { startDate, dryRun: true }`, review, then run again with `dryRun: false`
+3. Approve all blogs (each fires the publish flow): `POST /api/v1/campaigns/[id]/approve-all { type: 'seo_content' }`
+
+### Review URLs (prefer the org-scoped routes)
 
 The admin marketing-preview UI (Research / Blog Posts / Instagram / Reels
 & TikTok / Stories / Facebook / LinkedIn / YouTube tabs) lives at:

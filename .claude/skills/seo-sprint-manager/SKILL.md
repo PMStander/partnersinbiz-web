@@ -158,7 +158,7 @@ POST   /seo/sprints/[id]/content                     add idea
 PATCH  /seo/content/[id]                             update
 POST   /seo/content/[id]/draft                       AI-draft the post
 POST   /seo/content/[id]/repurpose                   handoff to social-media-manager
-POST   /seo/content/[id]/publish                     mark live
+POST   /seo/content/[id]/publish                     mark live + persist `slug` → auto-publishes to /insights/[slug]
 ```
 
 ### Audits
