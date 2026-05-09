@@ -14,7 +14,7 @@
  *     daysOfWeek?: number[]     // 0=Sun..6=Sat, default [1,3,5] (Mon/Wed/Fri)
  *   }
  *   platforms?: string[]        // filter (e.g. ['instagram','linkedin']) — default: all
- *   includePending?: boolean    // also schedule pending_approval posts (auto-approve them) — default false
+ *   includePending?: boolean    // also schedule pending_approval posts (auto-approve them) — default true
  *   timezone?: string           // IANA, default 'Africa/Johannesburg'
  *   dryRun?: boolean            // preview without writing — default false
  * }
@@ -159,7 +159,7 @@ export const POST = withAuth(
     const startDate = body.startDate ? new Date(body.startDate) : nextMonday09(tz)
     if (isNaN(startDate.getTime())) return apiError('Invalid startDate', 400)
     const mode = (body.mode as 'calendar' | 'cadence' | 'auto') ?? 'auto'
-    const includePending = body.includePending === true
+    const includePending = body.includePending !== false
     const platformsFilter: string[] | null = Array.isArray(body.platforms)
       ? body.platforms.map((p: unknown) => String(p).toLowerCase())
       : null

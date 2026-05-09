@@ -77,7 +77,7 @@ export const POST = withAuth('admin', async (req, user) => {
   const orgId: string | undefined = body.orgId?.trim?.()
   const resourceType: string | undefined = body.resourceType
   const resourceId: string | undefined = body.resourceId?.trim?.()
-  const text: string | undefined = typeof body.body === 'string' ? body.body : undefined
+  const text: string | undefined = typeof body.body === 'string' ? body.body : typeof body.text === 'string' ? body.text : undefined
   const parentCommentId: string | null =
     typeof body.parentCommentId === 'string' && body.parentCommentId.trim()
       ? body.parentCommentId.trim()
@@ -94,7 +94,7 @@ export const POST = withAuth('admin', async (req, user) => {
     )
   }
   if (!resourceId) return apiError('resourceId is required')
-  if (!text || !text.trim()) return apiError('body is required and cannot be empty')
+  if (!text || !text.trim()) return apiError('body (or text) is required and cannot be empty')
 
   const mentions = parseMentions(text)
   const mentionIds = mentions.map((m) => `${m.type}:${m.id}`)

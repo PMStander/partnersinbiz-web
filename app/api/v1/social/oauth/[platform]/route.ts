@@ -18,7 +18,8 @@ import { Timestamp } from 'firebase-admin/firestore'
 
 export const GET = withAuth('client', withTenant(async (req: NextRequest, _user, orgId) => {
   const url = new URL(req.url)
-  const platform = url.pathname.split('/').slice(-1)[0] as SocialPlatformType
+  const rawPlatform = url.pathname.split('/').slice(-1)[0]
+  const platform = (rawPlatform === 'x' ? 'twitter' : rawPlatform) as SocialPlatformType
   const redirectUrl = url.searchParams.get('redirectUrl') ?? '/admin/social'
 
   // Special handling for non-OAuth platforms

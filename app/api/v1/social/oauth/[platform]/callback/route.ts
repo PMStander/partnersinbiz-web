@@ -18,7 +18,8 @@ import type { SocialPlatformType } from '@/lib/social/providers/types'
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
-  const platform = url.pathname.split('/').slice(-2)[0] as SocialPlatformType
+  const rawPlatform = url.pathname.split('/').slice(-2)[0]
+  const platform = (rawPlatform === 'x' ? 'twitter' : rawPlatform) as SocialPlatformType
   const code = url.searchParams.get('code')
   const stateToken = url.searchParams.get('state')
   const error = url.searchParams.get('error')
