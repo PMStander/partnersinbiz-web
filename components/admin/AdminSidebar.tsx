@@ -8,7 +8,7 @@ import { OrgSwitcher } from './OrgSwitcher'
 import GlobalSearch from './GlobalSearch'
 import { CollapsibleSection } from './CollapsibleSection'
 import { useOrg } from '@/lib/contexts/OrgContext'
-import { OPERATOR_NAV, workspaceNav, type NavItem } from './navConfig'
+import { OPERATOR_NAV, OPERATOR_TOOLS, workspaceNav, workspaceTools, type NavItem } from './navConfig'
 
 // ── Sidebar nav item ───────────────────────────────────────────────────────
 
@@ -232,6 +232,15 @@ export function AdminSidebar({ open = false, onClose, collapsed = false, onToggl
           ))}
         </nav>
 
+        {/* Workspace mode: collapsed icon-only tools */}
+        {isWorkspaceMode && collapsed && (
+          <div className="border-t border-[var(--color-pib-line)] px-2 py-3 space-y-1">
+            {workspaceTools(selectedOrg.slug).map((item) => (
+              <NavLink key={item.href} item={item} pathname={pathname} collapsed />
+            ))}
+          </div>
+        )}
+
         {/* Workspace mode: collapsible tool stacks per client */}
         {isWorkspaceMode && !collapsed && (
           <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-3">
@@ -323,6 +332,15 @@ export function AdminSidebar({ open = false, onClose, collapsed = false, onToggl
                 pathname={pathname}
               />
             </CollapsibleSection>
+          </div>
+        )}
+
+        {/* Operator mode: collapsed icon-only tools */}
+        {!isWorkspaceMode && collapsed && (
+          <div className="border-t border-[var(--color-pib-line)] px-2 py-3 space-y-1">
+            {OPERATOR_TOOLS.map((item) => (
+              <NavLink key={item.href} item={item} pathname={pathname} collapsed />
+            ))}
           </div>
         )}
 

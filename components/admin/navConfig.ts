@@ -28,3 +28,23 @@ export function workspaceNav(slug: string): NavItem[] {
     { label: 'Settings',  href: `/admin/org/${slug}/settings`,  icon: 'settings' },
   ]
 }
+
+export const OPERATOR_TOOLS: NavItem[] = [
+  { label: 'Social',    href: '/admin/social',    icon: 'campaign' },
+  { label: 'SEO',       href: '/admin/seo',        icon: 'trending_up' },
+  { label: 'Email',     href: '/admin/email',      icon: 'mail' },
+  { label: 'Sequences', href: '/admin/sequences',  icon: 'stacked_email' },
+]
+
+export function workspaceTools(slug: string): NavItem[] {
+  return [
+    { label: 'Social Media',    href: `/admin/org/${slug}/social`,          icon: 'campaign' },
+    { label: 'SEO Sprint',      href: `/admin/org/${slug}/seo`,             icon: 'trending_up' },
+    { label: 'Email',           href: '/admin/email',                        icon: 'mail' },
+    { label: 'Sequences',       href: '/admin/sequences',                    icon: 'stacked_email' },
+    { label: 'Campaigns',       href: `/admin/org/${slug}/campaigns`,        icon: 'flag' },
+    { label: 'Capture Sources', href: `/admin/org/${slug}/capture-sources`,  icon: 'inventory_2' },
+    { label: 'Integrations',    href: `/admin/org/${slug}/integrations`,     icon: 'extension' },
+    { label: 'Email Domains',   href: `/admin/org/${slug}/email-domains`,    icon: 'dns' },
+  ]
+}

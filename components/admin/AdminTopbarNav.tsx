@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { useOrg } from '@/lib/contexts/OrgContext'
 import { OrgSwitcher } from './OrgSwitcher'
-import { OPERATOR_NAV, workspaceNav, type NavItem } from './navConfig'
+import { OPERATOR_NAV, OPERATOR_TOOLS, workspaceNav, workspaceTools, type NavItem } from './navConfig'
 
 interface AdminTopbarNavProps {
   userEmail: string
@@ -46,6 +46,7 @@ export function AdminTopbarNav({ userEmail, onToggleLayout }: AdminTopbarNavProp
   const selectedOrg = orgs.find((o) => o.id === selectedOrgId)
   const isWorkspaceMode = !!selectedOrgId && !!selectedOrg
   const navItems = isWorkspaceMode ? workspaceNav(selectedOrg.slug) : OPERATOR_NAV
+  const toolItems = isWorkspaceMode ? workspaceTools(selectedOrg.slug) : OPERATOR_TOOLS
 
   const initials = userEmail.split(/[.\s@]/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('')
 
@@ -77,6 +78,10 @@ export function AdminTopbarNav({ userEmail, onToggleLayout }: AdminTopbarNavProp
           {/* Nav items — scrollable */}
           <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-none flex-1 min-w-0">
             {navItems.map((item) => (
+              <TopbarNavLink key={item.href} item={item} pathname={pathname} />
+            ))}
+            <div className="w-px h-5 bg-[var(--color-pib-line)] shrink-0 mx-1" />
+            {toolItems.map((item) => (
               <TopbarNavLink key={item.href} item={item} pathname={pathname} />
             ))}
           </nav>
@@ -128,6 +133,11 @@ export function AdminTopbarNav({ userEmail, onToggleLayout }: AdminTopbarNavProp
             <OrgSwitcher />
             <div className="h-px bg-[var(--color-pib-line)] my-2" />
             {navItems.map((item) => (
+              <TopbarNavLink key={item.href} item={item} pathname={pathname} />
+            ))}
+            <div className="h-px bg-[var(--color-pib-line)] my-2" />
+            <p className="px-3 pb-1 text-[9px] uppercase tracking-widest text-[var(--color-pib-text-muted)] font-medium">Tools</p>
+            {toolItems.map((item) => (
               <TopbarNavLink key={item.href} item={item} pathname={pathname} />
             ))}
             <div className="h-px bg-[var(--color-pib-line)] my-2" />
