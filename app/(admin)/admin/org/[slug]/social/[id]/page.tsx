@@ -647,12 +647,16 @@ function splitAssets(assets: AnyObj | null) {
   }
 
   const formatOf = (p: AnyObj): string => (p.format ?? '').toString().toLowerCase()
+  const hasStoriesUrl = (p: AnyObj): boolean =>
+    Array.isArray(p.media) && p.media.some((m: AnyObj) => m?.urlStories)
 
   const instagramFeed = social.filter(p => {
     const plat = platformOf(p)
     return plat === 'instagram' && formatOf(p) !== 'story' && !isVideo(p)
   })
-  const stories = allSocial.filter(p => formatOf(p) === 'story')
+  // Stories tab matches BOTH posts explicitly tagged format='story' AND
+  // multi-format video posts that carry a urlStories cut on media[0].
+  const stories = allSocial.filter(p => formatOf(p) === 'story' || hasStoriesUrl(p))
   const reelsAndTikTok = allSocial.filter(p => {
     const plat = platformOf(p)
     if (formatOf(p) === 'story') return false
