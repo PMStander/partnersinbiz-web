@@ -1,9 +1,11 @@
 'use client'
 
+import * as React from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { AssetGrid } from '@/components/campaign-cockpit/AssetGrid'
+import { BlogPreviewCard } from '@/components/campaign-preview'
 import { OrgThemedFrame, useOrgBrand } from '@/components/admin/OrgThemedFrame'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -235,19 +237,16 @@ function Drillin({ slug, id, orgName }: { slug: string; id: string; orgName: str
       <div>
         {tab === 'research' && <ResearchPanel research={campaign.research} />}
         {tab === 'blogs' && (
-          <PlatformPanel
-            empty="No blog posts on this campaign yet."
-            social={[]}
-            blogs={split.blogs}
-            videos={[]}
-            filter="blogs"
-            brand={brand}
+          <BlogsTab
+            slug={slug}
             campaignId={id}
+            blogs={split.blogs}
+            brand={brand}
           />
         )}
         {tab === 'instagram' && (
           <PlatformPanel
-            empty="No Instagram feed posts yet."
+            empty={emptyCopy('Instagram feed posts', 'instagram-feed')}
             social={split.instagramFeed}
             blogs={[]}
             videos={[]}
@@ -258,7 +257,7 @@ function Drillin({ slug, id, orgName }: { slug: string; id: string; orgName: str
         )}
         {tab === 'reels' && (
           <PlatformPanel
-            empty="No Reels or TikToks yet."
+            empty={emptyCopy('Reels or TikToks', 'short-vertical-video')}
             social={split.reelsAndTikTok}
             blogs={[]}
             videos={[]}
@@ -269,7 +268,7 @@ function Drillin({ slug, id, orgName }: { slug: string; id: string; orgName: str
         )}
         {tab === 'stories' && (
           <PlatformPanel
-            empty="No story-format posts yet."
+            empty={emptyCopy('story-format posts', '15-second story slides')}
             social={split.stories}
             blogs={[]}
             videos={[]}
@@ -280,7 +279,7 @@ function Drillin({ slug, id, orgName }: { slug: string; id: string; orgName: str
         )}
         {tab === 'facebook' && (
           <PlatformPanel
-            empty="No Facebook posts yet."
+            empty={emptyCopy('Facebook posts', 'facebook-feed')}
             social={split.facebook}
             blogs={[]}
             videos={[]}
@@ -291,7 +290,7 @@ function Drillin({ slug, id, orgName }: { slug: string; id: string; orgName: str
         )}
         {tab === 'linkedin' && (
           <PlatformPanel
-            empty="No LinkedIn posts yet."
+            empty={emptyCopy('LinkedIn posts', 'linkedin-feed')}
             social={split.linkedin}
             blogs={[]}
             videos={[]}
@@ -302,7 +301,7 @@ function Drillin({ slug, id, orgName }: { slug: string; id: string; orgName: str
         )}
         {tab === 'youtube' && (
           <PlatformPanel
-            empty="No YouTube content yet."
+            empty={emptyCopy('YouTube videos', 'long-form 16:9 video')}
             social={split.youtubeSocial}
             blogs={[]}
             videos={split.youtubeVideos}
@@ -536,7 +535,7 @@ function PlatformPanel({
   filter: any
   brand: AnyObj | undefined
   campaignId: string
-  empty: string
+  empty: React.ReactNode
 }) {
   const total = social.length + blogs.length + videos.length
   if (total === 0) {
@@ -555,6 +554,56 @@ function PlatformPanel({
       videos={videos}
       filter={filter}
     />
+  )
+}
+
+function emptyCopy(label: string, kind: string): React.ReactNode {
+  return (
+    <span>
+      No {label} on this campaign yet.{' '}
+      <span className="block text-on-surface-variant text-xs mt-2">
+        The content-engine produces {kind} when a campaign is created with that
+        deliverable. Re-run it to add this format.
+      </span>
+    </span>
+  )
+}
+
+function BlogsTab({
+  slug,
+  campaignId,
+  blogs,
+  brand,
+}: {
+  slug: string
+  campaignId: string
+  blogs: AnyObj[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  brand: any
+}) {
+  if (blogs.length === 0) {
+    return (
+      <div className="pib-card p-10 text-center text-sm text-on-surface-variant">
+        No blog posts on this campaign yet.
+        <span className="block text-on-surface-variant text-xs mt-2">
+          Run the content-engine skill to generate the blog deliverables for
+          this campaign.
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {blogs.map(b => (
+        <BlogPreviewCard
+          key={b.id}
+          blog={b}
+          brand={brand}
+          status={b.status}
+          href={`/admin/org/${slug}/social/${campaignId}/blog/${b.id}`}
+        />
+      ))}
+    </div>
   )
 }
 

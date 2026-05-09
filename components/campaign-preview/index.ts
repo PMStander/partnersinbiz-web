@@ -22,6 +22,9 @@ export type { YouTubeCardProps } from './YouTubeCard'
 export { BlogReaderCard } from './BlogReaderCard'
 export type { BlogReaderCardProps } from './BlogReaderCard'
 
+export { BlogPreviewCard } from './BlogPreviewCard'
+export type { BlogPreviewCardProps } from './BlogPreviewCard'
+
 export { AssetActions } from './AssetActions'
 
 export type {
