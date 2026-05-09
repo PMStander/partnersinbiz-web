@@ -8,49 +8,19 @@ import { OrgSwitcher } from './OrgSwitcher'
 import GlobalSearch from './GlobalSearch'
 import { CollapsibleSection } from './CollapsibleSection'
 import { useOrg } from '@/lib/contexts/OrgContext'
-
-// ── Nav definitions ────────────────────────────────────────────────────────
-
-interface NavItem {
-  label: string
-  href: string
-  icon: string
-}
-
-const OPERATOR_NAV: NavItem[] = [
-  { label: 'Dashboard',   href: '/admin/dashboard',          icon: 'space_dashboard' },
-  { label: 'Properties',  href: '/admin/properties',         icon: 'apartment' },
-  { label: 'Analytics',   href: '/admin/analytics',          icon: 'analytics' },
-  { label: 'Pipeline',    href: '/admin/crm/contacts',       icon: 'view_kanban' },
-  { label: 'Clients',     href: '/admin/clients',            icon: 'groups' },
-  { label: 'Invoicing',   href: '/admin/invoicing',          icon: 'receipt_long' },
-  { label: 'Recurring',   href: '/admin/invoicing/recurring', icon: 'autorenew' },
-  { label: 'Quotes',      href: '/admin/quotes',             icon: 'request_quote' },
-  { label: 'Platform users', href: '/admin/platform-users',  icon: 'shield_person' },
-  { label: 'Settings',    href: '/admin/settings',           icon: 'settings' },
-]
-
-function workspaceNav(slug: string): NavItem[] {
-  return [
-    { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: 'space_dashboard' },
-    { label: 'Projects',  href: `/admin/org/${slug}/projects`,  icon: 'rocket_launch' },
-    { label: 'Brand',     href: `/admin/org/${slug}/brand`,     icon: 'palette' },
-    { label: 'Team',      href: `/admin/org/${slug}/team`,      icon: 'groups' },
-    { label: 'Billing',   href: `/admin/org/${slug}/billing`,   icon: 'payments' },
-    { label: 'Activity',  href: `/admin/org/${slug}/activity`,  icon: 'pulse_alert' },
-    { label: 'Settings',  href: `/admin/org/${slug}/settings`,  icon: 'settings' },
-  ]
-}
+import { OPERATOR_NAV, workspaceNav, type NavItem } from './navConfig'
 
 // ── Sidebar nav item ───────────────────────────────────────────────────────
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavLink({ item, pathname, collapsed }: { item: NavItem; pathname: string; collapsed?: boolean }) {
   const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
   return (
     <Link
       href={item.href}
+      title={collapsed ? item.label : undefined}
       className={[
-        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all duration-150',
+        'flex items-center rounded-lg text-sm transition-all duration-150',
+        collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2',
         isActive
           ? 'bg-[var(--color-pib-accent-soft)] text-[var(--color-pib-accent-hover)]'
           : 'text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] hover:bg-white/[0.03]',
@@ -64,7 +34,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
       >
         {item.icon}
       </span>
-      <span className="font-medium">{item.label}</span>
+      {!collapsed && <span className="font-medium">{item.label}</span>}
     </Link>
   )
 }
@@ -158,9 +128,11 @@ function SeoWorkspaceSection({ slug, orgId, pathname }: { slug: string; orgId: s
 interface AdminSidebarProps {
   open?: boolean
   onClose?: () => void
+  collapsed?: boolean
+  onToggleCollapsed?: () => void
 }
 
-export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
+export function AdminSidebar({ open = false, onClose, collapsed = false, onToggleCollapsed }: AdminSidebarProps) {
   const pathname = usePathname()
   const { selectedOrgId, orgs } = useOrg()
 
@@ -198,49 +170,70 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
 
       <aside
         className={[
-          'w-64 shrink-0 flex flex-col border-r border-[var(--color-pib-line)] bg-[var(--color-sidebar)] overflow-y-auto',
+          'shrink-0 flex flex-col border-r border-[var(--color-pib-line)] bg-[var(--color-sidebar)] overflow-y-auto',
           'md:h-screen md:sticky md:top-0 md:translate-x-0 md:z-auto',
-          'fixed top-0 left-0 h-full z-50 transition-transform duration-300 ease-in-out',
+          'fixed top-0 left-0 h-full z-50 transition-all duration-300 ease-in-out',
+          collapsed ? 'w-16' : 'w-64',
           open ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         ].join(' ')}
       >
         {/* Brand */}
-        <div className="px-5 h-16 flex items-center gap-2.5 border-b border-[var(--color-pib-line)] shrink-0">
-          <Image src="/pib-logo-512.png" alt="Partners in Biz" width={28} height={28} className="rounded-md object-contain" />
-          <span className="font-display text-lg leading-none">Partners in Biz</span>
-          <span
-            className={[
-              'ml-auto pill !text-[10px] !py-0.5 !px-2',
-              isWorkspaceMode ? 'pill-accent' : '',
-            ].join(' ')}
-          >
-            {isWorkspaceMode ? 'Client' : 'Admin'}
-          </span>
+        <div className={['h-16 flex items-center border-b border-[var(--color-pib-line)] shrink-0', collapsed ? 'justify-center px-0' : 'gap-2.5 px-5'].join(' ')}>
+          <Image src="/pib-logo-512.png" alt="Partners in Biz" width={28} height={28} className="rounded-md object-contain shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="font-display text-lg leading-none">Partners in Biz</span>
+              <span className={['ml-auto pill !text-[10px] !py-0.5 !px-2', isWorkspaceMode ? 'pill-accent' : ''].join(' ')}>
+                {isWorkspaceMode ? 'Client' : 'Admin'}
+              </span>
+            </>
+          )}
         </div>
+
+        {/* Collapse toggle */}
+        <button
+          onClick={onToggleCollapsed}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={[
+            'hidden md:flex items-center justify-center h-8 text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors border-b border-[var(--color-pib-line)]',
+            collapsed ? 'w-full' : 'w-full px-5',
+          ].join(' ')}
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            {collapsed ? 'chevron_right' : 'chevron_left'}
+          </span>
+          {!collapsed && <span className="ml-auto text-[10px] opacity-50">collapse</span>}
+        </button>
 
         {/* Search */}
-        <div className="px-3 pt-4 pb-3">
-          <GlobalSearch />
-        </div>
+        {!collapsed && (
+          <div className="px-3 pt-4 pb-3">
+            <GlobalSearch />
+          </div>
+        )}
 
         {/* Org Switcher */}
-        <div className="border-t border-[var(--color-pib-line)] py-3">
-          <p className="eyebrow !text-[9px] px-5 mb-1.5">Context</p>
-          <OrgSwitcher />
-        </div>
+        {!collapsed && (
+          <div className="border-t border-[var(--color-pib-line)] py-3">
+            <p className="eyebrow !text-[9px] px-5 mb-1.5">Context</p>
+            <OrgSwitcher />
+          </div>
+        )}
 
         {/* Navigation */}
-        <div className="px-3 pt-3 pb-1">
-          <p className="eyebrow !text-[9px] px-2 mb-2">Navigation</p>
-        </div>
-        <nav className="flex-1 px-3 space-y-1">
+        {!collapsed && (
+          <div className="px-3 pt-3 pb-1">
+            <p className="eyebrow !text-[9px] px-2 mb-2">Navigation</p>
+          </div>
+        )}
+        <nav className={['flex-1 space-y-1', collapsed ? 'px-2 pt-3' : 'px-3'].join(' ')}>
           {navItems.map((item) => (
-            <NavLink key={item.href} item={item} pathname={pathname} />
+            <NavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
           ))}
         </nav>
 
         {/* Workspace mode: collapsible tool stacks per client */}
-        {isWorkspaceMode && (
+        {isWorkspaceMode && !collapsed && (
           <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-3">
             <CollapsibleSection
               storageKey={`social_${selectedOrg.slug}`}
@@ -334,7 +327,7 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
         )}
 
         {/* Operator mode: flat global tools list */}
-        {!isWorkspaceMode && (
+        {!isWorkspaceMode && !collapsed && (
           <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-1">
             <p className="eyebrow !text-[9px] px-2 pb-1.5">Tools</p>
             {[
@@ -348,7 +341,7 @@ export function AdminSidebar({ open = false, onClose }: AdminSidebarProps) {
           </div>
         )}
 
-        {!isWorkspaceMode && favoriteOrgs.length > 0 && (
+        {!isWorkspaceMode && !collapsed && favoriteOrgs.length > 0 && (
           <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-1">
             <p className="eyebrow !text-[9px] px-2 pb-1">Favorites</p>
             {favoriteOrgs.map((org) => (

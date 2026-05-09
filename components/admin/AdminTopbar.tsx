@@ -1,9 +1,10 @@
 interface AdminTopbarProps {
   userEmail: string
   onMenuClick?: () => void
+  onToggleLayout?: () => void
 }
 
-export function AdminTopbar({ userEmail, onMenuClick }: AdminTopbarProps) {
+export function AdminTopbar({ userEmail, onMenuClick, onToggleLayout }: AdminTopbarProps) {
   const initials = userEmail.split(/[.\s@]/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('')
 
   return (
@@ -26,6 +27,13 @@ export function AdminTopbar({ userEmail, onMenuClick }: AdminTopbarProps) {
         </span>
       </div>
       <div className="flex items-center gap-3 md:gap-4">
+        <button
+          onClick={onToggleLayout}
+          title="Switch to topbar layout"
+          className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] hover:bg-white/[0.05] transition-colors"
+        >
+          <span className="material-symbols-outlined text-[18px]">dock_to_right</span>
+        </button>
         <span className="hidden sm:inline text-xs font-mono text-[var(--color-pib-text-muted)] truncate max-w-[200px]">
           {userEmail}
         </span>
