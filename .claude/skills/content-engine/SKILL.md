@@ -192,6 +192,16 @@ Almost everything lives in the platform. The local workspace is now just for thi
 
 After each asset is uploaded to the platform, the local file is no longer the source of truth — `tmp/` and `images/blog/` can be cleaned up. `videos/` is worth keeping for re-render runs.
 
+## Firebase Storage discipline (every asset, every time)
+
+The platform — not the local filesystem — is where every deliverable lives. Each render variant of a video, each hero image, each social-card background MUST be uploaded to Firebase Storage via `POST /api/v1/social/media/upload` and referenced by URL on the relevant `social_post` / `seo_content` record.
+
+**For videos** that means **all three** format files per slot — vertical Reel, 16:9 YouTube cut, 15s Stories cut — all uploaded, then registered on a single post via `media[0].{url, urlYoutube, urlStories, durationSec}`. A campaign with 6 videos = 18 storage uploads + 6 social_posts. See `references/05-video-production.md` for the upload + post-registration flow.
+
+**Re-renders** (e.g. responding to a client comment that requested changes) follow the same path: render → upload → `PUT /api/v1/social/posts/{id}` with the new `media` array. Do not edit the local mp4 in place and call it done — it must round-trip through `/social/media/upload` so the URL and the `social_media` row exist in Firestore.
+
+If you find an asset on disk that has no corresponding Firebase URL, treat it as work-in-progress, not a deliverable. The campaign roll-up reads from the platform; if it's not there, it doesn't exist.
+
 ## Brand Identity (Always Lock First)
 
 Before writing any content, lock the brand. These go on `campaign.brandIdentity`:
@@ -227,6 +237,7 @@ Spend most of your active time on Phase 3's prompts (the agent briefs determine 
 
 ## Bundled Assets (copy these as starters)
 
+- **`assets/composition-template.html`** — **REQUIRED** for Phase 5. Brand-agnostic HyperFrames composition with the working pattern (paused master timeline, single `window.__timelines` registration, no inline sequencer). Copy + sed-substitute for each video. Worked example values are inline at the bottom of the file. Do NOT generate compositions from scratch — the lint requirements are easy to violate and produce black frames.
 - **`assets/DESIGN-template.md`** — HyperFrames DESIGN.md skeleton with palette/typography/motion fields
 - **`assets/prompts-template.md`** — Image prompt library skeleton (master suffix + per-blog prompts)
 - **`assets/HOW-TO-USE-template.md`** — The 3-layer mental model guide (image → on-image text → caption)
