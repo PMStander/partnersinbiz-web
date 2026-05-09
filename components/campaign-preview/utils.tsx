@@ -81,9 +81,24 @@ export function PreviewImage({
   return <img src={src} alt={alt || ''} className={className} style={{ objectFit: 'cover', ...style }} />
 }
 
+/**
+ * Extract the text body from a post.content field, which on the platform can
+ * be either a plain string OR the wrapped object shape used by social_posts:
+ * `{ text, platformOverrides }`. Used by every card so they render either way.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getPostText(content: any): string {
+  if (typeof content === 'string') return content
+  if (content && typeof content === 'object' && typeof content.text === 'string') {
+    return content.text
+  }
+  return ''
+}
+
 /** Render hashtags into post body if not already inline. */
-export function withHashtags(content: string | null | undefined, hashtags?: string[]): string {
-  const safe = typeof content === 'string' ? content : ''
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function withHashtags(content: any, hashtags?: string[]): string {
+  const safe = getPostText(content)
   if (!hashtags || hashtags.length === 0) return safe
   const present = hashtags.filter((tag) => !safe.includes(`#${tag.replace(/^#/, '')}`))
   if (present.length === 0) return safe

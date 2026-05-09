@@ -2,7 +2,7 @@
 
 import React from 'react'
 import type { PreviewSocialPost, PreviewBrand } from './types'
-import { PreviewImage, getFirstVideo, getFirstImage } from './utils'
+import { PreviewImage, getFirstVideo, getFirstImage, getPostText } from './utils'
 
 export interface InstagramStoriesCardProps {
   post: PreviewSocialPost
@@ -13,7 +13,8 @@ export function InstagramStoriesCard({ post, brand }: InstagramStoriesCardProps)
   const video = getFirstVideo(post.media)
   const image = getFirstImage(post.media)
   const handle = post.authorHandle || 'yourbrand'
-  const showSticker = post.content && post.content.length > 0 && post.content.length <= 80
+  const text = getPostText(post.content)
+  const showSticker = text.length > 0 && text.length <= 80
   const accent = brand?.palette.accent || '#F5A623'
 
   return (
@@ -123,7 +124,7 @@ export function InstagramStoriesCard({ post, brand }: InstagramStoriesCardProps)
             borderLeft: `4px solid ${accent}`,
           }}
         >
-          {post.content}
+          {text}
         </div>
       )}
 
