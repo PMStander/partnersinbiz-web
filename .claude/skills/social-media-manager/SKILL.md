@@ -313,11 +313,27 @@ Response: `{ "id": "post_xyz", "status": "approved" }`
 
 List review/collaboration comments on a post, ordered by `createdAt` ascending.
 
-Response: Array of comment objects with `id`, `text`, `userId`, `userName`, `userRole`, `createdAt`, `agentPickedUp`, `agentPickedUpAt`.
+Response: Array of comment objects with `id`, `text`, `userId`, `userName`, `userRole`, `createdAt`, `agentPickedUp`, `agentPickedUpAt`, **`anchor`** (optional — see below).
 
 #### `POST /posts/[id]/comments` — auth: client
 
-Add a comment to a post. Body: `{ "text": "Your comment" }`
+Add a comment to a post. Body: `{ "text": "Your comment", "anchor"?: { ... } }`
+
+**Optional `anchor` field** — set when the client commented on a specific
+piece of the post in the review UI:
+
+```json
+// Comment on a text selection in the post body
+{ "type": "text", "text": "Most agency owners find out…", "offset": 0 }
+
+// Comment on an image attached to the post
+{ "type": "image", "mediaUrl": "https://firebasestorage.googleapis.com/…" }
+```
+
+Strings are clamped server-side (text ≤ 400 chars, mediaUrl ≤ 1000). When
+present, the activity log entry includes the anchor preview, so agents
+watching `social_post_commented` events know exactly what was flagged
+without re-fetching the post.
 
 #### `DELETE /posts/[id]/comments/[commentId]` — auth: client
 

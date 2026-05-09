@@ -51,6 +51,7 @@ export const GET = withAuth('client', withTenant(async (req, user, orgId, contex
         createdAt: data.createdAt,
         agentPickedUp: data.agentPickedUp ?? false,
         agentPickedUpAt: data.agentPickedUpAt ?? null,
+        anchor: data.anchor ?? null,
       }
     })
 
@@ -97,6 +98,28 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
     // Determine userRole
     const userRole = user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client'
 
+    // Optional anchor — text excerpt OR media URL the client commented on.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawAnchor = body?.anchor as any
+    let anchor: {
+      type: 'text' | 'image'
+      text?: string
+      offset?: number
+      mediaUrl?: string
+    } | null = null
+    if (rawAnchor && (rawAnchor.type === 'text' || rawAnchor.type === 'image')) {
+      anchor = { type: rawAnchor.type }
+      if (rawAnchor.type === 'text' && typeof rawAnchor.text === 'string') {
+        anchor.text = String(rawAnchor.text).slice(0, 400)
+        if (typeof rawAnchor.offset === 'number' && rawAnchor.offset >= 0) {
+          anchor.offset = Math.floor(rawAnchor.offset)
+        }
+      }
+      if (rawAnchor.type === 'image' && typeof rawAnchor.mediaUrl === 'string') {
+        anchor.mediaUrl = String(rawAnchor.mediaUrl).slice(0, 1000)
+      }
+    }
+
     // Create comment
     const commentRef = postRef.collection('comments').doc()
     const commentData = {
@@ -106,6 +129,7 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
       userRole,
       createdAt: FieldValue.serverTimestamp(),
       agentPickedUp: false,
+      ...(anchor ? { anchor } : {}),
     }
 
     await commentRef.set(commentData)

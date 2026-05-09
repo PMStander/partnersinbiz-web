@@ -107,7 +107,62 @@ POST   /social/media/upload                           multipart upload, returns 
 
 # Tenant resolution
 GET    /organizations                                 resolve org id from slug
+
+# Inline review surface (NEW — clients use this; agents read from it)
+GET    /seo/content/[id]/comments                     list comments incl. `anchor`
+POST   /seo/content/[id]/comments                     accepts `{ text, anchor? }` — see below
+GET    /social/posts/[id]/comments                    list comments incl. `anchor`
+POST   /social/posts/[id]/comments                    accepts `{ text, anchor? }` — see below
+PATCH  /seo/drafts/[id]                               client/admin edit `{ body, title?, metaDescription? }` — emits `seo_content_edited`
 ```
+
+### The `anchor` field (NEW — read this when picking up changes)
+
+When a client leaves feedback in the org-themed review UI
+(`/admin/org/[slug]/social/[id]/blog/[blogId]`), comments carry an optional
+`anchor` so we know exactly what they pointed at:
+
+```json
+{
+  "id": "...",
+  "text": "Tone is too corporate here, can we soften?",
+  "userRole": "client",
+  "anchor": { "type": "text", "text": "Most agency owners find out their site maintenance process…" }
+}
+```
+
+`anchor.type` is `"text"` (selection in the body) or `"image"` (with `mediaUrl`
+instead of `text`). Activity log entries (`seo_content_commented`,
+`seo_content_changes_requested`, `social_post_commented`) already include the
+anchor preview in their `description`, so an agent loop that watches activity
+sees what was flagged without re-fetching.
+
+**When you regenerate a section in response to a comment, log a reply on the
+same comment** (or post a follow-up) so the client sees you addressed it.
+
+### Client-edited bodies (NEW — don't overwrite without checking)
+
+Clients can now click "Edit body" in the review UI and save changes via
+`PATCH /seo/drafts/[id]`. That fires a `seo_content_edited` activity event
+with `actorRole: "client"`. Before regenerating a draft, check for this event
+on the entity — if a client has edited recently, confirm with the operator
+before clobbering their changes. Treat the post-edit body as the new source
+of truth.
+
+### Review URLs (NEW — prefer the org-scoped routes)
+
+The admin marketing-preview UI (Research / Blog Posts / Instagram / Reels
+& TikTok / Stories / Facebook / LinkedIn / YouTube tabs) lives at:
+
+```
+/admin/org/[slug]/social                       campaign index for the client
+/admin/org/[slug]/social/[campaignId]          drill-in (replaces /admin/campaigns/[id])
+/admin/org/[slug]/social/[campaignId]/blog/[blogId]   inline-comment + WYSIWYG-edit blog detail
+```
+
+Use these in run-summary output and end-of-run handoff messages instead of
+the older flat `/admin/campaigns/[id]/...` paths — the org-scoped route
+applies the client's brand colours to the chrome.
 
 ## How this composes with seo-sprint-manager
 
@@ -184,7 +239,7 @@ After all phases complete, the skill prints:
 ```
 Campaign created: <campaignId>
 Share URL: https://partnersinbiz.online/c/<shareToken>
-Admin cockpit: https://partnersinbiz.online/admin/campaigns/<campaignId>
+Admin cockpit: https://partnersinbiz.online/admin/org/<slug>/social/<campaignId>
 Client portal: https://partnersinbiz.online/portal/campaigns/<campaignId>
 
 Assets produced:
