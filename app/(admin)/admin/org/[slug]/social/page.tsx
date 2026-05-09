@@ -113,12 +113,29 @@ function SocialIndex({
     ])
       .then(([c, p]) => {
         const allCampaigns = (c.data ?? []) as CampaignRow[]
-        // Only content-engine campaigns surface here. Email campaigns share the
-        // collection but don't carry social_posts via campaignId.
-        const contentCampaigns = allCampaigns.filter(
+        const allPosts = (p.data ?? []) as PostRow[]
+
+        // Pre-index posts by campaignId so we can filter out content-engine
+        // campaigns that produced zero social (e.g. blog-only campaigns) —
+        // those belong on the blogs page, not the social media index.
+        const postsByCampaignId = new Map<string, number>()
+        for (const post of allPosts) {
+          if (!post.campaignId) continue
+          postsByCampaignId.set(post.campaignId, (postsByCampaignId.get(post.campaignId) ?? 0) + 1)
+        }
+
+        const contentCampaigns = allCampaigns
+          .filter(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (row: any) => row.clientType || row.shareToken,
+          )
+          // Hide archived — they're stale and shouldn't clutter the index
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (row: any) => row.clientType || row.shareToken,
-        )
+          .filter((row: any) => row.status !== 'archived')
+          // Hide content-engine campaigns that haven't produced any social
+          // (e.g. blog-only or in-progress launch wrappers).
+          .filter(row => (postsByCampaignId.get(row.id) ?? 0) > 0)
+
         setCampaigns(
           contentCampaigns.sort((a, b) => {
             const ad = tsToDate(a.createdAt)?.getTime() ?? 0
@@ -126,7 +143,7 @@ function SocialIndex({
             return bd - ad
           }),
         )
-        setPosts((p.data ?? []) as PostRow[])
+        setPosts(allPosts)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
