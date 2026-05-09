@@ -12,6 +12,7 @@ import {
   type AnchorTarget,
   type InlineComment,
 } from '@/components/inline-comments'
+import { BlogEditor } from '@/components/blog-editor/BlogEditor'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObj = any
@@ -60,8 +61,9 @@ function Detail({
   const [blog, setBlog] = useState<AnyObj | null>(null)
   const [comments, setComments] = useState<InlineComment[]>([])
   const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState<null | 'approve' | 'comment'>(null)
+  const [busy, setBusy] = useState<null | 'approve' | 'comment' | 'save'>(null)
   const [composerAnchor, setComposerAnchor] = useState<AnchorTarget | null>(null)
+  const [editing, setEditing] = useState(false)
 
   const bodyRef = useRef<HTMLDivElement | null>(null)
 
@@ -209,6 +211,27 @@ function Detail({
     }
   }
 
+  async function saveBody(markdown: string) {
+    if (busy) return
+    const draftId = blog?.draftPostId
+    if (!draftId) return
+    setBusy('save')
+    try {
+      const r = await fetch(`/api/v1/seo/drafts/${draftId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: markdown }),
+      })
+      if (!r.ok) throw new Error('save failed')
+      const a = await fetch(`/api/v1/campaigns/${id}/assets`).then(r => r.json())
+      const blogs = (a.data?.blogs ?? []) as AnyObj[]
+      setBlog(blogs.find(b => b.id === blogId) ?? null)
+      setEditing(false)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   if (loading) {
     return <div className="pib-skeleton h-96 max-w-7xl mx-auto rounded-2xl" />
   }
@@ -229,6 +252,7 @@ function Detail({
 
   const isPublished = blog?.status === 'live' || blog?.status === 'published'
   const anchoredCount = comments.filter(c => !!c.anchor).length
+  const canEdit = !isPublished && !!blog?.draftPostId
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto" style={{ color: 'var(--org-text, var(--color-pib-text))' }}>
@@ -240,21 +264,32 @@ function Detail({
         >
           ← {orgName ? `${orgName} · Blog Posts` : 'Blog Posts'}
         </Link>
-        <p
-          className="text-[10px] font-label uppercase tracking-[0.2em]"
-          style={{ color: 'var(--org-accent, var(--color-pib-accent))' }}
-        >
-          Blog Post · {isPublished ? 'Published' : 'Awaiting Review'}
-          {anchoredCount > 0 && (
-            <span className="ml-2 normal-case tracking-normal text-on-surface-variant">
-              · {anchoredCount} inline comment{anchoredCount === 1 ? '' : 's'}
-            </span>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <p
+            className="text-[10px] font-label uppercase tracking-[0.2em]"
+            style={{ color: 'var(--org-accent, var(--color-pib-accent))' }}
+          >
+            Blog Post · {isPublished ? 'Published' : 'Awaiting Review'}
+            {anchoredCount > 0 && (
+              <span className="ml-2 normal-case tracking-normal text-on-surface-variant">
+                · {anchoredCount} inline comment{anchoredCount === 1 ? '' : 's'}
+              </span>
+            )}
+          </p>
+          {canEdit && !editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-xs font-label px-3 py-1.5 rounded-md border border-[var(--org-border,var(--color-pib-line))] hover:bg-[var(--color-surface)] transition-colors"
+            >
+              ✏️ Edit body
+            </button>
           )}
-        </p>
+        </div>
       </header>
 
       {/* Helper banner */}
-      {!isPublished && (
+      {!isPublished && !editing && (
         <div
           className="pib-card p-4 text-xs leading-relaxed flex items-start gap-3"
           style={{
@@ -266,42 +301,55 @@ function Detail({
             💬
           </span>
           <p>
-            <strong>Highlight any text</strong> to leave an inline comment, or{' '}
-            <strong>click an image</strong> to comment on it. The writer and our
-            agents see exactly which part you flagged.
+            <strong>Highlight any text</strong> to leave an inline comment,{' '}
+            <strong>click an image</strong> to comment on it, or{' '}
+            <strong>click "Edit body"</strong> to make changes yourself. Agents
+            and the writer see exactly what you flagged or changed.
           </p>
         </div>
       )}
 
-      {/* Two-column layout: reader + comments sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start relative">
-        {/* Reader */}
-        <div ref={bodyRef} className="relative w-full overflow-hidden">
-          <SelectionPopover
-            containerRef={bodyRef}
-            onComment={text =>
-              setComposerAnchor({ kind: 'text', text })
-            }
-          />
-          <BlogReaderCard blog={previewBlog} brand={brand} />
-        </div>
+      {/* Edit mode */}
+      {editing && previewBlog.draft?.body !== undefined && (
+        <BlogEditor
+          initialMarkdown={previewBlog.draft.body ?? ''}
+          busy={busy === 'save'}
+          onSave={saveBody}
+          onCancel={() => setEditing(false)}
+        />
+      )}
 
-        {/* Sidebar */}
-        <aside className="lg:sticky lg:top-6 space-y-3">
-          <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
-            Comments ({comments.length})
-          </p>
-          <CommentList comments={comments} onScrollToAnchor={scrollToAnchor} />
-          <button
-            type="button"
-            onClick={() => setComposerAnchor({ kind: 'general' })}
-            disabled={isPublished}
-            className="w-full text-xs font-label px-3 py-2 rounded-md border border-[var(--org-border,var(--color-pib-line))] hover:bg-[var(--color-surface)] transition-colors disabled:opacity-50"
-          >
-            + General comment
-          </button>
-        </aside>
-      </div>
+      {/* Read mode */}
+      {!editing && (
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start relative">
+          {/* Reader */}
+          <div ref={bodyRef} className="relative w-full overflow-hidden">
+            <SelectionPopover
+              containerRef={bodyRef}
+              onComment={text =>
+                setComposerAnchor({ kind: 'text', text })
+              }
+            />
+            <BlogReaderCard blog={previewBlog} brand={brand} />
+          </div>
+
+          {/* Sidebar */}
+          <aside className="lg:sticky lg:top-6 space-y-3">
+            <p className="text-xs font-label uppercase tracking-widest text-on-surface-variant">
+              Comments ({comments.length})
+            </p>
+            <CommentList comments={comments} onScrollToAnchor={scrollToAnchor} />
+            <button
+              type="button"
+              onClick={() => setComposerAnchor({ kind: 'general' })}
+              disabled={isPublished}
+              className="w-full text-xs font-label px-3 py-2 rounded-md border border-[var(--org-border,var(--color-pib-line))] hover:bg-[var(--color-surface)] transition-colors disabled:opacity-50"
+            >
+              + General comment
+            </button>
+          </aside>
+        </div>
+      )}
 
       {/* Approval bar */}
       {!isPublished && (
