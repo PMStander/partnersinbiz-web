@@ -33,8 +33,8 @@ function toLegacyPlatform(platform: string): SocialPlatform | null {
 
 function toProviderPlatform(platform: string): SocialPlatformType | null {
   if (platform === 'x' || platform === 'twitter') return 'twitter'
-  if (platform === 'linkedin') return 'linkedin'
-  return null
+  const p = platform.toLowerCase() as SocialPlatformType
+  return ACTIVE_PLATFORMS.includes(p) ? p : null
 }
 
 export const GET = withAuth('client', withTenant(async (req, _user, orgId) => {
