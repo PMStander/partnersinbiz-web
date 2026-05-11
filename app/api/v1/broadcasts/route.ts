@@ -115,6 +115,10 @@ export const POST = withAuth(
       sendCompletedAt: null,
       stats: { ...EMPTY_BROADCAST_STATS },
       ab: { ...DEFAULT_BROADCAST_AB },
+      topicId:
+        typeof body.topicId === 'string' && body.topicId.trim()
+          ? body.topicId.trim()
+          : 'newsletter',
       // FieldValue placeholders — replaced server-side.
       createdAt: null,
       updatedAt: null,

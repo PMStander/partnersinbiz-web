@@ -8,8 +8,11 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { LineChart, BarChart } from '@/components/admin/email-analytics/charts'
-import type { BroadcastDetailedStats } from '@/lib/email-analytics/aggregate'
+import { LineChart, BarChart, CountBar } from '@/components/admin/email-analytics/charts'
+import type {
+  BroadcastDetailedStats,
+  BroadcastHeatmap,
+} from '@/lib/email-analytics/aggregate'
 
 function pct(n: number): string {
   return `${(n * 100).toFixed(1)}%`
@@ -22,6 +25,8 @@ export default function BroadcastAnalyticsPage({
 }) {
   const [id, setId] = useState<string | null>(null)
   const [data, setData] = useState<BroadcastDetailedStats | null>(null)
+  const [heatmap, setHeatmap] = useState<BroadcastHeatmap | null>(null)
+  const [heatmapLoading, setHeatmapLoading] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -35,6 +40,13 @@ export default function BroadcastAnalyticsPage({
           else setError(b.error ?? 'Failed to load')
         })
         .finally(() => setLoading(false))
+
+      fetch(`/api/v1/email-analytics/broadcasts/${p.id}/heatmap`)
+        .then((r) => r.json())
+        .then((b) => {
+          if (b.success) setHeatmap(b.data)
+        })
+        .finally(() => setHeatmapLoading(false))
     })
   }, [params])
 
@@ -118,6 +130,39 @@ export default function BroadcastAnalyticsPage({
           )}
         </Section>
       </div>
+
+      <Section title="Link heatmap">
+        {heatmapLoading ? (
+          <div className="h-32 rounded-lg bg-surface-container-high animate-pulse" />
+        ) : !heatmap || heatmap.linkStats.length === 0 ? (
+          <Empty>No tracked link clicks for this broadcast yet.</Empty>
+        ) : (
+          <div className="space-y-2">
+            <div className="text-xs text-on-surface-variant mb-2">
+              {heatmap.totalClicks.toLocaleString()} clicks across {heatmap.linkStats.length} link
+              {heatmap.linkStats.length === 1 ? '' : 's'}.
+            </div>
+            {heatmap.linkStats.slice(0, 20).map((link, i) => {
+              const max = heatmap.linkStats[0]?.clicks ?? 1
+              const label = link.url
+              const right = `${link.clicks.toLocaleString()} · ${(link.percentOfTotalClicks * 100).toFixed(1)}%`
+              return (
+                <CountBar
+                  key={`${link.url}|${i}`}
+                  label={
+                    link.positionInEmail
+                      ? `#${link.positionInEmail} · ${label}`
+                      : label
+                  }
+                  value={link.clicks}
+                  max={max}
+                  rightLabel={right}
+                />
+              )
+            })}
+          </div>
+        )}
+      </Section>
     </div>
   )
 }

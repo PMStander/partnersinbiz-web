@@ -6,14 +6,30 @@ import { sendCampaignEmail } from '@/lib/email/resend'
 import { resolveFrom } from '@/lib/email/resolveFrom'
 import { interpolate, varsFromContact } from '@/lib/email/template'
 import { signUnsubscribeToken } from '@/lib/email/unsubscribeToken'
+import { isSuppressed } from '@/lib/email/suppressions'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { pickVariantForSend, incrementVariantStat } from '@/lib/ab-testing/cronHelpers'
 import { applyVariantOverrides } from '@/lib/ab-testing/apply'
 import type { AbConfig } from '@/lib/ab-testing/types'
+import { shouldSendToContact } from '@/lib/preferences/store'
+import { isWithinFrequencyCap, logFrequencySkip } from '@/lib/email/frequency'
+import { pickSendTime, type SendTimeContext } from '@/lib/email/send-time'
+import type {
+  SequenceStep,
+  SequenceGoal,
+  SequenceBranch,
+  EnrollmentPathEntry,
+} from '@/lib/sequences/types'
+import type { Contact } from '@/lib/crm/types'
+import { evaluateCondition, findHitGoal, type EvaluationContext } from '@/lib/sequences/conditions'
+import { sendSmsToContact } from '@/lib/sms/send'
 
 export const dynamic = 'force-dynamic'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://partnersinbiz.online'
+
+const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -35,13 +51,12 @@ export async function GET(req: NextRequest) {
       const seqSnap = await adminDb.collection('sequences').doc(enrollment.sequenceId).get()
       if (!seqSnap.exists) continue
       const seq = seqSnap.data()!
-      const steps = seq.steps ?? []
-      const step = steps[enrollment.currentStep]
-      if (!step) continue
+      const steps: SequenceStep[] = seq.steps ?? []
+      const goals: SequenceGoal[] | undefined = seq.goals
 
       const contactSnap = await adminDb.collection('contacts').doc(enrollment.contactId).get()
       if (!contactSnap.exists) continue
-      const contact = contactSnap.data()!
+      const contact = { id: contactSnap.id, ...contactSnap.data() } as Contact
 
       // Hard-block: skip and exit if contact has bounced or unsubscribed.
       if (contact.bouncedAt || contact.unsubscribedAt) {
@@ -53,15 +68,249 @@ export async function GET(req: NextRequest) {
         continue
       }
 
-      // Look up the org for fallback display name
-      const orgId: string = enrollment.orgId ?? ''
-      let orgName = ''
-      if (orgId) {
-        const orgSnap = await adminDb.collection('organizations').doc(orgId).get()
-        if (orgSnap.exists) {
-          orgName = (orgSnap.data() as { name?: string })?.name ?? ''
+      // Suppression check (covers complaints, hard bounces from another
+      // campaign, and live soft-bounce holds). Exit the enrollment with
+      // `bounced` so it doesn't get re-picked next tick.
+      const enrollmentOrgId: string = enrollment.orgId ?? ''
+      if (
+        enrollmentOrgId &&
+        contact.email &&
+        (await isSuppressed(enrollmentOrgId, contact.email))
+      ) {
+        await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+          status: 'exited',
+          exitReason: 'bounced',
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+        continue
+      }
+
+      // ── Branch evaluation phase ────────────────────────────────────────
+      // If the enrollment is in a "pendingBranchEvalAt" window AND that
+      // instant has been reached, evaluate branches and advance.
+      const nowDate = now.toDate()
+      const pendingEvalMs: number | null =
+        enrollment.pendingBranchEvalAt && typeof enrollment.pendingBranchEvalAt.toMillis === 'function'
+          ? enrollment.pendingBranchEvalAt.toMillis()
+          : null
+
+      if (pendingEvalMs !== null && pendingEvalMs <= nowDate.getTime()) {
+        const sentStep = steps[enrollment.currentStep]
+        const branch = sentStep?.branch as SequenceBranch | undefined
+        const evalCtx: EvaluationContext = {
+          orgId: enrollmentOrgId,
+          contact,
+          sequenceId: enrollment.sequenceId,
+          stepNumber: enrollment.currentStep,
+          enrolledAt: enrollment.enrolledAt ?? null,
+          now: nowDate,
+          goals,
+        }
+
+        // Goals are checked first — they short-circuit even branch waits.
+        const hit = await findHitGoal(goals, evalCtx)
+        if (hit) {
+          await exitWithGoal(enrollDoc.id, enrollmentOrgId, contact.id, hit, enrollment.path)
+          continue
+        }
+
+        let nextStepNumber = enrollment.currentStep + 1
+        let matchedRuleIndex = -1
+        let matchedCondition = undefined as
+          | undefined
+          | SequenceBranch['rules'][number]['condition']
+        if (branch) {
+          for (let i = 0; i < branch.rules.length; i++) {
+            const rule = branch.rules[i]
+            let matched = false
+            try {
+              matched = await evaluateCondition(rule.condition, evalCtx)
+            } catch (err) {
+              console.error('[cron/sequences] branch rule eval failed', err)
+            }
+            if (matched) {
+              nextStepNumber = rule.nextStepNumber
+              matchedRuleIndex = i
+              matchedCondition = rule.condition
+              break
+            }
+          }
+          if (matchedRuleIndex === -1) {
+            nextStepNumber = branch.defaultNextStepNumber
+          }
+        }
+
+        // -1 means exit.
+        if (nextStepNumber < 0) {
+          await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+            status: 'exited',
+            exitReason: 'branch-exit',
+            pendingBranchEvalAt: null,
+            path: appendPath(enrollment.path, {
+              stepNumber: enrollment.currentStep,
+              branchTaken: {
+                matchedRuleIndex,
+                condition: matchedCondition,
+                nextStepNumber,
+              },
+              at: now,
+            }),
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+          continue
+        }
+
+        // Bounds check.
+        if (nextStepNumber >= steps.length) {
+          await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+            status: 'completed',
+            exitReason: 'completed',
+            completedAt: FieldValue.serverTimestamp(),
+            pendingBranchEvalAt: null,
+            path: appendPath(enrollment.path, {
+              stepNumber: enrollment.currentStep,
+              branchTaken: {
+                matchedRuleIndex,
+                condition: matchedCondition,
+                nextStepNumber,
+              },
+              at: now,
+            }),
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+          continue
+        }
+
+        // Cycle guard.
+        const visited: number[] = Array.isArray(enrollment.visitedSteps)
+          ? enrollment.visitedSteps
+          : []
+        if (visited.includes(nextStepNumber)) {
+          await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+            status: 'exited',
+            exitReason: 'cycle-detected',
+            pendingBranchEvalAt: null,
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+          continue
+        }
+
+        // Compute nextSendAt for the new step.
+        const orgMeta = await loadOrgMeta(enrollmentOrgId)
+        const nextStep = steps[nextStepNumber]
+        const nextDelayMs = (nextStep.delayDays ?? 0) * DAY_MS
+        const baseNext = new Date(nowDate.getTime() + nextDelayMs)
+        const sendCtx: SendTimeContext = {
+          orgTimezone: orgMeta.orgTimezone || 'UTC',
+          contactTimezone:
+            typeof contact.timezone === 'string' && contact.timezone.trim()
+              ? contact.timezone.trim()
+              : undefined,
+          preferredHourLocal: orgMeta.preferredHourLocal,
+          preferredDaysOfWeek: orgMeta.preferredDaysOfWeek,
+        }
+        const tunedNext = pickSendTime(baseNext, sendCtx)
+
+        await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+          currentStep: nextStepNumber,
+          nextSendAt: Timestamp.fromDate(tunedNext),
+          pendingBranchEvalAt: null,
+          visitedSteps: [...visited, nextStepNumber],
+          path: appendPath(enrollment.path, {
+            stepNumber: enrollment.currentStep,
+            branchTaken: {
+              matchedRuleIndex,
+              condition: matchedCondition,
+              nextStepNumber,
+            },
+            at: now,
+          }),
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+        processed++
+        continue
+      }
+
+      // ── Normal step-send phase ─────────────────────────────────────────
+      const step = steps[enrollment.currentStep]
+      if (!step) continue
+
+      // Goal check BEFORE sending.
+      const evalCtx: EvaluationContext = {
+        orgId: enrollmentOrgId,
+        contact,
+        sequenceId: enrollment.sequenceId,
+        stepNumber: enrollment.currentStep,
+        enrolledAt: enrollment.enrolledAt ?? null,
+        now: nowDate,
+        goals,
+      }
+      const preHit = await findHitGoal(goals, evalCtx)
+      if (preHit) {
+        await exitWithGoal(enrollDoc.id, enrollmentOrgId, contact.id, preHit, enrollment.path)
+        continue
+      }
+
+      // Wait-until gate.
+      if (step.waitUntil) {
+        let conditionMet = false
+        try {
+          conditionMet = await evaluateCondition(step.waitUntil.condition, evalCtx)
+        } catch (err) {
+          console.error('[cron/sequences] waitUntil eval failed', err)
+        }
+
+        if (!conditionMet) {
+          const waitingSinceMs =
+            enrollment.waitingSince && typeof enrollment.waitingSince.toMillis === 'function'
+              ? enrollment.waitingSince.toMillis()
+              : null
+          const startedAtMs = waitingSinceMs ?? nowDate.getTime()
+          const maxMs = step.waitUntil.maxWaitDays * DAY_MS
+          const expired = nowDate.getTime() - startedAtMs >= maxMs
+
+          if (expired) {
+            if (step.waitUntil.onTimeout === 'exit') {
+              await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+                status: 'exited',
+                exitReason: 'wait-timeout',
+                waitingSince: null,
+                updatedAt: FieldValue.serverTimestamp(),
+              })
+              continue
+            }
+            // onTimeout === 'send' → fall through to the send block below
+            // but first clear the waitingSince marker.
+            await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+              waitingSince: null,
+              updatedAt: FieldValue.serverTimestamp(),
+            })
+            // proceed to send
+          } else {
+            // Push nextSendAt forward by 1 hour and keep waiting.
+            const update: Record<string, unknown> = {
+              nextSendAt: Timestamp.fromDate(new Date(nowDate.getTime() + HOUR_MS)),
+              updatedAt: FieldValue.serverTimestamp(),
+            }
+            if (waitingSinceMs === null) update.waitingSince = now
+            await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update(update)
+            continue
+          }
+        } else if (enrollment.waitingSince) {
+          // Condition now satisfied — clear marker before sending.
+          await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+            waitingSince: null,
+            updatedAt: FieldValue.serverTimestamp(),
+          })
         }
       }
+
+      // Look up the org for fallback display name + timezone + send-time settings
+      const orgMeta = await loadOrgMeta(enrollmentOrgId)
+      const orgName = orgMeta.orgName
+      const orgTimezone = orgMeta.orgTimezone
+      const preferredHourLocal = orgMeta.preferredHourLocal
+      const preferredDaysOfWeek = orgMeta.preferredDaysOfWeek
 
       // Look up the campaign if linked. Honor pause / completed / deleted states.
       type CampaignLite = {
@@ -94,27 +343,57 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Resolve sender
-      const resolved = await resolveFrom({
-        fromDomainId: campaign?.fromDomainId,
-        fromName: campaign?.fromName,
-        fromLocal: campaign?.fromLocal || 'campaigns',
-        orgName,
-      })
+      // Preferences gate + frequency cap — SINGLE SOURCE OF TRUTH for "can
+      // we send to this contact". Honours per-topic opt-outs, hard
+      // unsubscribes, frequency='none'. We keep the enrollment alive so a
+      // contact who later re-opts-in resumes from where they left off — only
+      // the legacy bounced/unsubscribed paths above forcibly exit it.
+      const stepWithTopic = step as SequenceStep & { topicId?: string }
+      const sequenceTopicId =
+        (typeof seq.topicId === 'string' && seq.topicId.trim()) ||
+        (typeof stepWithTopic.topicId === 'string' && stepWithTopic.topicId.trim()) ||
+        'newsletter'
+      if (enrollmentOrgId) {
+        const prefsCheck = await shouldSendToContact({
+          contactId: enrollment.contactId,
+          orgId: enrollmentOrgId,
+          topicId: sequenceTopicId,
+        })
+        if (!prefsCheck.allowed) {
+          // Skip without advancing the step — if they opt back in later, the
+          // next cron tick will resend this same step.
+          continue
+        }
+        const freqCheck = await isWithinFrequencyCap(
+          enrollmentOrgId,
+          enrollment.contactId,
+          sequenceTopicId,
+        )
+        if (!freqCheck.allowed) {
+          await logFrequencySkip({
+            orgId: enrollmentOrgId,
+            contactId: enrollment.contactId,
+            topicId: sequenceTopicId,
+            source: 'sequence',
+            sourceId: enrollment.sequenceId,
+            reason: freqCheck.reason ?? 'frequency cap',
+          })
+          continue
+        }
+      }
 
-      // Build template variables
+      // Build template variables (shared across channels).
       const unsubscribeUrl = `${BASE_URL}/api/unsubscribe?token=${signUnsubscribeToken(enrollment.contactId, campaignId || undefined)}`
+      const preferencesUrl = `${BASE_URL}/preferences/${encodeURIComponent(signUnsubscribeToken(enrollment.contactId))}`
       const vars = {
         ...varsFromContact(contact),
         orgName,
         unsubscribeUrl,
+        preferencesUrl,
       }
 
-      const interpolatedSubject = interpolate(step.subject ?? '', vars)
-      const interpolatedHtml = interpolate(step.bodyHtml ?? '', vars)
-      const interpolatedText = interpolate(step.bodyText ?? '', vars)
-
-      // A/B variant pick — applies only when step.ab.enabled === true.
+      // A/B variant pick — applies whether channel is email or sms. Defer
+      // behaviour (winner-only cohort) is shared too.
       const stepAb = (step.ab as AbConfig | undefined) ?? null
       const variantPick = pickVariantForSend({
         contactId: enrollment.contactId,
@@ -126,104 +405,269 @@ export async function GET(req: NextRequest) {
         // the cron picks them up again after the winner is decided.
         continue
       }
-      const effective = applyVariantOverrides(
-        {
-          subject: interpolatedSubject,
-          bodyHtml: interpolatedHtml,
-          bodyText: interpolatedText,
-          fromName: campaign?.fromName ?? '',
-          scheduledFor: null,
-        },
-        variantPick.variant,
-      )
 
-      // Send via Resend
-      const sendResult = await sendCampaignEmail({
-        from: resolved.from,
-        to: contact.email,
-        replyTo: campaign?.replyTo,
-        subject: effective.subject,
-        html: effective.bodyHtml,
-        text: effective.bodyText,
-      })
+      // ── Channel dispatch ───────────────────────────────────────────────
+      // SMS path: render smsBody with interpolate, call sendSmsToContact,
+      // skip the email-specific render + emails-doc write entirely. Email
+      // path falls through to the original block below.
+      const stepChannel: 'email' | 'sms' =
+        (step as SequenceStep & { channel?: 'email' | 'sms' }).channel ?? 'email'
 
-      // Create email doc
-      const emailRef = await adminDb.collection('emails').add({
-        orgId,
-        campaignId,
-        fromDomainId: resolved.fromDomainId,
-        direction: 'outbound',
-        contactId: enrollment.contactId,
-        resendId: sendResult.resendId,
-        from: resolved.from,
-        to: contact.email,
-        cc: [],
-        subject: effective.subject,
-        bodyHtml: effective.bodyHtml,
-        bodyText: effective.bodyText,
-        status: sendResult.ok ? 'sent' : 'failed',
-        scheduledFor: null,
-        sentAt: sendResult.ok ? FieldValue.serverTimestamp() : null,
-        openedAt: null,
-        clickedAt: null,
-        bouncedAt: null,
-        sequenceId: enrollment.sequenceId,
-        sequenceStep: enrollment.currentStep,
-        variantId: variantPick.variant?.id ?? '',
-        createdAt: FieldValue.serverTimestamp(),
-      })
+      if (stepChannel === 'sms') {
+        const stepSmsBody =
+          (step as SequenceStep & { smsBody?: string }).smsBody ??
+          step.bodyText ??
+          ''
+        const interpolatedSmsBody = interpolate(stepSmsBody, vars)
+        // A/B variant body override applies to SMS too — reuse the same
+        // applyVariantOverrides plumbing to derive an "effective" bodyText.
+        const smsEffective = applyVariantOverrides(
+          {
+            subject: '',
+            bodyHtml: '',
+            bodyText: interpolatedSmsBody,
+            fromName: '',
+            scheduledFor: null,
+          },
+          variantPick.variant,
+        )
 
-      // Variant-level sent-stat increment (best-effort).
-      if (sendResult.ok && variantPick.variant?.id) {
-        try {
-          await incrementVariantStat({
-            targetCollection: 'sequences',
-            targetId: enrollment.sequenceId,
-            stepNumber: enrollment.currentStep,
-            variantId: variantPick.variant.id,
-            field: 'sent',
+        const outcome = await sendSmsToContact({
+          orgId: enrollmentOrgId,
+          contactId: enrollment.contactId,
+          body: smsEffective.bodyText,
+          topicId: sequenceTopicId,
+          sequenceId: enrollment.sequenceId,
+          sequenceStep: enrollment.currentStep,
+          campaignId: campaignId || undefined,
+          variantId: variantPick.variant?.id ?? '',
+        })
+
+        // Variant-level sent-stat increment (best-effort).
+        if (outcome.status === 'sent' && variantPick.variant?.id) {
+          try {
+            await incrementVariantStat({
+              targetCollection: 'sequences',
+              targetId: enrollment.sequenceId,
+              stepNumber: enrollment.currentStep,
+              variantId: variantPick.variant.id,
+              field: 'sent',
+            })
+          } catch (err) {
+            console.error('[cron/sequences] variant stat increment failed (sms)', err)
+          }
+        }
+
+        // Bump campaign stats on success.
+        if (outcome.status === 'sent' && campaignId) {
+          await adminDb.collection('campaigns').doc(campaignId).update({
+            'stats.sent': FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
           })
-        } catch (err) {
-          console.error('[cron/sequences] variant stat increment failed', err)
+        }
+
+        // Skipped outcomes (no phone, suppressed, prefs gate) leave the
+        // enrollment in place and the cron will retry next tick. Note: we
+        // still advance because the step has been attempted; otherwise a
+        // contact with no phone would loop on the same SMS step forever.
+        // The activity log / failure reason already lives on the sms doc.
+        void outcome
+        // Fall through to the shared post-send progression block below.
+      } else {
+        // ── Email path (unchanged) ───────────────────────────────────────
+        const resolved = await resolveFrom({
+          fromDomainId: campaign?.fromDomainId,
+          fromName: campaign?.fromName,
+          fromLocal: campaign?.fromLocal || 'campaigns',
+          orgName,
+        })
+
+        const interpolatedSubject = interpolate(step.subject ?? '', vars)
+        const interpolatedHtml = interpolate(step.bodyHtml ?? '', vars)
+        const interpolatedText = interpolate(step.bodyText ?? '', vars)
+
+        const effective = applyVariantOverrides(
+          {
+            subject: interpolatedSubject,
+            bodyHtml: interpolatedHtml,
+            bodyText: interpolatedText,
+            fromName: campaign?.fromName ?? '',
+            scheduledFor: null,
+          },
+          variantPick.variant,
+        )
+
+        // Send via Resend
+        const sendResult = await sendCampaignEmail({
+          from: resolved.from,
+          to: contact.email,
+          replyTo: campaign?.replyTo,
+          subject: effective.subject,
+          html: effective.bodyHtml,
+          text: effective.bodyText,
+          listUnsubscribeUrl: unsubscribeUrl,
+        })
+
+        // Create email doc
+        const emailRef = await adminDb.collection('emails').add({
+          orgId: enrollmentOrgId,
+          campaignId,
+          fromDomainId: resolved.fromDomainId,
+          direction: 'outbound',
+          contactId: enrollment.contactId,
+          resendId: sendResult.resendId,
+          from: resolved.from,
+          to: contact.email,
+          cc: [],
+          subject: effective.subject,
+          bodyHtml: effective.bodyHtml,
+          bodyText: effective.bodyText,
+          status: sendResult.ok ? 'sent' : 'failed',
+          scheduledFor: null,
+          sentAt: sendResult.ok ? FieldValue.serverTimestamp() : null,
+          openedAt: null,
+          clickedAt: null,
+          bouncedAt: null,
+          sequenceId: enrollment.sequenceId,
+          sequenceStep: enrollment.currentStep,
+          variantId: variantPick.variant?.id ?? '',
+          topicId: sequenceTopicId,
+          createdAt: FieldValue.serverTimestamp(),
+        })
+
+        // Variant-level sent-stat increment (best-effort).
+        if (sendResult.ok && variantPick.variant?.id) {
+          try {
+            await incrementVariantStat({
+              targetCollection: 'sequences',
+              targetId: enrollment.sequenceId,
+              stepNumber: enrollment.currentStep,
+              variantId: variantPick.variant.id,
+              field: 'sent',
+            })
+          } catch (err) {
+            console.error('[cron/sequences] variant stat increment failed', err)
+          }
+        }
+
+        // Log activity
+        await adminDb.collection('activities').add({
+          orgId: enrollmentOrgId,
+          contactId: enrollment.contactId,
+          type: 'email_sent',
+          summary: `Sequence step ${enrollment.currentStep + 1}: ${interpolatedSubject}`,
+          metadata: { emailId: emailRef.id, campaignId, sequenceId: enrollment.sequenceId },
+          createdAt: FieldValue.serverTimestamp(),
+        })
+
+        // Bump campaign stats on success
+        if (sendResult.ok && campaignId) {
+          await adminDb.collection('campaigns').doc(campaignId).update({
+            'stats.sent': FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
+          })
         }
       }
 
-      // Log activity
-      await adminDb.collection('activities').add({
-        orgId,
-        contactId: enrollment.contactId,
-        type: 'email_sent',
-        summary: `Sequence step ${enrollment.currentStep + 1}: ${interpolatedSubject}`,
-        metadata: { emailId: emailRef.id, campaignId, sequenceId: enrollment.sequenceId },
-        createdAt: FieldValue.serverTimestamp(),
-      })
+      // ── Post-send progression ─────────────────────────────────────────
+      // If the step has a branch, schedule re-evaluation. Otherwise linear.
+      if (step.branch && Array.isArray(step.branch.rules) && step.branch.rules.length > 0) {
+        const earliestEvalDays =
+          step.branch.rules.reduce<number>(
+            (min, r) =>
+              typeof r.evaluateAfterDays === 'number' && r.evaluateAfterDays >= 0
+                ? Math.min(min, r.evaluateAfterDays)
+                : min,
+            Number.POSITIVE_INFINITY,
+          ) === Number.POSITIVE_INFINITY
+            ? 1
+            : Math.max(
+                0,
+                step.branch.rules.reduce<number>(
+                  (min, r) =>
+                    typeof r.evaluateAfterDays === 'number' && r.evaluateAfterDays >= 0
+                      ? Math.min(min, r.evaluateAfterDays)
+                      : min,
+                  Number.POSITIVE_INFINITY,
+                ),
+              )
 
-      // Bump campaign stats on success
-      if (sendResult.ok && campaignId) {
-        await adminDb.collection('campaigns').doc(campaignId).update({
-          'stats.sent': FieldValue.increment(1),
-          updatedAt: FieldValue.serverTimestamp(),
-        })
-      }
-
-      const nextStep = enrollment.currentStep + 1
-      const isLast = nextStep >= steps.length
-
-      if (isLast) {
+        const pendingAt = new Date(nowDate.getTime() + earliestEvalDays * DAY_MS)
+        const visited: number[] = Array.isArray(enrollment.visitedSteps)
+          ? enrollment.visitedSteps
+          : [enrollment.currentStep]
+        const visitedNext = visited.includes(enrollment.currentStep)
+          ? visited
+          : [...visited, enrollment.currentStep]
         await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
-          status: 'completed',
-          exitReason: 'completed',
-          completedAt: FieldValue.serverTimestamp(),
+          pendingBranchEvalAt: Timestamp.fromDate(pendingAt),
+          nextSendAt: Timestamp.fromDate(pendingAt),
+          visitedSteps: visitedNext,
+          path: appendPath(enrollment.path, {
+            stepNumber: enrollment.currentStep,
+            sentAt: now,
+            at: now,
+          }),
           updatedAt: FieldValue.serverTimestamp(),
         })
       } else {
-        const nextDelayMs = steps[nextStep].delayDays * 24 * 60 * 60 * 1000
-        const nextSendAt = Timestamp.fromDate(new Date(Date.now() + nextDelayMs))
-        await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
-          currentStep: nextStep,
-          nextSendAt,
-          updatedAt: FieldValue.serverTimestamp(),
-        })
+        const nextStepIdx = enrollment.currentStep + 1
+        const isLast = nextStepIdx >= steps.length
+
+        if (isLast) {
+          await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+            status: 'completed',
+            exitReason: 'completed',
+            completedAt: FieldValue.serverTimestamp(),
+            path: appendPath(enrollment.path, {
+              stepNumber: enrollment.currentStep,
+              sentAt: now,
+              at: now,
+            }),
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+        } else {
+          const visited: number[] = Array.isArray(enrollment.visitedSteps)
+            ? enrollment.visitedSteps
+            : [enrollment.currentStep]
+          const visitedNext = visited.includes(nextStepIdx)
+            ? visited
+            : [...visited, nextStepIdx]
+          // Cycle guard for linear (rare — only if branch on an earlier step
+          // jumped backward into a linear region).
+          if (visited.includes(nextStepIdx)) {
+            await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+              status: 'exited',
+              exitReason: 'cycle-detected',
+              updatedAt: FieldValue.serverTimestamp(),
+            })
+            continue
+          }
+          const nextDelayMs = steps[nextStepIdx].delayDays * DAY_MS
+          const baseNext = new Date(Date.now() + nextDelayMs)
+          const sendCtx: SendTimeContext = {
+            orgTimezone: orgTimezone || 'UTC',
+            contactTimezone:
+              typeof contact.timezone === 'string' && contact.timezone.trim()
+                ? contact.timezone.trim()
+                : undefined,
+            preferredHourLocal,
+            preferredDaysOfWeek,
+          }
+          const tunedNext = pickSendTime(baseNext, sendCtx)
+          const nextSendAt = Timestamp.fromDate(tunedNext)
+          await adminDb.collection('sequence_enrollments').doc(enrollDoc.id).update({
+            currentStep: nextStepIdx,
+            nextSendAt,
+            visitedSteps: visitedNext,
+            path: appendPath(enrollment.path, {
+              stepNumber: enrollment.currentStep,
+              sentAt: now,
+              at: now,
+            }),
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+        }
       }
 
       processed++
@@ -234,4 +678,88 @@ export async function GET(req: NextRequest) {
   }
 
   return apiSuccess({ processed })
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+interface OrgMeta {
+  orgName: string
+  orgTimezone: string
+  preferredHourLocal: number
+  preferredDaysOfWeek: number[]
+}
+
+async function loadOrgMeta(orgId: string): Promise<OrgMeta> {
+  const meta: OrgMeta = {
+    orgName: '',
+    orgTimezone: '',
+    preferredHourLocal: 9,
+    preferredDaysOfWeek: [1, 2, 3, 4, 5],
+  }
+  if (!orgId) return meta
+  const orgSnap = await adminDb.collection('organizations').doc(orgId).get()
+  if (!orgSnap.exists) return meta
+  const orgData = (orgSnap.data() ?? {}) as {
+    name?: string
+    settings?: {
+      timezone?: string
+      preferredSendHourLocal?: number
+      preferredSendDaysOfWeek?: number[]
+    }
+  }
+  meta.orgName = orgData.name ?? ''
+  meta.orgTimezone = orgData.settings?.timezone ?? ''
+  if (
+    typeof orgData.settings?.preferredSendHourLocal === 'number' &&
+    orgData.settings.preferredSendHourLocal >= 0 &&
+    orgData.settings.preferredSendHourLocal <= 23
+  ) {
+    meta.preferredHourLocal = orgData.settings.preferredSendHourLocal
+  }
+  if (
+    Array.isArray(orgData.settings?.preferredSendDaysOfWeek) &&
+    orgData.settings.preferredSendDaysOfWeek.length > 0
+  ) {
+    meta.preferredDaysOfWeek = orgData.settings.preferredSendDaysOfWeek
+  }
+  return meta
+}
+
+async function exitWithGoal(
+  enrollmentId: string,
+  orgId: string,
+  contactId: string,
+  goal: SequenceGoal,
+  existingPath: EnrollmentPathEntry[] | undefined,
+): Promise<void> {
+  const now = Timestamp.now()
+  await adminDb.collection('sequence_enrollments').doc(enrollmentId).update({
+    status: 'exited',
+    exitReason: 'goal-hit',
+    completedAt: FieldValue.serverTimestamp(),
+    pendingBranchEvalAt: null,
+    waitingSince: null,
+    path: appendPath(existingPath, {
+      stepNumber: -1,
+      goalHit: { goalId: goal.id, label: goal.label },
+      at: now,
+    }),
+    updatedAt: FieldValue.serverTimestamp(),
+  })
+  await adminDb.collection('activities').add({
+    orgId,
+    contactId,
+    type: 'sequence_goal_hit',
+    summary: `Goal hit: ${goal.label}`,
+    metadata: { goalId: goal.id, exitReason: goal.exitReason ?? 'goal-hit' },
+    createdAt: FieldValue.serverTimestamp(),
+  })
+}
+
+function appendPath(
+  existing: EnrollmentPathEntry[] | undefined,
+  entry: EnrollmentPathEntry,
+): EnrollmentPathEntry[] {
+  const prev = Array.isArray(existing) ? existing : []
+  return [...prev, entry]
 }

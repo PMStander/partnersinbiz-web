@@ -33,6 +33,18 @@ export interface Contact {
   subscribedAt: Timestamp | null
   unsubscribedAt: Timestamp | null
   bouncedAt: Timestamp | null
+  // Per-contact IANA timezone override. Falls back to org timezone when unset.
+  // Used by send-time optimisation (lib/email/send-time.ts).
+  timezone?: string
+  // Reply-tracking stats — populated by the inbound webhook pipeline.
+  lastRepliedAt?: Timestamp | null
+  repliesCount?: number
+  // SMS-channel fields — populated by the SMS pipeline (Twilio inbound webhook,
+  // contact-edit form, capture flows). All optional so existing email-only
+  // contacts continue to work without a backfill.
+  phoneVerified?: boolean
+  smsOptedIn?: boolean
+  smsUnsubscribedAt?: Timestamp | null
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
   lastContactedAt: Timestamp | null
@@ -74,6 +86,11 @@ export type DealInput = Omit<Deal, 'id' | 'createdAt' | 'updatedAt'>
 export type ActivityType =
   | 'email_sent'
   | 'email_received'
+  | 'email_replied'
+  | 'email_auto_reply'
+  | 'email_bounce_reply'
+  | 'email_unsubscribe_reply'
+  | 'email_inbound_unknown'
   | 'call'
   | 'note'
   | 'stage_change'

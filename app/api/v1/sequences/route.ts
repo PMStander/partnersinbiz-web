@@ -49,6 +49,10 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) =
     description: body.description ?? '',
     status: body.status ?? 'draft',
     steps: body.steps ?? [],
+    topicId:
+      typeof body.topicId === 'string' && body.topicId.trim()
+        ? body.topicId.trim()
+        : 'newsletter',
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     deleted: false,

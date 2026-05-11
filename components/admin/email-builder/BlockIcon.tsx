@@ -12,6 +12,10 @@ const ICONS: Record<BlockType, string> = {
   spacer: '↕',
   columns: '◫',
   footer: '⌐',
+  'amp-carousel': '⇄',
+  'amp-accordion': '≡',
+  'amp-form': '⌨',
+  'amp-live-data': '⏱',
 }
 
 const LABELS: Record<BlockType, string> = {
@@ -24,6 +28,10 @@ const LABELS: Record<BlockType, string> = {
   spacer: 'Spacer',
   columns: 'Columns',
   footer: 'Footer',
+  'amp-carousel': 'Carousel (AMP)',
+  'amp-accordion': 'Accordion (AMP)',
+  'amp-form': 'Inline form (AMP)',
+  'amp-live-data': 'Live data (AMP)',
 }
 
 export function BlockIcon({ type, className = '' }: { type: BlockType; className?: string }) {

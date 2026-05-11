@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { notifyInvoiceSent } from '@/lib/notifications/notify'
 import { logActivity } from '@/lib/activity/log'
+import { tryAttributeInvoicePaid } from '@/lib/email-analytics/attribution-hooks'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +39,8 @@ export const PATCH = withAuth('admin', async (req, user, ctx) => {
   }
 
   // Handle status transitions
-  if (body.status === 'paid' && doc.data()?.status !== 'paid') {
+  const flippedToPaid = body.status === 'paid' && doc.data()?.status !== 'paid'
+  if (flippedToPaid) {
     updates.paidAt = FieldValue.serverTimestamp()
   }
   if (body.status === 'sent' && doc.data()?.status === 'draft') {
@@ -46,6 +48,23 @@ export const PATCH = withAuth('admin', async (req, user, ctx) => {
   }
 
   await ref.update(updates)
+
+  // Best-effort revenue attribution when an invoice flips to paid via PATCH.
+  if (flippedToPaid) {
+    const data = doc.data() ?? {}
+    await tryAttributeInvoicePaid({
+      orgId: typeof data.orgId === 'string' ? data.orgId : null,
+      contactId: typeof data.contactId === 'string' ? data.contactId : null,
+      invoiceId: id,
+      amount:
+        typeof body.paidAmount === 'number'
+          ? body.paidAmount
+          : typeof data.total === 'number'
+            ? data.total
+            : 0,
+      currency: typeof data.currency === 'string' ? data.currency : 'ZAR',
+    })
+  }
 
   // Send invoice notification if transitioning to sent
   if (body.status === 'sent' && doc.data()?.status === 'draft') {

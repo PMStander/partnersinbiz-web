@@ -51,7 +51,14 @@ import { adminDb } from '@/lib/firebase/admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import type { AbConfig, Variant } from './types'
 import { assignVariant, assignForWinnerOnly } from './assign'
-import { selectWinner } from './winner'
+import { selectWinner, selectWinnerWithSignificance } from './winner'
+
+// How long to extend `testEndsAt` when we can't yet declare a significant
+// winner. The cron retries this finalizer on every tick, so each extension
+// effectively means "check again in 6 hours". The hard cap (7d total) avoids
+// running tests forever when neither variant ever pulls ahead.
+const EXTEND_TEST_WINDOW_MS = 6 * 60 * 60 * 1000
+const MAX_TEST_DURATION_MS = 7 * 24 * 60 * 60 * 1000
 
 export type AbTargetCollection = 'broadcasts' | 'sequences'
 export type VariantStatField = 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'unsubscribed'
@@ -164,13 +171,41 @@ export async function maybeFinalizeWinner(args: FinalizeWinnerArgs): Promise<str
   if (!ab.testEndsAt) return null
   if (ab.testEndsAt.toMillis() > Date.now()) return null
 
-  const winner = selectWinner(ab.variants, ab.winnerMetric)
-  if (!winner) return null
-
-  const now = FieldValue.serverTimestamp()
-  const updates: Record<string, unknown> = {}
+  // Use the statistical significance picker — never auto-promote a winner
+  // chosen on noise. If the test isn't significant yet, extend the window
+  // up to a hard cap so the operator can intervene.
+  const result = selectWinnerWithSignificance(ab.variants, ab.winnerMetric)
   const prefix = targetCollection === 'broadcasts' ? 'ab' : `steps.${stepNumber}.ab`
-  updates[`${prefix}.winnerVariantId`] = winner.id
+  const now = FieldValue.serverTimestamp()
+
+  if (result.reason !== 'significant' || !result.winner) {
+    // Insufficient data or tie — extend testEndsAt by EXTEND_TEST_WINDOW_MS,
+    // bounded by MAX_TEST_DURATION_MS from the original testStartedAt.
+    const startedMs = ab.testStartedAt ? ab.testStartedAt.toMillis() : Date.now()
+    const cap = startedMs + MAX_TEST_DURATION_MS
+    const proposed = Date.now() + EXTEND_TEST_WINDOW_MS
+    if (proposed <= cap) {
+      await adminDb.collection(targetCollection).doc(targetId).update({
+        [`${prefix}.testEndsAt`]: Timestamp.fromMillis(proposed),
+        updatedAt: now,
+      })
+      return null
+    }
+    // Cap reached — fall back to the original "highest count" picker so a
+    // long-running test eventually produces a result.
+    const fallback = selectWinner(ab.variants, ab.winnerMetric)
+    if (!fallback) return null
+    const updates: Record<string, unknown> = {}
+    updates[`${prefix}.winnerVariantId`] = fallback.id
+    updates[`${prefix}.winnerDecidedAt`] = now
+    updates[`${prefix}.status`] = 'winner-pending'
+    updates['updatedAt'] = now
+    await adminDb.collection(targetCollection).doc(targetId).update(updates)
+    return 'winner-pending'
+  }
+
+  const updates: Record<string, unknown> = {}
+  updates[`${prefix}.winnerVariantId`] = result.winner.id
   updates[`${prefix}.winnerDecidedAt`] = now
   updates[`${prefix}.status`] = 'winner-pending'
   updates['updatedAt'] = now

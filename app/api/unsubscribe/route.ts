@@ -3,23 +3,35 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { verifyUnsubscribeToken } from '@/lib/email/unsubscribeToken'
 import { syncUnsubscribeToIntegrations } from '@/lib/crm/integrations/syncOptOut'
+import { addSuppression } from '@/lib/email/suppressions'
 
-export async function GET(req: NextRequest) {
-  const token = req.nextUrl.searchParams.get('token')
+type UnsubResult =
+  | { ok: false; status: 400 | 404; heading: string; message: string }
+  | {
+      ok: true
+      alreadyUnsubscribed: boolean
+      campaignName?: string
+      orgName?: string
+    }
 
+/**
+ * Shared opt-out worker. Used by both GET (browser click) and POST (mail
+ * client one-click per RFC 8058). Idempotent — calling twice for the same
+ * contact is a no-op after the first time.
+ */
+async function performUnsubscribe(token: string | null): Promise<UnsubResult> {
   if (!token) {
-    return new NextResponse(unsubscribePage('Invalid link', 'No contact token was provided.'), {
-      status: 400,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+    return { ok: false, status: 400, heading: 'Invalid link', message: 'No contact token was provided.' }
   }
 
   const verified = verifyUnsubscribeToken(token)
   if (!verified.ok) {
-    return new NextResponse(unsubscribePage('Invalid link', 'This unsubscribe link is invalid or has expired.'), {
+    return {
+      ok: false,
       status: 400,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+      heading: 'Invalid link',
+      message: 'This unsubscribe link is invalid or has expired.',
+    }
   }
   const contactId = verified.contactId
   const tokenCampaignId = verified.campaignId
@@ -28,20 +40,19 @@ export async function GET(req: NextRequest) {
   const doc = await docRef.get()
 
   if (!doc.exists) {
-    return new NextResponse(unsubscribePage('Invalid link', 'We could not find your contact record.'), {
+    return {
+      ok: false,
       status: 404,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+      heading: 'Invalid link',
+      message: 'We could not find your contact record.',
+    }
   }
 
   // Honor either the legacy boolean or the new timestamp signal as "already done"
   const data = doc.data() ?? {}
   const alreadyUnsubscribed = !!data.unsubscribed || !!data.unsubscribedAt
   if (alreadyUnsubscribed) {
-    return new NextResponse(
-      unsubscribePage('Already unsubscribed', 'You are already unsubscribed from our emails.'),
-      { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-    )
+    return { ok: true, alreadyUnsubscribed: true }
   }
 
   // 1. Mark the contact as unsubscribed
@@ -90,7 +101,28 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // 5. Resolve campaign/org names for campaign-aware confirmation page
+  // 5. Add a permanent suppression so future sends from this org never reach
+  //    this address — covers cases where the contact record gets re-imported
+  //    or the email is sent ad-hoc via the send API.
+  const contactEmail = typeof data.email === 'string' ? data.email : ''
+  if (orgId && contactEmail) {
+    try {
+      await addSuppression({
+        orgId,
+        email: contactEmail,
+        reason: 'manual-unsub',
+        source: 'api',
+        scope: 'permanent',
+        expiresAt: null,
+        details: { campaignId: tokenCampaignId || undefined },
+        createdBy: 'system',
+      })
+    } catch (err) {
+      console.error('[unsubscribe] failed to add suppression', orgId, contactEmail, err)
+    }
+  }
+
+  // 6. Resolve campaign/org names for campaign-aware confirmation page
   let campaignName: string | undefined
   let orgName: string | undefined
 
@@ -114,16 +146,76 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const confirmMessage = campaignName && orgName
-    ? `You have been successfully removed from ${campaignName} by ${orgName}. You will no longer receive emails from this campaign.`
-    : campaignName
-      ? `You have been successfully removed from ${campaignName}. You will no longer receive emails from this campaign.`
+  return { ok: true, alreadyUnsubscribed: false, campaignName, orgName }
+}
+
+export async function GET(req: NextRequest) {
+  const token = req.nextUrl.searchParams.get('token')
+  const result = await performUnsubscribe(token)
+
+  if (!result.ok) {
+    return new NextResponse(unsubscribePage(result.heading, result.message), {
+      status: result.status,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })
+  }
+
+  if (result.alreadyUnsubscribed) {
+    return new NextResponse(
+      unsubscribePage('Already unsubscribed', 'You are already unsubscribed from our emails.'),
+      { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    )
+  }
+
+  const confirmMessage = result.campaignName && result.orgName
+    ? `You have been successfully removed from ${result.campaignName} by ${result.orgName}. You will no longer receive emails from this campaign.`
+    : result.campaignName
+      ? `You have been successfully removed from ${result.campaignName}. You will no longer receive emails from this campaign.`
       : 'You have been successfully removed from our email list. You will no longer receive marketing emails from us.'
 
   return new NextResponse(
     unsubscribePage('You\'ve been unsubscribed', confirmMessage),
     { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
   )
+}
+
+/**
+ * POST handler — required for RFC 8058 one-click unsubscribe. Mail clients
+ * (Gmail, Yahoo, Apple Mail) POST to the List-Unsubscribe URL when the user
+ * hits the inline "Unsubscribe" button. They send
+ * `application/x-www-form-urlencoded` with body `List-Unsubscribe=One-Click`.
+ *
+ * We accept the token from EITHER the query string (matching the GET URL
+ * shape we already send) OR from form data, and return 200 on success.
+ */
+export async function POST(req: NextRequest) {
+  // Token can arrive via query string (?token=...) — our links already have
+  // it there — or in the request body as form data.
+  let token = req.nextUrl.searchParams.get('token')
+
+  if (!token) {
+    const contentType = req.headers.get('content-type') ?? ''
+    try {
+      if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+        const form = await req.formData()
+        const t = form.get('token')
+        if (typeof t === 'string') token = t
+      } else if (contentType.includes('application/json')) {
+        const body = await req.json().catch(() => ({}))
+        if (typeof body?.token === 'string') token = body.token
+      }
+    } catch {
+      // Best-effort body parse — fall through with token=null.
+    }
+  }
+
+  const result = await performUnsubscribe(token)
+
+  if (!result.ok) {
+    return NextResponse.json({ success: false, error: result.message }, { status: result.status })
+  }
+
+  return NextResponse.json({ success: true })
 }
 
 function unsubscribePage(heading: string, message: string): string {

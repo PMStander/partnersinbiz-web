@@ -16,6 +16,7 @@
 
 import { adminDb } from '@/lib/firebase/admin'
 import { resolveSegmentContacts, type Segment } from '@/lib/crm/segments'
+import { getSuppressedEmails, normalizeEmail } from '@/lib/email/suppressions'
 import type { Contact } from '@/lib/crm/types'
 import type { BroadcastAudience } from './types'
 
@@ -108,5 +109,14 @@ export async function resolveBroadcastAudience(
     }
   }
 
-  return [...seen.values()]
+  // Final filter — drop any address on the suppression list (hard bounce,
+  // complaint, manual unsub, or temporary soft-bounce within its 24h window).
+  const collected = [...seen.values()]
+  if (collected.length === 0) return collected
+  const suppressed = await getSuppressedEmails(
+    orgId,
+    collected.map((c) => c.email),
+  )
+  if (suppressed.size === 0) return collected
+  return collected.filter((c) => !suppressed.has(normalizeEmail(c.email)))
 }

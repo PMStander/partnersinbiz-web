@@ -24,12 +24,89 @@ import { sendCampaignEmail, htmlToPlainText } from '@/lib/email/resend'
 import { resolveFrom } from '@/lib/email/resolveFrom'
 import { signConfirmToken } from '@/lib/lead-capture/token'
 import { performAutoEnroll } from '@/lib/lead-capture/autoEnroll'
+import { isDisposableEmail } from '@/lib/lead-capture/disposable-domains'
+import { verifyTurnstileToken } from '@/lib/forms/turnstile'
 import {
   type CaptureSource,
   type CaptureSubmission,
+  type CaptureSourceRateLimit,
+  DEFAULT_RATE_LIMIT,
   LEAD_CAPTURE_SOURCES,
   LEAD_CAPTURE_SUBMISSIONS,
 } from '@/lib/lead-capture/types'
+
+const RATE_LIMIT_COLLECTION = 'lead_capture_rate_limits'
+
+type BlockReason = 'honeypot' | 'rateLimit' | 'disposable' | 'captcha'
+
+function resolveRateLimit(source: CaptureSource): CaptureSourceRateLimit {
+  const r = source.rateLimit
+  if (!r || typeof r !== 'object') return { ...DEFAULT_RATE_LIMIT }
+  return {
+    enabled: typeof r.enabled === 'boolean' ? r.enabled : DEFAULT_RATE_LIMIT.enabled,
+    maxPerHourPerIp: Number.isFinite(r.maxPerHourPerIp) && r.maxPerHourPerIp > 0
+      ? r.maxPerHourPerIp
+      : DEFAULT_RATE_LIMIT.maxPerHourPerIp,
+    maxPerDayPerEmail: Number.isFinite(r.maxPerDayPerEmail) && r.maxPerDayPerEmail > 0
+      ? r.maxPerDayPerEmail
+      : DEFAULT_RATE_LIMIT.maxPerDayPerEmail,
+  }
+}
+
+function sanitiseKeyPart(s: string): string {
+  return (s || 'unknown').replace(/[^a-zA-Z0-9:.\-_@]/g, '_').slice(0, 120)
+}
+
+/**
+ * Atomically increment-and-check a Firestore-backed counter for a deterministic
+ * bucket id. Returns true if the caller is still under `max`, false if the
+ * request would exceed the cap. Fails open on Firestore errors (so legitimate
+ * users are never blocked by infra problems).
+ */
+async function checkAndIncrement(
+  docId: string,
+  max: number,
+  ttlMs: number,
+  metadata: Record<string, unknown>,
+): Promise<boolean> {
+  if (!Number.isFinite(max) || max <= 0) return true
+  const ref = adminDb.collection(RATE_LIMIT_COLLECTION).doc(docId)
+  try {
+    return await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(ref)
+      const current = (snap.exists ? (snap.data()?.count as number) : 0) ?? 0
+      if (current >= max) return false
+      if (snap.exists) {
+        tx.update(ref, {
+          count: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+      } else {
+        tx.set(ref, {
+          ...metadata,
+          count: 1,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          expiresAt: Timestamp.fromMillis(Date.now() + ttlMs),
+        })
+      }
+      return true
+    })
+  } catch {
+    // Fail open — don't block real submissions on Firestore hiccups.
+    return true
+  }
+}
+
+async function recordBlock(sourceId: string, reason: BlockReason): Promise<void> {
+  try {
+    await adminDb.collection(LEAD_CAPTURE_SOURCES).doc(sourceId).update({
+      [`stats.blocked.${reason}`]: FieldValue.increment(1),
+    })
+  } catch {
+    // best-effort — never throw from a stats increment
+  }
+}
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -158,6 +235,99 @@ export async function POST(req: NextRequest, context: Params) {
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   if (!isEmail(email)) return jsonError('A valid email is required', 400)
 
+  // ---- Spam protection gates ----
+  const ip = clientIp(req)
+  const honeypotEnabled = source.honeypotEnabled !== false // default ON
+
+  // 2a. Honeypot — silently accept (look like a real success to fool bots).
+  if (honeypotEnabled) {
+    const rawHp =
+      (body.data && typeof body.data === 'object' && (body.data as Record<string, unknown>)._hp) ??
+      (body as Record<string, unknown>)._hp
+    if (typeof rawHp === 'string' && rawHp.trim() !== '') {
+      // eslint-disable-next-line no-console
+      console.warn('[lead-capture] honeypot triggered', {
+        sourceId: source.id,
+        ip,
+        email,
+      })
+      recordBlock(source.id, 'honeypot').catch(() => {})
+      return jsonSuccess({
+        ok: true,
+        requiresConfirmation: source.doubleOptIn === 'on',
+        message: source.successMessage,
+      })
+    }
+  }
+
+  // 2b. Rate-limit by IP (per hour).
+  const rl = resolveRateLimit(source)
+  if (rl.enabled) {
+    const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000))
+    const ipKey = `${source.id}_${sanitiseKeyPart(ip)}_${hourBucket}`
+    const ipAllowed = await checkAndIncrement(ipKey, rl.maxPerHourPerIp, 2 * 60 * 60 * 1000, {
+      kind: 'ip',
+      sourceId: source.id,
+      ip: sanitiseKeyPart(ip),
+      hourBucket,
+    })
+    if (!ipAllowed) {
+      recordBlock(source.id, 'rateLimit').catch(() => {})
+      return NextResponse.json(
+        { ok: false, error: 'Too many submissions. Try again later.' },
+        { status: 429, headers: { ...CORS_HEADERS, 'Retry-After': '3600' } },
+      )
+    }
+
+    // 2c. Rate-limit by email (per day).
+    const dayBucket = Math.floor(Date.now() / (24 * 60 * 60 * 1000))
+    const emailKey = `${source.id}_${sanitiseKeyPart(email)}_${dayBucket}`
+    const emailAllowed = await checkAndIncrement(
+      emailKey,
+      rl.maxPerDayPerEmail,
+      48 * 60 * 60 * 1000,
+      {
+        kind: 'email',
+        sourceId: source.id,
+        email,
+        dayBucket,
+      },
+    )
+    if (!emailAllowed) {
+      recordBlock(source.id, 'rateLimit').catch(() => {})
+      return NextResponse.json(
+        { ok: false, error: 'Too many submissions. Try again later.' },
+        { status: 429, headers: { ...CORS_HEADERS, 'Retry-After': '3600' } },
+      )
+    }
+  }
+
+  // 2d. Disposable email blocklist.
+  if (source.blockDisposableEmails !== false && isDisposableEmail(email)) {
+    recordBlock(source.id, 'disposable').catch(() => {})
+    return NextResponse.json(
+      { ok: false, error: 'Disposable email addresses are not allowed.' },
+      { status: 422, headers: CORS_HEADERS },
+    )
+  }
+
+  // 2e. Turnstile CAPTCHA — when enabled, require a valid token.
+  if (source.turnstileEnabled) {
+    const token =
+      (typeof body.turnstileToken === 'string' && body.turnstileToken) ||
+      (typeof body['cf-turnstile-response'] === 'string' &&
+        (body['cf-turnstile-response'] as string)) ||
+      ''
+    const verification = await verifyTurnstileToken(token, ip)
+    if (!verification.success) {
+      recordBlock(source.id, 'captcha').catch(() => {})
+      return NextResponse.json(
+        { ok: false, error: 'CAPTCHA verification failed. Please try again.' },
+        { status: 422, headers: CORS_HEADERS },
+      )
+    }
+  }
+
   // Build the submitted data record from declared fields + any extras
   const rawData = (body.data && typeof body.data === 'object' ? body.data : {}) as Record<string, unknown>
   const data: Record<string, string> = {}
@@ -240,7 +410,7 @@ export async function POST(req: NextRequest, context: Params) {
   }
 
   // 4. Create the submission
-  const ipAddress = clientIp(req)
+  const ipAddress = ip
   const userAgent = req.headers.get('user-agent') ?? ''
   const referer =
     (typeof body.referer === 'string' && body.referer) ||

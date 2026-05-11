@@ -1,7 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import type { CaptureField, CaptureWidgetTheme } from '@/lib/lead-capture/types'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type {
+  CaptureField,
+  CaptureWidgetTheme,
+  WidgetDisplayConfig,
+} from '@/lib/lead-capture/types'
 
 interface Props {
   sourceId: string
@@ -10,6 +14,25 @@ interface Props {
   successMessage: string
   successRedirectUrl: string
   submitUrl: string
+  turnstileSiteKey?: string
+  // Optional multi-step config — when present and `display.mode === 'multi-step'`
+  // with at least one step, the form progresses step-by-step using the
+  // progressive endpoint. Any other mode is rendered as a normal inline form
+  // (overlay modes don't make sense inside an iframe).
+  display?: WidgetDisplayConfig
+  progressiveUrl?: string
+}
+
+const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+
+function loadTurnstileScript() {
+  if (typeof window === 'undefined') return
+  if (document.querySelector(`script[src="${TURNSTILE_SCRIPT_SRC}"]`)) return
+  const script = document.createElement('script')
+  script.src = TURNSTILE_SCRIPT_SRC
+  script.async = true
+  script.defer = true
+  document.head.appendChild(script)
 }
 
 interface SubmitResponse {
@@ -18,34 +41,144 @@ interface SubmitResponse {
   message?: string
   requiresConfirmation?: boolean
   redirect?: string
+  submissionId?: string
+  nextStep?: number
+  isLast?: boolean
 }
 
 export function LeadCaptureEmbedForm(props: Props) {
-  const { theme, fields, submitUrl, successMessage } = props
+  const { theme, fields, submitUrl, successMessage, turnstileSiteKey, display, progressiveUrl } = props
+  const steps = display?.steps ?? []
+  const isMultiStep = display?.mode === 'multi-step' && steps.length > 0 && !!progressiveUrl
+
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState<{ requiresConfirmation: boolean; message: string } | null>(null)
   const [email, setEmail] = useState('')
   const [values, setValues] = useState<Record<string, string>>({})
+  const [honeypot, setHoneypot] = useState('')
+  const [stepIndex, setStepIndex] = useState(0)
+  const [submissionId, setSubmissionId] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement | null>(null)
+
+  useEffect(() => {
+    if (turnstileSiteKey) loadTurnstileScript()
+  }, [turnstileSiteKey])
 
   function setField(key: string, value: string) {
     setValues((v) => ({ ...v, [key]: value }))
   }
 
+  function readTurnstileToken(): string {
+    if (!formRef.current) return ''
+    const input = formRef.current.querySelector(
+      'input[name="cf-turnstile-response"]',
+    ) as HTMLInputElement | null
+    return input?.value ?? ''
+  }
+
+  const currentStepCfg = isMultiStep ? steps[stepIndex] : null
+  const isLastStep = isMultiStep ? stepIndex >= steps.length - 1 : true
+
+  const fieldsForStep = useMemo<CaptureField[]>(() => {
+    if (!isMultiStep || !currentStepCfg) {
+      return fields.filter((f) => f.key !== 'email')
+    }
+    const byKey: Record<string, CaptureField> = {}
+    fields.forEach((f) => { if (f.key) byKey[f.key] = f })
+    return (currentStepCfg.fields || [])
+      .filter((k) => k !== 'email')
+      .map((k) => byKey[k])
+      .filter((f): f is CaptureField => !!f)
+  }, [isMultiStep, currentStepCfg, fields])
+
+  const headingText = currentStepCfg?.headingText || theme.headingText || 'Join our newsletter'
+  const subheadingText = currentStepCfg?.subheadingText ?? theme.subheadingText ?? ''
+  const buttonText = currentStepCfg?.buttonText || theme.buttonText || 'Subscribe'
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
-    if (!email.trim()) {
+
+    // Step-level required field check
+    const missing = fieldsForStep.find((f) => f.required && !(values[f.key] || '').trim())
+    if (missing) {
+      setError(`${missing.label} is required.`)
+      return
+    }
+
+    // Email validation on step 0 (or single-screen)
+    if (stepIndex === 0 && !email.trim()) {
       setError('Email is required.')
       return
     }
+    const stepData: Record<string, string> = {}
+    fieldsForStep.forEach((f) => {
+      const v = (values[f.key] || '').trim()
+      if (v) stepData[f.key] = v
+    })
+
+    // Turnstile only on the final step
+    let turnstileToken = ''
+    if (isLastStep && turnstileSiteKey) {
+      turnstileToken = readTurnstileToken()
+      if (!turnstileToken) {
+        setError('Please complete the CAPTCHA challenge.')
+        return
+      }
+    }
+
     setSubmitting(true)
     try {
       const referer = typeof document !== 'undefined' ? document.referrer : ''
+
+      // Multi-step progressive flow
+      if (isMultiStep && progressiveUrl) {
+        const payload: Record<string, unknown> = {
+          email: email.trim(),
+          step: stepIndex,
+          data: { ...stepData, _hp: honeypot },
+          referer,
+        }
+        if (submissionId) payload.submissionId = submissionId
+        if (turnstileToken) payload.turnstileToken = turnstileToken
+        const res = await fetch(progressiveUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const body: SubmitResponse = await res.json().catch(() => ({ ok: false } as SubmitResponse))
+        if (!res.ok || body.ok === false) {
+          setError(body.error || 'Submission failed. Please try again.')
+          setSubmitting(false)
+          return
+        }
+        if (body.submissionId) setSubmissionId(body.submissionId)
+        if (body.isLast) {
+          setDone({
+            requiresConfirmation: !!body.requiresConfirmation,
+            message: body.message || successMessage,
+          })
+          if (body.redirect) {
+            setTimeout(() => { window.location.href = body.redirect as string }, 1200)
+          }
+        } else {
+          setStepIndex(typeof body.nextStep === 'number' ? body.nextStep : stepIndex + 1)
+        }
+        setSubmitting(false)
+        return
+      }
+
+      // Single-screen submit
       const res = await fetch(submitUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), data: values, referer }),
+        body: JSON.stringify({
+          email: email.trim(),
+          data: { ...values, _hp: honeypot },
+          referer,
+          ...(turnstileToken ? { turnstileToken } : {}),
+        }),
       })
       const body: SubmitResponse = await res.json().catch(() => ({ ok: false } as SubmitResponse))
       if (!res.ok || !body.ok) {
@@ -113,28 +246,54 @@ export function LeadCaptureEmbedForm(props: Props) {
   return (
     <div style={containerStyle}>
       <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 600, color: theme.textColor || '#111827' }}>
-        {theme.headingText || 'Join our newsletter'}
+        {headingText}
       </h3>
-      {theme.subheadingText ? (
+      {subheadingText ? (
         <p style={{ margin: '0 0 18px', color: theme.textColor || '#475569', opacity: 0.8, fontSize: 14 }}>
-          {theme.subheadingText}
+          {subheadingText}
         </p>
       ) : null}
 
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }} noValidate>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label style={{ fontSize: 13, fontWeight: 500 }}>Email</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            style={inputStyle}
-          />
+      {isMultiStep ? (
+        <div style={{ marginBottom: 12, fontSize: 12, color: theme.textColor || '#475569', opacity: 0.7 }}>
+          Step {stepIndex + 1} of {steps.length}
         </div>
+      ) : null}
 
-        {fields.filter((f) => f.key !== 'email').map((field) => {
+      <form ref={formRef} onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }} noValidate>
+        {/* Honeypot */}
+        <input
+          type="text"
+          name="_hp"
+          tabIndex={-1}
+          autoComplete="off"
+          value={honeypot}
+          onChange={(e) => setHoneypot(e.target.value)}
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '-9999px',
+            width: '1px',
+            height: '1px',
+            opacity: 0,
+          }}
+        />
+
+        {stepIndex === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={{ fontSize: 13, fontWeight: 500 }}>Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              style={inputStyle}
+            />
+          </div>
+        ) : null}
+
+        {fieldsForStep.map((field) => {
           const v = values[field.key] ?? ''
           const lbl = `${field.label}${field.required ? ' *' : ''}`
           if (field.type === 'textarea') {
@@ -185,6 +344,14 @@ export function LeadCaptureEmbedForm(props: Props) {
           )
         })}
 
+        {isLastStep && turnstileSiteKey ? (
+          <div
+            className="cf-turnstile"
+            data-sitekey={turnstileSiteKey}
+            style={{ marginTop: 4 }}
+          />
+        ) : null}
+
         <button
           type="submit"
           disabled={submitting}
@@ -202,7 +369,7 @@ export function LeadCaptureEmbedForm(props: Props) {
             fontFamily: 'inherit',
           }}
         >
-          {submitting ? 'Submitting…' : theme.buttonText || 'Subscribe'}
+          {submitting ? 'Submitting…' : buttonText}
         </button>
 
         {error ? <div style={{ fontSize: 13, color: '#b91c1c' }}>{error}</div> : null}

@@ -8,6 +8,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import { tryAttributeDealWon } from '@/lib/email-analytics/attribution-hooks'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -41,6 +42,22 @@ export const PUT = withAuth('admin', async (req, _user, context) => {
       } catch (err) {
         console.error('[webhook-dispatch-error] deal.won', err)
       }
+      // Best-effort revenue attribution back to the most recent email click.
+      const contactId =
+        (typeof body?.contactId === 'string' && body.contactId) ||
+        (typeof before.contactId === 'string' && before.contactId) ||
+        null
+      const currency =
+        (typeof body?.currency === 'string' && body.currency) ||
+        (typeof before.currency === 'string' && before.currency) ||
+        'ZAR'
+      await tryAttributeDealWon({
+        orgId,
+        contactId,
+        dealId: id,
+        amount: typeof value === 'number' ? value : 0,
+        currency,
+      })
     } else if (toStage === 'lost') {
       try {
         await dispatchWebhook(orgId, 'deal.lost', { id, fromStage, toStage, value })

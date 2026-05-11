@@ -6,14 +6,37 @@ import type {
   CaptureField,
   CaptureFieldType,
   CaptureSource,
+  CaptureSourceBlockStats,
+  CaptureSourceRateLimit,
   CaptureSubmission,
   CaptureWidgetTheme,
   DoubleOptInMode,
+  WidgetDisplayConfig,
+  WidgetDisplayMode,
+  WidgetDisplayStep,
+  WidgetPosition,
+} from '@/lib/lead-capture/types'
+import {
+  DEFAULT_RATE_LIMIT,
+  DEFAULT_BLOCK_STATS,
+  DEFAULT_DISPLAY_CONFIG,
 } from '@/lib/lead-capture/types'
 import type { Sequence } from '@/lib/sequences/types'
 import type { Campaign } from '@/lib/campaigns/types'
 
-type TabKey = 'setup' | 'fields' | 'routing' | 'widget' | 'embed' | 'submissions'
+type TabKey = 'setup' | 'fields' | 'routing' | 'widget' | 'display' | 'spam' | 'embed' | 'submissions'
+
+const DISPLAY_MODES: { value: WidgetDisplayMode; label: string; help: string }[] = [
+  { value: 'inline', label: 'Inline', help: 'Form renders next to the script tag.' },
+  { value: 'popup', label: 'Popup modal', help: 'Full-screen modal triggered by delay or scroll.' },
+  { value: 'slide-in', label: 'Slide-in toast', help: 'Small card sliding in from a corner.' },
+  { value: 'exit-intent', label: 'Exit-intent', help: 'Popup that fires only when the visitor signals leaving.' },
+  { value: 'multi-step', label: 'Multi-step', help: 'Progressive form — captures email first, then more fields.' },
+]
+
+const POSITIONS: WidgetPosition[] = [
+  'center', 'bottom-right', 'bottom-left', 'top-right', 'top-left',
+]
 
 interface Props {
   source: CaptureSource
@@ -37,6 +60,11 @@ interface EditableSource {
   notifyEmails: string[]
   widgetTheme: CaptureWidgetTheme
   active: boolean
+  turnstileEnabled: boolean
+  turnstileSiteKey: string
+  honeypotEnabled: boolean
+  blockDisposableEmails: boolean
+  rateLimit: CaptureSourceRateLimit
 }
 
 function pluck(source: CaptureSource): EditableSource {
@@ -54,6 +82,11 @@ function pluck(source: CaptureSource): EditableSource {
     notifyEmails: source.notifyEmails ?? [],
     widgetTheme: source.widgetTheme,
     active: source.active ?? true,
+    turnstileEnabled: source.turnstileEnabled === true,
+    turnstileSiteKey: source.turnstileSiteKey ?? '',
+    honeypotEnabled: source.honeypotEnabled !== false,
+    blockDisposableEmails: source.blockDisposableEmails !== false,
+    rateLimit: source.rateLimit ?? { ...DEFAULT_RATE_LIMIT },
   }
 }
 
@@ -188,6 +221,13 @@ export function CaptureSourceEditor(props: Props) {
             previewUrl={`${props.appUrl}/embed/newsletter/${props.source.id}`}
           />
         )}
+        {tab === 'spam' && (
+          <SpamProtectionTab
+            state={state}
+            update={update}
+            blockStats={props.source.stats?.blocked ?? DEFAULT_BLOCK_STATS}
+          />
+        )}
         {tab === 'embed' && (
           <EmbedTab scriptSnippet={scriptSnippet} iframeSnippet={iframeSnippet} />
         )}
@@ -205,6 +245,7 @@ function Tabs(props: { tab: TabKey; setTab: (t: TabKey) => void; submissionCount
     { key: 'fields', label: 'Fields' },
     { key: 'routing', label: 'Routing' },
     { key: 'widget', label: 'Widget' },
+    { key: 'spam', label: 'Spam protection' },
     { key: 'embed', label: 'Embed code' },
     { key: 'submissions', label: `Submissions (${props.submissionCount})` },
   ]
@@ -567,6 +608,160 @@ function WidgetTab(props: {
           />
         </div>
       </div>
+    </div>
+  )
+}
+
+function SpamProtectionTab(props: {
+  state: EditableSource
+  update: <K extends keyof EditableSource>(k: K, v: EditableSource[K]) => void
+  blockStats: CaptureSourceBlockStats
+}) {
+  const { state, update, blockStats } = props
+  const totalBlocked =
+    (blockStats.honeypot ?? 0) +
+    (blockStats.rateLimit ?? 0) +
+    (blockStats.disposable ?? 0) +
+    (blockStats.captcha ?? 0)
+
+  return (
+    <div>
+      <Section
+        title="Suspicious submissions"
+        description="Counters of attempts blocked by each spam-protection gate."
+      >
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <StatTile label="Total blocked" value={totalBlocked} highlight />
+          <StatTile label="Honeypot" value={blockStats.honeypot ?? 0} />
+          <StatTile label="Rate limit" value={blockStats.rateLimit ?? 0} />
+          <StatTile label="Disposable" value={blockStats.disposable ?? 0} />
+          <StatTile label="CAPTCHA" value={blockStats.captcha ?? 0} />
+        </div>
+      </Section>
+
+      <Section
+        title="Cloudflare Turnstile"
+        description="Privacy-friendly CAPTCHA. Requires TURNSTILE_SECRET_KEY env var on the server."
+      >
+        <label className="flex items-center gap-2 text-sm text-on-surface mb-3">
+          <input
+            type="checkbox"
+            checked={state.turnstileEnabled}
+            onChange={(e) => update('turnstileEnabled', e.target.checked)}
+          />
+          Require Cloudflare Turnstile on this form
+        </label>
+        <Input
+          label="Turnstile site key (public, safe to embed)"
+          value={state.turnstileSiteKey}
+          onChange={(v) => update('turnstileSiteKey', v)}
+          placeholder="0x4AAAAAAA..."
+        />
+        <p className="text-xs text-on-surface-variant">
+          Set the matching secret key as the <code>TURNSTILE_SECRET_KEY</code> environment variable on the deployment. Without it, all submissions to a turnstile-enabled source will be rejected.
+        </p>
+      </Section>
+
+      <Section
+        title="Honeypot field"
+        description="Adds a hidden _hp input — invisible to humans, often filled by bots. Recommended ON."
+      >
+        <label className="flex items-center gap-2 text-sm text-on-surface">
+          <input
+            type="checkbox"
+            checked={state.honeypotEnabled}
+            onChange={(e) => update('honeypotEnabled', e.target.checked)}
+          />
+          Enable honeypot trap (silent reject on fill)
+        </label>
+      </Section>
+
+      <Section
+        title="Block disposable email providers"
+        description="Reject signups from mailinator / tempmail / etc. Reduces spam contacts in your CRM."
+      >
+        <label className="flex items-center gap-2 text-sm text-on-surface">
+          <input
+            type="checkbox"
+            checked={state.blockDisposableEmails}
+            onChange={(e) => update('blockDisposableEmails', e.target.checked)}
+          />
+          Reject known disposable / burner email domains
+        </label>
+      </Section>
+
+      <Section
+        title="Rate limiting"
+        description="Per-IP hourly cap and per-email daily cap. Defaults to 10/hr/IP and 3/day/email."
+      >
+        <label className="flex items-center gap-2 text-sm text-on-surface mb-3">
+          <input
+            type="checkbox"
+            checked={state.rateLimit.enabled}
+            onChange={(e) =>
+              update('rateLimit', { ...state.rateLimit, enabled: e.target.checked })
+            }
+          />
+          Enable rate limiting
+        </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="block text-xs font-medium text-on-surface-variant mb-1">
+              Max submissions per hour per IP
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              value={state.rateLimit.maxPerHourPerIp}
+              onChange={(e) =>
+                update('rateLimit', {
+                  ...state.rateLimit,
+                  maxPerHourPerIp: Math.max(
+                    1,
+                    parseInt(e.target.value || '10', 10) || 10,
+                  ),
+                })
+              }
+              className="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface text-on-surface text-sm"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-medium text-on-surface-variant mb-1">
+              Max submissions per day per email
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              value={state.rateLimit.maxPerDayPerEmail}
+              onChange={(e) =>
+                update('rateLimit', {
+                  ...state.rateLimit,
+                  maxPerDayPerEmail: Math.max(
+                    1,
+                    parseInt(e.target.value || '3', 10) || 3,
+                  ),
+                })
+              }
+              className="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface text-on-surface text-sm"
+            />
+          </label>
+        </div>
+      </Section>
+    </div>
+  )
+}
+
+function StatTile(props: { label: string; value: number; highlight?: boolean }) {
+  return (
+    <div
+      className={`p-3 rounded-lg ${
+        props.highlight ? 'bg-primary/10 border border-primary/30' : 'bg-surface-container'
+      }`}
+    >
+      <div className="text-xs text-on-surface-variant">{props.label}</div>
+      <div className="text-xl font-semibold text-on-surface mt-1">{props.value}</div>
     </div>
   )
 }

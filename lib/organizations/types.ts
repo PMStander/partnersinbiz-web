@@ -74,6 +74,13 @@ export interface OrgSettings {
     secondary: string
     accent: string
   }
+  // Email send-time optimisation.
+  // Hour 0-23 (org-local clock) at which sequences/broadcasts target sends.
+  preferredSendHourLocal?: number
+  // Days-of-week (0=Sun..6=Sat) sequences/broadcasts may target.
+  preferredSendDaysOfWeek?: number[]
+  // Addresses notified when a contact replies / bounces / unsubscribes via reply.
+  replyNotifyEmails?: string[]
 }
 
 // ── Members ───────────────────────────────────────────────────────────────

@@ -11,6 +11,8 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { actorFrom } from '@/lib/api/actor'
 import { findStarter, isStarterId } from '@/lib/email-builder/templates'
 import { validateDocument } from '@/lib/email-builder/validate'
+import { getBrandKitForOrg } from '@/lib/brand-kit/store'
+import { applyBrandKitToTheme } from '@/lib/brand-kit/applyToDocument'
 import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
@@ -53,12 +55,20 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser, c
   const v = validateDocument(source.document)
   if (!v.ok) return apiError('Source document is invalid: ' + v.errors.join('; '), 400)
 
+  // Apply brand kit when duplicating a starter (so it picks up the caller's
+  // org branding). When duplicating a user template, also apply — most users
+  // expect "copy this template" to honor their current brand identity.
+  const skipBrandKit = body?.applyBrandKit === false
+  const finalDocument = skipBrandKit
+    ? v.doc
+    : applyBrandKitToTheme(v.doc, await getBrandKitForOrg(orgId))
+
   const docData = {
     orgId,
     name: `${source.name} (copy)`,
     description: source.description,
     category: source.category,
-    document: v.doc,
+    document: finalDocument,
     isStarter: false,
     deleted: false,
     createdAt: FieldValue.serverTimestamp(),

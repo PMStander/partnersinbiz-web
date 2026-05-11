@@ -1,23 +1,35 @@
 ---
 name: email-outreach
 description: >
-  Complete email marketing platform — send, schedule, and track transactional + marketing emails;
-  build multi-step drip sequences; one-time broadcasts/newsletters; visual block-based email templates;
-  per-org sending domains; segments + audiences; lead capture with double-opt-in; embeddable newsletter
-  widgets; AI-generated emails, subject lines, and full sequences; A/B testing with auto-winner promotion;
-  click-tracked short links; engagement analytics. Uses Resend under the hood. Trigger whenever the user
-  mentions: "send an email", "draft email", "email a contact", "email client", "schedule email", "email queue",
-  "email status", "create email sequence", "drip campaign", "nurture sequence", "onboarding email sequence",
-  "welcome series", "enroll contact in sequence", "broadcast", "newsletter", "blast", "one-time email",
-  "email template", "template library", "visual builder", "email editor", "merge fields", "personalize email",
-  "segment", "audience", "tag", "lead capture", "newsletter signup", "subscribe form", "embed form",
-  "double opt-in", "confirmation email", "campaign", "email campaign", "launch campaign", "bulk email",
-  "sending domain", "verify domain", "DNS records", "email domain", "from domain", "custom domain",
-  "shorten link", "tracked link", "short URL", "link analytics", "click stats", "click rate", "UTM",
-  "generate email with AI", "write email", "AI subject lines", "rewrite email", "improve email",
-  "A/B test", "AB test", "split test", "subject line test", "winner promotion", "email analytics",
-  "engagement score", "open rate", "click rate", "bounce rate", "unsubscribe rate", "deliverability",
-  "Resend webhook", "complaint", "bounce", "unsubscribe". If in doubt, trigger.
+  Complete world-class email + SMS marketing platform — transactional + marketing emails; drip sequences
+  with branching, goal-exit, and wait-until conditions; broadcasts/newsletters; visual block-based templates
+  with conditional content + reusable snippets + AMP for Email; per-org sending domains with DKIM;
+  behavioral segmentation + lead-capture forms with double-opt-in + popup/exit-intent/multi-step widgets;
+  spam protection (Cloudflare Turnstile + honeypot + disposable-email blocking + rate limiting);
+  preferences center with topic-level opt-in/out + frequency capping; AI-generated emails, subject lines,
+  sequences, newsletters, winbacks, rewrites; A/B testing with split + winner-only modes and statistical
+  significance; reply tracking via Resend Inbound Routes (auto-pause on reply); send-time optimization
+  (timezone-aware, preferred-day + preferred-hour in recipient's local clock); pre-send preflight validation
+  (broken links, accessibility, deliverability); image upload + brand kit; suppression list with hard/soft
+  bounce categorization; List-Unsubscribe + List-Unsubscribe-Post one-click compliance (RFC 8058);
+  webhook signature verification (svix); SMS via Twilio with multi-channel sequences; click-tracked short
+  links; analytics dashboard with cohort retention, revenue attribution, click heatmaps, send-time matrix,
+  industry benchmark comparison, engagement score. Uses Resend + Twilio + Vercel AI Gateway. Trigger on:
+  "send email/SMS", "draft email/SMS", "email/text a contact", "schedule", "email queue",
+  "create sequence", "drip campaign", "nurture sequence", "welcome series", "enroll contact",
+  "broadcast", "newsletter", "blast", "template", "visual builder", "block editor", "merge fields",
+  "segment", "behavioral segment", "audience", "engagement", "lead capture", "newsletter signup",
+  "popup form", "exit intent", "multi-step form", "subscribe form", "double opt-in",
+  "campaign", "launch campaign", "bulk email", "sending domain", "verify domain", "DNS",
+  "track link", "short URL", "click stats", "AI email", "AI subject lines", "rewrite",
+  "A/B test", "split test", "subject test", "winner", "statistical significance",
+  "analytics", "cohort", "revenue attribution", "click heatmap", "best send time", "benchmarks",
+  "engagement score", "open rate", "click rate", "bounce rate", "complaints", "unsubscribe",
+  "suppression", "preferences", "frequency cap", "deliverability", "reply", "auto-pause", "out of office",
+  "send time optimization", "timezone", "preflight", "validate email", "brand kit", "image upload",
+  "AMP for Email", "carousel", "accordion", "live data", "dark mode", "Twilio", "SMS",
+  "STOP", "multi-channel", "Turnstile", "captcha", "honeypot", "disposable email", "rate limit",
+  "List-Unsubscribe", "spam protection", "svix". If in doubt, trigger.
 ---
 
 # Email Outreach — Partners in Biz Platform API
@@ -862,3 +874,330 @@ POST /broadcasts/<id>/send-now
 13. **Engagement score (0..100)** = `opens × 5 + clicks × 15 − bounces × 30 − daysSinceLastEngaged × 0.5`, clamped. Use the `cooling`/`dormant` status filters on `/email-analytics/contacts` to find your winback audience.
 14. **No raw HTML in starters.** All 5 starter templates use the block model — easier to AI-edit, easier to remix per-org.
 15. **The complete capture → enroll loop:** `/capture-sources/[id]/submit` (public) → contact + tags applied → DOI confirm if on → auto-enroll all matching sequences + active campaigns whose `triggers.captureSourceIds` includes the source. No glue code needed.
+
+---
+
+# v3 features (2026-05-11 world-class build)
+
+Twelve additional layers on top of the v2 platform. Every surface is agent-callable.
+
+## 13. Deliverability hardening
+
+- **List-Unsubscribe + List-Unsubscribe-Post (RFC 8058 one-click)** — `sendCampaignEmail` accepts `listUnsubscribeUrl`; every broadcast/sequence/transactional send now sets `List-Unsubscribe: <url>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. Required by Gmail/Yahoo bulk-sender rules.
+- **Bounce categorization** — webhook reads `data.bounce.{type,subType}`. Hard → permanent suppression + `contact.bouncedAt`. Soft → temporary 24h suppression (contact stays sendable after expiry). Complaint → permanent suppression + full unsubscribe.
+- **Suppression list** — `suppressions` collection keyed by `${orgId}_${lowercase(email)}`. Reasons: `hard-bounce | soft-bounce | complaint | manual-unsub | list-cleanup | invalid-address | disposable-domain`. Scopes: `permanent | temporary`. Routes:
+  - `GET /api/v1/suppressions?orgId=...&reason=...` — list
+  - `POST /api/v1/suppressions` — admin add
+  - `DELETE /api/v1/suppressions/[id]` — admin remove
+  - `GET /api/v1/suppressions/check?orgId=...&email=...` — `{ suppressed, reason, scope, expiresAt }`
+- **Send pipelines refuse suppressed addresses** — `lib/broadcasts/audience.ts` filters via `getSuppressedEmails`; `sendSmsToContact` and `sendBroadcastToContact` and the sequences cron all call `isSuppressed` before sending.
+- **Webhook svix verification** — `app/api/v1/email/webhook` enforces `svix-id/timestamp/signature` headers against `RESEND_WEBHOOK_SECRET`. Soft-fails with warning in dev when secret unset; MANDATORY in prod.
+
+## 14. Spam protection on lead capture
+
+`CaptureSource` extended with:
+```ts
+turnstileEnabled: boolean
+turnstileSiteKey: string
+honeypotEnabled: boolean             // default true
+blockDisposableEmails: boolean       // default true (40+ burner domains)
+rateLimit: { enabled: boolean; maxPerHourPerIp: number; maxPerDayPerEmail: number }
+```
+
+- Cloudflare Turnstile widget injected into JS bundle + iframe; verified server-side via `TURNSTILE_SECRET_KEY`.
+- Honeypot `_hp` field included in every form (CSS-hidden). Filled = silent success (fool the bot).
+- Rate limit state in `lead_capture_rate_limits` collection, deterministic keys.
+- Disposable email check via `lib/lead-capture/disposable-domains.ts > isDisposableEmail`.
+- Block stats incremented on `source.stats.blocked.{honeypot,rateLimit,disposable,captcha}`.
+- Admin "Spam protection" tab in CaptureSourceEditor.
+
+## 15. Preferences center + frequency capping
+
+Instead of binary unsubscribe, contacts pick topics + frequency.
+
+- **`SubscriptionTopic`** per-org config in `org_preferences_config/{orgId}` — list of topics + page copy + default frequency.
+- **`ContactPreferences`** in `contact_preferences/{contactId}` — `topics: Record<topicId, boolean>`, `frequency: 'all'|'weekly'|'monthly'|'transactional-only'|'none'`.
+- **Preferences page** at `/preferences/[token]` — same HMAC token as unsubscribe. Server-rendered form works without JS.
+- **`shouldSendToContact({ contactId, orgId, topicId? })`** — SINGLE SOURCE OF TRUTH for "can I send to this contact". Every cron/send path calls it.
+- **Frequency cap** in `organizations.settings.frequencyCap`: `maxPer7Days` (default 7), `maxPer24Hours` (default 3), `exemptTopics: ['transactional']`.
+- **`isWithinFrequencyCap(orgId, contactId, topicId)`** — counts emails in last 24h/7d, excludes exempt topics. Frequency-skipped sends logged to `frequency_skips`.
+- **`topicId`** added to Broadcast, Sequence, and Email docs.
+
+Routes:
+- `GET/PUT /api/v1/orgs/[orgId]/preferences-config`
+- `GET /api/v1/orgs/[orgId]/preferences-config/recent-unsubs`
+- `GET/PUT /api/v1/orgs/[orgId]/frequency-cap`
+- `GET/PUT /api/v1/contacts/[id]/preferences`
+
+Footer block auto-injects `{{preferencesUrl}}` when not explicitly set.
+
+## 16. broadcast_recipients drain (A/B winner-only fix)
+
+The broadcast cron's main loop now drains `broadcast_recipients` after the main loop. For A/B winner-only mode, deferred contacts pending the winner now actually get the winner variant sent. Idempotent via existing `(broadcastId, contactId)` emails-doc check. Cron response includes `recipientsDrained`/`recipientsFailed`/`recipientsSkipped`.
+
+## 17. Reply tracking (Resend Inbound)
+
+- **Webhook:** `POST /api/v1/email/inbound-webhook` (public, svix-verified).
+- **Collection:** `inbound_emails` — one doc per received message with intent classification.
+- **Classifier:** header-aware (`Auto-Submitted`, `X-Autoreply`, `Precedence`, `X-Failed-Recipients`, DSN Content-Type) + subject prefix + body unsubscribe-phrase scan.
+- **5 intents:**
+  - `reply` — auto-pauses active `sequence_enrollments` with `exitReason: 'replied'`, bumps `contact.lastRepliedAt` + `repliesCount`
+  - `auto-reply` — log only, no pause
+  - `bounce-reply` — adds soft-bounce suppression, marks `contact.bouncedAt`
+  - `unsubscribe-reply` — full unsub + permanent manual-unsub suppression + pause all enrollments
+  - `unknown` — log + notify admins via `org.settings.replyNotifyEmails`
+- **Admin UI:** `/admin/email/inbound` list + detail with intent badges.
+
+**Config required:** Create a Resend Route in dashboard forwarding inbound `reply.<sending-domain>` to `https://partnersinbiz.online/api/v1/email/inbound-webhook`. Set sequence/broadcast `replyTo` to that address.
+
+## 18. Send-time optimization (timezone-aware)
+
+- **Org-level:** `OrgSettings.preferredSendHourLocal` (default 9), `preferredSendDaysOfWeek` (default `[1,2,3,4,5]` Mon-Fri).
+- **Per-contact override:** `Contact.timezone` (IANA).
+- **Sequences cron:** `nextSendAt = pickSendTime(now + delayDays, ctx)` — DST-correct via `Intl.DateTimeFormat` roundtrip (no offset-string math).
+- **Broadcast local delivery:** new `broadcast.audienceLocalDelivery` + `localDeliveryWindowHours` (default 24). When on, cron defers contacts whose local clock hasn't reached the broadcast hour. After windowHours expires, sends regardless. Admin: "Deliver at recipient's local time" checkbox in BroadcastEditor Schedule tab.
+
+## 19. Behavioral segmentation
+
+`SegmentFilters` extended (all OPTIONAL — old segments keep working):
+
+```ts
+behavioral?: BehavioralRule[]      // AND across rules
+engagement?: EngagementScoreRule
+```
+
+- **8 ops × 7 scopes:** `has-opened|has-not-opened|has-clicked|has-not-clicked|has-received|has-not-received|has-replied|has-not-replied` × `any-email|broadcast|campaign|sequence|sequence-step|topic|link-url`.
+- **Engagement filter:** min/max score (0-100), `lastEngagedWithinDays`, `notEngagedWithinDays`.
+- **Live preview:** `POST /api/v1/crm/segments/preview` returns `{ count, sample }` without persisting.
+- **7 predefined recipes** in `lib/crm/predefined-segments.ts`: Highly engaged / Cooling / Dormant / New & active / Never engaged / Clicked but didn't reply / Newsletter-only. Use as templates in the UI.
+
+## 20. Branching sequences + goal-based exit + wait-until
+
+`SequenceStep` extended with OPTIONAL `branch?: SequenceBranch` and `waitUntil?: WaitUntil`. `Sequence` extended with optional `goals?: SequenceGoal[]`.
+
+- **Branch conditions:** `opened | not-opened | clicked | not-clicked | clicked-link | contact-has-tag | contact-at-stage | replied | days-since-step | goal-hit`.
+- **Wait-until:** `business-hours | day-of-week | contact-tag-added | contact-stage-reached | goal-hit`. With `maxWaitDays` + `onTimeout: 'send' | 'exit'`.
+- **Goals:** checked before every step. Hit → exit with custom `exitReason` (e.g. `'converted'`).
+- **Cycle guard:** `visitedSteps[]` on enrollment; revisit triggers `exitReason: 'cycle-detected'`.
+- **Path audit trail:** `path: EnrollmentPathEntry[]` on enrollment records every step + branch decision.
+- **`pendingBranchEvalAt`** on enrollment — two-phase send → wait → branch flow.
+
+Routes:
+- `PATCH /api/v1/sequences/[id]/steps/[stepNumber]` — set branch/waitUntil
+- `PUT /api/v1/sequences/[id]/goals` — set sequence goals
+- `GET /api/v1/sequence-enrollments/[id]/path` — view contact's journey
+
+Admin UI: ConditionPicker, BranchEditor, WaitUntilEditor, GoalsEditor components + `SequenceTreeView` visualization.
+
+## 21. Pre-send preflight validation
+
+Catches mistakes BEFORE sending.
+
+Checks: subject length, missing alt text, broken/empty link URLs, low-contrast text, missing unsubscribe link, oversize images, banned-word audit.
+
+Routes:
+- `POST /api/v1/broadcasts/[id]/preflight` — returns `{ errors[], warnings[], passed }`
+- `POST /api/v1/sequences/[id]/steps/[stepNumber]/preflight` — same for a sequence step
+
+Admin: `PreflightPanel` component in BroadcastEditor + sequence step editor. Schedule button disabled if errors present.
+
+## 22. A/B statistical significance
+
+`lib/ab-testing/stats.ts > selectWinner` now respects `minSampleSize` (default 100 per variant). Returns null until both variants have enough data. Optional chi-squared test reports confidence level. Manual override still works via `POST /broadcasts/[id]/ab/declare-winner { variantId }`.
+
+## 23. Image upload + brand kit + conditional content + reusable snippets
+
+- **Image upload:** `POST /api/v1/email-images/upload` — multipart upload to Firebase Storage, returns CDN URL. Used by builder image block.
+- **Brand kit:** `GET/PUT /api/v1/brand-kit` per-org store of logo URL, primary/secondary/accent colors, font family, custom voice, default footer. Auto-applied to new templates via `applyToDocument`.
+- **Conditional content blocks:** every block now supports `condition?: BlockCondition` — show/hide based on contact tag, stage, custom field, or merge-var presence. Renderer evaluates per-recipient.
+- **Reusable snippets:** save a block tree as a named snippet, reuse across templates. CRUD via `/api/v1/email-snippets`. Pre-built snippets in `snippet-presets.ts` (header / footer / hero card / CTA bar / social row).
+
+## 24. Popup / exit-intent / multi-step capture widgets
+
+`CaptureSource.display: WidgetDisplayConfig` with 5 modes:
+
+- **inline** (default) — current behavior
+- **popup** — modal after `triggerDelaySeconds` or `triggerScrollPercent`; optional `triggerOnExitIntent`
+- **slide-in** — small toaster from `position: bottom-right | bottom-left | top-right | top-left`
+- **exit-intent** — fires on mouseleave (desktop) or popstate (mobile)
+- **multi-step** — collects email first, then progressive profiling on subsequent steps
+
+Per-mode controls: `dismissCooldownDays` (default 7), `suppressForSubscribedDays` (default 365), `showOnPaths` / `hideOnPaths` (glob patterns), `triggerPagesViewed`. Frequency state in `localStorage` under `pib_lc_<sourceId>_*`.
+
+- `POST /api/v1/capture-sources/[id]/progressive` — partial multi-step submits (captures email on step 1 even if user bails on step 2).
+- Admin "Display & triggers" tab in CaptureSourceEditor with live preview iframe.
+
+## 25. AMP for Email + dark mode + interactive blocks
+
+4 new AMP block types:
+
+- `amp-carousel` — multi-image slider with autoAdvance
+- `amp-accordion` — expandable FAQ sections
+- `amp-form` — capture inside the email (no click-through needed)
+- `amp-live-data` — fetch live JSON at render time
+
+HTML fallbacks for non-AMP clients (first slide, fully-expanded accordions, "Click to subscribe" buttons).
+
+- **AMP renderer:** `lib/email-builder/render-amp.ts > renderAmpEmail(doc, vars)` returns `null` if no AMP blocks (skip AMP entirely).
+- **Dark mode:** `<meta name="color-scheme" content="light dark">` + `@media (prefers-color-scheme: dark)` CSS overrides + MSO Outlook 365 `[data-ogsc]` selectors. Theme override `darkMode: 'auto' | 'force-light'`.
+- **AMP validation:** `validateAmp(ampHtml)` checks for AMP 4 Email boilerplate before send.
+
+## 26. Advanced analytics
+
+5 new endpoints + 4 new dashboard tabs:
+
+- **Cohort retention:** `GET /api/v1/email-analytics/cohort?orgId=...&from=...&to=...&weeksToShow=12` — % of each signup-week cohort engaged in each subsequent week.
+- **Revenue attribution:** `GET /api/v1/email-analytics/revenue` (overview) + `GET /revenue/[source]/[sourceId]`. Auto-attributes on deal `won` and invoice `paid`. Stored in `email_attributions` keyed by `${orgId}_${conversionId}`.
+- **Click heatmap:** `GET /api/v1/email-analytics/broadcasts/[id]/heatmap` — link-by-link click stats with position in email.
+- **Send-time matrix:** `GET /api/v1/email-analytics/send-time-matrix?orgId=...&from=...&to=...` — 7×24 grid of openRate per (day, hour) in org timezone. Includes `bestDay`/`bestHour` recommendation (min 10 samples per cell).
+- **Industry benchmarks:** `GET /api/v1/email-analytics/benchmarks?orgId=...&industry=...&from=...&to=...` — compares org's rates to industry medians (newsletter/ecommerce/saas/agency/nonprofit/b2b/media/finance/health) and to org's own 30-day rolling baseline. Reports p25/p50/p75 percentile bucket per metric.
+
+Dashboard tabs: Cohorts (heatmap table), Revenue (KPIs + topPerformingEmails + topPerformingSources), Send time (7×24 grid with best-time recommendation), Benchmarks (3-column comparison).
+
+## 27. SMS via Twilio + multi-channel sequences
+
+- **Library:** `lib/sms/twilio.ts` (SDK wrapper + `isValidE164` / `normalizeToE164` / `countSmsSegments`), `lib/sms/send.ts > sendSmsToContact` (preferences gate + suppression + activity log + stats roll-up).
+- **`Sms` collection** with same shape patterns as `emails`: direction, twilioSid, status, segmentsCount, costEstimateUsd, contactId, sequenceId, broadcastId, topicId, variantId.
+- **Contact extensions:** `phoneVerified?`, `smsOptedIn?`, `smsUnsubscribedAt?`.
+- **Suppression extended with `channel: 'email' | 'sms'`.**
+- **Multi-channel sequence steps:** `SequenceStep.channel: 'email' | 'sms'` + `smsBody`. Cron dispatches on channel.
+- **Multi-channel broadcasts:** `Broadcast.channel: 'email' | 'sms'`. SMS broadcasts use `content.bodyText` as the SMS body. A/B variants also apply to SMS.
+- **Routes:**
+  - `POST /api/v1/sms/send` — send (ad-hoc or contact-aware)
+  - `GET  /api/v1/sms` / `GET /api/v1/sms/[id]` — list/detail
+  - `POST /api/v1/sms/webhook` — PUBLIC, Twilio-signature verified. Handles STOP/HELP/START keywords (TwiML responses for HELP, suppression+confirmation for STOP).
+  - `POST /api/v1/sms/status-webhook` — PUBLIC, status callbacks (sent → delivered/failed/undelivered). Rolls up broadcast/campaign stats. Adds SMS suppression on hard-fail Twilio error codes (21610 = STOP, 21211/21408/21614/30003-30008 = hard).
+- **AI SMS generator:** `POST /api/v1/email/generate { kind: 'sms', input: { goal, voice, cta?, maxSegments? } }` — uses BRIEF_MODEL (Haiku) since SMS is short.
+- **Admin UI:** channel toggle in BroadcastEditor + sequence step editor. SMS view shows segment counter (chars · segments · GSM7/UCS2).
+- **Env required:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID`, `TWILIO_DEFAULT_FROM_NUMBER`.
+
+## v3 workflow recipe — complete world-class campaign
+
+```bash
+# 1. Create a brand kit
+PUT /api/v1/brand-kit
+{ "orgId":"acme", "logoUrl":"...", "primaryColor":"#0A0A0B", "accentColor":"#F5A623",
+  "fontFamily":"Inter, sans-serif", "footer":{ "address":"Cape Town, SA" } }
+
+# 2. Set up preferences + frequency cap
+PUT /api/v1/orgs/acme/preferences-config
+{ "topics":[{"id":"newsletter","label":"Weekly newsletter","defaultOptIn":true},
+            {"id":"product-updates","label":"Product updates","defaultOptIn":true},
+            {"id":"transactional","label":"Receipts & account","defaultOptIn":true}],
+  "defaultFrequency":"all", "enabled":true }
+
+PUT /api/v1/orgs/acme/frequency-cap
+{ "enabled":true, "maxPer7Days":5, "maxPer24Hours":2, "exemptTopics":["transactional"] }
+
+# 3. Create a popup lead-capture form
+POST /api/v1/capture-sources
+{ "orgId":"acme", "name":"Homepage exit-intent", "type":"newsletter",
+  "doubleOptIn":"on", "turnstileEnabled":true, "turnstileSiteKey":"0x4AAA...",
+  "blockDisposableEmails":true, "honeypotEnabled":true,
+  "rateLimit":{"enabled":true,"maxPerHourPerIp":10,"maxPerDayPerEmail":3},
+  "display":{ "mode":"exit-intent", "triggerOnExitIntent":true,
+    "dismissCooldownDays":7, "suppressForSubscribedDays":365 },
+  "sequenceIdsToEnroll":["seq_welcome"], "active":true }
+
+# 4. Build a behavioral segment
+POST /api/v1/crm/segments
+{ "orgId":"acme", "name":"Engaged-but-no-purchase",
+  "filters":{
+    "behavioral":[
+      { "op":"has-opened", "scope":"any-email", "withinDays":30 },
+      { "op":"has-not-clicked", "scope":"link-url", "scopeId":"checkout" }
+    ],
+    "engagement":{ "min":30 } } }
+
+# 5. AI-generate newsletter content with A/B subject variants
+POST /api/v1/email/generate
+{ "kind":"newsletter", "input":{ "topic":"April recap", "voice":<PIB_FOUNDER_VOICE>,
+  "stories":[ {"heading":"...","bodyHint":"...","ctaText":"Read","ctaUrl":"..."} ], "orgName":"Acme" } }
+POST /api/v1/email/generate { "kind":"subjects", "input":{ "topic":"April recap", "voice":<PIB_FOUNDER_VOICE>, "count":5 } }
+
+# 6. Create broadcast with local-delivery + A/B + send-time optimization
+POST /api/v1/broadcasts
+{ "orgId":"acme", "name":"April newsletter", "channel":"email", "topicId":"newsletter",
+  "audienceLocalDelivery":true, "localDeliveryWindowHours":24,
+  "content":{ "templateId":"<from step 5>" },
+  "audience":{ "segmentId":"<from step 4>","excludeUnsubscribed":true,"excludeBouncedAt":true } }
+
+PUT /api/v1/broadcasts/<id>/ab
+{ "enabled":true, "mode":"winner-only", "testCohortPercent":20, "winnerMetric":"opens",
+  "testDurationMinutes":240, "autoPromote":true,
+  "variants":[{"id":"a","weight":50,"overrides":[{"kind":"subject","subject":"<v1>"}],...},
+              {"id":"b","weight":50,"overrides":[{"kind":"subject","subject":"<v2>"}],...}] }
+
+# 7. Preflight validation
+POST /api/v1/broadcasts/<id>/preflight
+# → { passed: true, warnings: [], errors: [] }
+
+POST /api/v1/broadcasts/<id>/schedule { "scheduledFor":"2026-05-15T09:00:00+02:00" }
+POST /api/v1/broadcasts/<id>/ab/start
+
+# 8. Follow-up SMS to non-openers after 3 days (in a sequence)
+POST /api/v1/sequences
+{ "name":"April recap follow-up", "topicId":"newsletter", "status":"active",
+  "steps":[
+    { "stepNumber":1, "delayDays":3, "channel":"sms",
+      "smsBody":"Hi {{firstName}}, missed our April recap. 30sec read: {{shortUrl}}",
+      "branch":{ "rules":[{"condition":{"kind":"clicked"},"nextStepNumber":-1,"evaluateAfterDays":2}],
+                 "defaultNextStepNumber":1 } }
+  ] }
+
+# 9. Watch the funnel
+GET /api/v1/email-analytics/overview?orgId=acme&from=2026-05-01&to=2026-05-31
+GET /api/v1/email-analytics/cohort?orgId=acme&from=2026-04-01&to=2026-05-31
+GET /api/v1/email-analytics/broadcasts/<id>/heatmap
+GET /api/v1/email-analytics/benchmarks?orgId=acme&industry=newsletter
+GET /api/v1/email-analytics/send-time-matrix?orgId=acme&from=2026-04-01&to=2026-05-31
+
+# 10. Revenue attribution lands automatically when contacts convert
+# (deal stage→won OR invoice→paid triggers `recordAttribution` server-side)
+```
+
+## v3 agent patterns
+
+16. **Always check preflight before scheduling.** `POST /broadcasts/[id]/preflight` catches broken links, missing alt text, missing unsubscribe.
+17. **Use the preferences gate.** `shouldSendToContact` is the canonical "may I send?" check — your custom code should NEVER bypass it.
+18. **Suppression list is the single source of truth.** Don't query `contacts.bouncedAt` directly — `isSuppressed(orgId, email, channel?)` covers all reasons + temporary/permanent.
+19. **Multi-channel = email + SMS** in one sequence. Step 1 email, step 2 SMS, step 3 email again. Set `channel: 'sms'` + `smsBody` on the step.
+20. **Behavioral segments evaluate live.** `POST /crm/segments/preview` is your debug tool — never schedule a broadcast without checking the count.
+21. **Local delivery beats global timestamp** for newsletters. `audienceLocalDelivery: true` + `localDeliveryWindowHours: 24` sends at 9am wherever each contact is.
+22. **Branching beats linear** for nurture. After a key email, branch on opened/clicked/replied → different paths.
+23. **Goals exit aggressively.** When the goal of the sequence is achieved (deal won, demo booked), stop sending. Set `sequence.goals[]`.
+24. **A/B needs ≥100 samples per variant** before the auto-winner picks. Don't trust 5-vs-4 splits.
+25. **Industry benchmarks calibrate your reporting.** `GET /email-analytics/benchmarks` answers "is 22% open rate good?" with the right context.
+26. **Cohort retention reveals churn.** A cohort that drops from 40% engaged in week 1 to 5% by week 4 = welcome series isn't activating. Watch week-1 retention closely.
+27. **Send-time matrix > "always 9am".** After 100+ sends, `GET /send-time-matrix` shows when YOUR contacts actually open. Often surprising.
+28. **For Resend Inbound:** add the Route in the dashboard before relying on reply tracking. Point `replyTo` at the routed address.
+29. **For Twilio Webhooks:** configure inbound + status callback URLs in Messaging Service settings. `TWILIO_AUTH_TOKEN` enforces signature verification.
+30. **For Cloudflare Turnstile:** site key embeds publicly in the widget; secret key (`TURNSTILE_SECRET_KEY`) stays server-side.
+
+# Required env vars (full list)
+
+```
+# Resend
+RESEND_API_KEY=re_...
+RESEND_WEBHOOK_SECRET=whsec_...
+
+# Twilio (for SMS)
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_MESSAGING_SERVICE_SID=MG...
+TWILIO_DEFAULT_FROM_NUMBER=+27...
+
+# Cloudflare Turnstile (for lead-capture)
+TURNSTILE_SECRET_KEY=0x4AAA...
+
+# Tokens
+UNSUBSCRIBE_TOKEN_SECRET=...   # HMAC secret for unsubscribe + preferences URLs
+LEAD_CONFIRM_TOKEN_SECRET=...  # HMAC secret for DOI tokens (falls back to UNSUBSCRIBE_TOKEN_SECRET)
+
+# Cron
+CRON_SECRET=...
+
+# URLs
+NEXT_PUBLIC_APP_URL=https://partnersinbiz.online
+NEXT_PUBLIC_BASE_URL=https://partnersinbiz.online
+```

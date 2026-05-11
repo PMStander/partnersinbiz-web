@@ -64,6 +64,16 @@ export const PUT = withAuth('client', async (req: NextRequest, user: ApiUser, co
     }
   }
 
+  if (typeof body.audienceLocalDelivery === 'boolean') {
+    update.audienceLocalDelivery = body.audienceLocalDelivery
+  }
+  if (typeof body.localDeliveryWindowHours === 'number') {
+    update.localDeliveryWindowHours = Math.max(
+      1,
+      Math.min(168, Math.floor(body.localDeliveryWindowHours)),
+    )
+  }
+
   if (body.audience && typeof body.audience === 'object') {
     const a = body.audience as Partial<Broadcast['audience']>
     update.audience = {

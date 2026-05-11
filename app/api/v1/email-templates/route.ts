@@ -8,6 +8,8 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { actorFrom } from '@/lib/api/actor'
 import { validateDocument } from '@/lib/email-builder/validate'
 import { STARTER_TEMPLATES, type EmailTemplate, type TemplateCategory } from '@/lib/email-builder/templates'
+import { getBrandKitForOrg } from '@/lib/brand-kit/store'
+import { applyBrandKitToTheme } from '@/lib/brand-kit/applyToDocument'
 import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
@@ -71,12 +73,20 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) =
   const v = validateDocument(body.document)
   if (!v.ok) return apiError('Invalid document: ' + v.errors.join('; '), 400)
 
+  // Auto-apply the org's brand kit so new templates pick up colors / fonts
+  // and the org name/address/social are populated on any empty footer fields.
+  // Skipped explicitly when `applyBrandKit: false` is passed.
+  const skipBrandKit = body.applyBrandKit === false
+  const finalDocument = skipBrandKit
+    ? v.doc
+    : applyBrandKitToTheme(v.doc, await getBrandKitForOrg(orgId))
+
   const docData = {
     orgId,
     name: body.name.trim(),
     description: typeof body.description === 'string' ? body.description : '',
     category: body.category,
-    document: v.doc,
+    document: finalDocument,
     isStarter: false,
     deleted: false,
     createdAt: FieldValue.serverTimestamp(),

@@ -59,6 +59,89 @@ export const DEFAULT_WIDGET_THEME: CaptureWidgetTheme = {
   subheadingText: 'Get the latest updates straight to your inbox.',
 }
 
+export interface CaptureSourceRateLimit {
+  enabled: boolean
+  maxPerHourPerIp: number
+  maxPerDayPerEmail: number
+}
+
+export interface CaptureSourceBlockStats {
+  honeypot: number
+  rateLimit: number
+  disposable: number
+  captcha: number
+}
+
+export interface CaptureSourceStats {
+  blocked: CaptureSourceBlockStats
+}
+
+export const DEFAULT_RATE_LIMIT: CaptureSourceRateLimit = {
+  enabled: true,
+  maxPerHourPerIp: 10,
+  maxPerDayPerEmail: 3,
+}
+
+export const DEFAULT_BLOCK_STATS: CaptureSourceBlockStats = {
+  honeypot: 0,
+  rateLimit: 0,
+  disposable: 0,
+  captcha: 0,
+}
+
+// ─── Widget display modes ───────────────────────────────────────────────────
+//
+// The embed widget can render in five display modes. `inline` is the legacy
+// behaviour (form renders next to the script tag). The other four wrap the
+// same form in different presentation chrome (modal, toaster, exit-intent
+// modal, or multi-step wizard) with shared triggering + frequency rules.
+//
+// All new fields are optional so existing sources without a `display` config
+// continue to behave as inline forms.
+
+export type WidgetDisplayMode =
+  | 'inline'
+  | 'popup'
+  | 'slide-in'
+  | 'exit-intent'
+  | 'multi-step'
+
+export type WidgetPosition =
+  | 'center'
+  | 'bottom-right'
+  | 'bottom-left'
+  | 'top-right'
+  | 'top-left'
+
+export interface WidgetDisplayStep {
+  headingText: string
+  subheadingText: string
+  fields: string[]           // field keys from source.fields to show on this step
+  buttonText: string
+}
+
+export interface WidgetDisplayConfig {
+  mode: WidgetDisplayMode
+  // Popup / slide-in / exit-intent triggers
+  triggerDelaySeconds?: number             // show after N seconds on page
+  triggerScrollPercent?: number            // show after scrolling N% of page
+  triggerPagesViewed?: number              // show only after N pageviews (sessionStorage)
+  triggerOnExitIntent?: boolean            // for popup/slide-in: also fire on exit-intent
+  // Don't pester
+  dismissCooldownDays?: number             // after dismiss, suppress for N days (default 7)
+  suppressForSubscribedDays?: number       // after signup, suppress for N days (default 365)
+  showOnPaths?: string[]                   // glob patterns; empty = all pages
+  hideOnPaths?: string[]                   // glob patterns; takes precedence over showOnPaths
+  // Positioning (popup uses 'center' by default; slide-in defaults bottom-right)
+  position?: WidgetPosition
+  // Multi-step config
+  steps?: WidgetDisplayStep[]
+}
+
+export const DEFAULT_DISPLAY_CONFIG: WidgetDisplayConfig = {
+  mode: 'inline',
+}
+
 export interface CaptureSource {
   id: string
   orgId: string
@@ -79,6 +162,17 @@ export interface CaptureSource {
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
   deleted?: boolean
+
+  // Spam protection
+  turnstileEnabled: boolean          // gate submissions behind Cloudflare Turnstile
+  turnstileSiteKey: string           // public site key, safe to embed in widget JS
+  honeypotEnabled: boolean           // default true — adds a hidden _hp field, silent reject if filled
+  blockDisposableEmails: boolean     // reject mailinator.com / tempmail / etc.
+  rateLimit: CaptureSourceRateLimit
+  stats?: CaptureSourceStats         // counter of blocked attempts by reason
+
+  // Widget display + triggers (optional — absence means classic inline mode)
+  display?: WidgetDisplayConfig
 }
 
 export type CaptureSourceInput = Omit<
@@ -99,6 +193,12 @@ export interface CaptureSubmission {
   userAgent: string
   referer: string
   createdAt: Timestamp | null
+  // Multi-step / progressive profiling — present when the submission was
+  // created by a multi-step widget. `currentStep` is the last step the user
+  // completed (0-indexed). `completedSteps` is true once the final step has
+  // been posted (auto-enroll + DOI fire on that transition).
+  currentStep?: number
+  completedSteps?: boolean
 }
 
 export const VALID_CAPTURE_TYPES: CaptureSourceType[] = [

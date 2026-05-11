@@ -19,6 +19,8 @@ import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import { validateBroadcastForSend } from '@/lib/broadcasts/validate'
+import { runPreflight } from '@/lib/email/preflight'
+import { preflightInputForBroadcast } from '@/lib/email/preflight-source'
 import type { Broadcast } from '@/lib/broadcasts/types'
 import type { ApiUser } from '@/lib/api/types'
 
@@ -55,10 +57,39 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser, c
     return apiError('Validation failed', 422, { issues: validation.issues })
   }
 
+  // Preflight quality gate. `force: true` in the body skips errors but logs
+  // them on the broadcast for audit purposes. Warnings never block.
+  const force = body.force === true
+  const preflightInput = await preflightInputForBroadcast(broadcast)
+  const preflight = await runPreflight(preflightInput)
+  if (!preflight.pass && !force) {
+    return apiError('Preflight failed', 422, {
+      error: 'Preflight failed',
+      issues: preflight.issues,
+      report: preflight,
+    })
+  }
+  if (!preflight.pass && force) {
+    // Audit the override — never silent.
+    console.warn(
+      '[broadcast/schedule] force=true bypass with',
+      preflight.errorCount,
+      'errors on broadcast',
+      id,
+    )
+  }
+
   await ref.update({
     status: 'scheduled',
     scheduledFor: Timestamp.fromDate(scheduledDate),
     'stats.audienceSize': validation.audienceSize,
+    lastPreflight: {
+      pass: preflight.pass,
+      errorCount: preflight.errorCount,
+      warningCount: preflight.warningCount,
+      forced: !preflight.pass && force,
+      scannedAt: preflight.scannedAt,
+    },
     ...lastActorFrom(user),
     updatedAt: FieldValue.serverTimestamp(),
   })
@@ -68,5 +99,6 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser, c
     status: 'scheduled',
     scheduledFor: scheduledDate.toISOString(),
     audienceSize: validation.audienceSize,
+    preflight: { pass: preflight.pass, warningCount: preflight.warningCount },
   })
 })

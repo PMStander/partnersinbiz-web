@@ -16,6 +16,7 @@ import type {
   EnrollmentStatus,
 } from '@/lib/sequences/types'
 import type { Contact } from '@/lib/crm/types'
+import { dayOfWeekInTimezone, hourInTimezone } from '@/lib/email/send-time'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -140,6 +141,58 @@ export interface OrgComparisonRow {
   openRate: number
   clickRate: number
   bounceRate: number
+}
+
+// ── Cohort retention ────────────────────────────────────────────────────────
+
+export interface CohortRow {
+  cohortStart: string // ISO date (Monday of the week)
+  cohortSize: number // contacts created in this week
+  weekIndex: number[] // [0, 1, 2, 3, ...] — weeks since signup
+  // For each weekIndex, what % of cohort still engaged (had an open/click in that week)?
+  retentionPercent: number[] // parallel array to weekIndex
+}
+
+export interface CohortAnalysis {
+  range: { from: string; to: string }
+  weeksToShow: number
+  cohorts: CohortRow[]
+}
+
+// ── Click heatmap (per-broadcast) ───────────────────────────────────────────
+
+export interface LinkClickStat {
+  url: string
+  clicks: number
+  uniqueClicks: number // distinct contacts
+  percentOfTotalClicks: number // share of total clicks in this broadcast
+  positionInEmail?: number // 1-based index of this link in the email body
+}
+
+export interface BroadcastHeatmap {
+  broadcastId: string
+  totalClicks: number
+  linkStats: LinkClickStat[] // sorted by clicks desc
+}
+
+// ── Send-time matrix ────────────────────────────────────────────────────────
+
+export interface SendTimeCell {
+  sent: number
+  opened: number
+  openRate: number
+}
+
+export interface SendTimeMatrix {
+  // 7 days x 24 hours = 168 cells. Each cell: { sent, opened, openRate }
+  // dayOfWeek: 0=Sun..6=Sat. hour: 0-23. Stored in the ORG's timezone.
+  cells: SendTimeCell[][] // [dayOfWeek][hour]
+  bestDay: number
+  bestHour: number
+  worstDay: number
+  worstHour: number
+  totalSamples: number
+  timezone: string
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -861,4 +914,467 @@ export async function getPlatformLeaderboard(range: DateRange): Promise<OrgCompa
     })
   }
   return rows.sort((a, b) => b.sent - a.sent)
+}
+
+// ── Cohort retention ────────────────────────────────────────────────────────
+
+const MAX_COHORT_SIZE = 5000
+const FIRESTORE_IN_LIMIT = 30
+
+/**
+ * Returns the UTC Monday at 00:00:00 for the ISO-week containing `ms`.
+ */
+function isoWeekStartUtc(ms: number): Date {
+  const d = new Date(ms)
+  const day = (d.getUTCDay() + 6) % 7 // 0..6, Monday=0
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day, 0, 0, 0, 0),
+  )
+}
+
+function isoDateKey(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Cohort retention curves. Groups contacts by signup-week (ISO Monday) within
+ * the range, then for each week-index since signup computes the fraction of
+ * cohort members who had an open or click in that calendar week.
+ *
+ * Capped at 5000 contacts per cohort to keep query fan-out under control.
+ */
+export async function getCohortAnalysis(
+  orgId: string,
+  range: DateRange,
+  weeksToShow = 12,
+): Promise<CohortAnalysis> {
+  const safeWeeks = Math.max(1, Math.min(52, weeksToShow))
+
+  // Pull contacts created within the range.
+  let contacts: Contact[] = []
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const snap: any = await (adminDb.collection('contacts') as any)
+      .where('orgId', '==', orgId)
+      .where('createdAt', '>=', Timestamp.fromDate(range.from))
+      .where('createdAt', '<', Timestamp.fromDate(range.to))
+      .get()
+    contacts = snap.docs
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((d: any) => ({ id: d.id, ...d.data() } as Contact))
+      .filter((c: Contact) => c.deleted !== true)
+  } catch {
+    // Missing composite index — fall back to scan.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const snap: any = await (adminDb.collection('contacts') as any)
+      .where('orgId', '==', orgId)
+      .limit(20_000)
+      .get()
+    const { fromMs, toMs } = rangeToMillis(range)
+    contacts = snap.docs
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((d: any) => ({ id: d.id, ...d.data() } as Contact))
+      .filter((c: Contact) => {
+        if (c.deleted === true) return false
+        const ms = tsToMs(c.createdAt)
+        return ms !== null && ms >= fromMs && ms < toMs
+      })
+  }
+
+  if (contacts.length === 0) {
+    return {
+      range: { from: toIso(range.from), to: toIso(range.to) },
+      weeksToShow: safeWeeks,
+      cohorts: [],
+    }
+  }
+
+  // Group by ISO-week start (UTC Monday).
+  const cohortMap = new Map<string, { start: Date; members: Contact[] }>()
+  for (const c of contacts) {
+    const ms = tsToMs(c.createdAt)
+    if (ms === null) continue
+    const startDate = isoWeekStartUtc(ms)
+    const key = isoDateKey(startDate)
+    const slot = cohortMap.get(key) ?? { start: startDate, members: [] }
+    if (slot.members.length < MAX_COHORT_SIZE) slot.members.push(c)
+    cohortMap.set(key, slot)
+  }
+
+  const sortedCohorts = Array.from(cohortMap.values()).sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  )
+
+  // For each cohort, fetch emails for its members and bucket engagement by week.
+  const result: CohortRow[] = []
+  const nowMs = Date.now()
+  for (const cohort of sortedCohorts) {
+    const cohortIds = cohort.members.map((m) => m.id)
+    const cohortSize = cohortIds.length
+
+    // Determine how many weeks of data we actually have for this cohort.
+    const weeksElapsed = Math.min(
+      safeWeeks,
+      Math.max(
+        0,
+        Math.floor((nowMs - cohort.start.getTime()) / (7 * DAY_MS)) + 1,
+      ),
+    )
+
+    if (weeksElapsed === 0 || cohortSize === 0) {
+      result.push({
+        cohortStart: isoDateKey(cohort.start),
+        cohortSize,
+        weekIndex: [],
+        retentionPercent: [],
+      })
+      continue
+    }
+
+    // For each week-index, track distinct contactIds that engaged.
+    const engagedPerWeek: Set<string>[] = []
+    for (let i = 0; i < weeksElapsed; i++) engagedPerWeek.push(new Set<string>())
+
+    const cohortEndMs = cohort.start.getTime() + weeksElapsed * 7 * DAY_MS
+
+    // Chunk contactIds into groups of 30 for Firestore `in` queries. We can
+    // filter by orgId + contactId-in-chunk AND a time bound — but since the
+    // SDK only supports a single `in` per query, we additionally filter by
+    // openedAt/clickedAt timestamps in-memory.
+    for (let i = 0; i < cohortIds.length; i += FIRESTORE_IN_LIMIT) {
+      const chunk = cohortIds.slice(i, i + FIRESTORE_IN_LIMIT)
+      if (chunk.length === 0) continue
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const snap: any = await (adminDb.collection('emails') as any)
+        .where('orgId', '==', orgId)
+        .where('contactId', 'in', chunk)
+        .where('sentAt', '>=', Timestamp.fromDate(cohort.start))
+        .where('sentAt', '<', Timestamp.fromDate(new Date(cohortEndMs)))
+        .limit(MAX_EMAILS_PER_QUERY)
+        .get()
+
+      for (const doc of snap.docs) {
+        const e = { id: doc.id, ...doc.data() } as Email
+        if (e.deleted === true) continue
+        if (!e.contactId) continue
+        // Use the engagement timestamp (open or click). If neither, skip —
+        // we're measuring retention via engagement, not raw sends.
+        const engagedMs = tsToMs(e.openedAt) ?? tsToMs(e.clickedAt)
+        if (engagedMs === null) continue
+        const weekIdx = Math.floor((engagedMs - cohort.start.getTime()) / (7 * DAY_MS))
+        if (weekIdx < 0 || weekIdx >= weeksElapsed) continue
+        engagedPerWeek[weekIdx].add(e.contactId)
+      }
+    }
+
+    const weekIndex: number[] = []
+    const retentionPercent: number[] = []
+    for (let i = 0; i < weeksElapsed; i++) {
+      weekIndex.push(i)
+      const pct =
+        cohortSize > 0 ? Math.round((engagedPerWeek[i].size / cohortSize) * 10_000) / 10_000 : 0
+      retentionPercent.push(pct)
+    }
+
+    result.push({
+      cohortStart: isoDateKey(cohort.start),
+      cohortSize,
+      weekIndex,
+      retentionPercent,
+    })
+  }
+
+  return {
+    range: { from: toIso(range.from), to: toIso(range.to) },
+    weeksToShow: safeWeeks,
+    cohorts: result,
+  }
+}
+
+// ── Click heatmap (per-broadcast) ───────────────────────────────────────────
+
+/**
+ * Parse `<a href="...">` URLs in order from an HTML email body. 1-based
+ * positions are returned for each unique URL.
+ */
+function extractLinkPositions(html: string): Map<string, number> {
+  const positions = new Map<string, number>()
+  const re = /<a\b[^>]*\bhref\s*=\s*"([^"]+)"/gi
+  let m: RegExpExecArray | null
+  let pos = 0
+  while ((m = re.exec(html)) !== null) {
+    pos += 1
+    const url = m[1].trim()
+    if (!positions.has(url)) positions.set(url, pos)
+  }
+  return positions
+}
+
+/**
+ * Per-broadcast link click heatmap. Uses the `shortened_links` collection's
+ * per-link `clicks` subcollection where possible, falls back to body-href
+ * parsing + per-email `clickedAt` aggregation when the broadcast didn't use
+ * shortened links.
+ */
+export async function getBroadcastHeatmap(
+  orgId: string,
+  broadcastId: string,
+): Promise<BroadcastHeatmap> {
+  const bSnap = await adminDb.collection('broadcasts').doc(broadcastId).get()
+  if (!bSnap.exists || bSnap.data()?.deleted === true || bSnap.data()?.orgId !== orgId) {
+    throw new Error('Broadcast not found')
+  }
+  const broadcast = { id: bSnap.id, ...bSnap.data() } as Broadcast
+  const bodyHtml = broadcast.content?.bodyHtml ?? ''
+  const positions = extractLinkPositions(bodyHtml)
+
+  // Find shortened links whose shortCode/shortUrl appears in the broadcast body.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const linksSnap: any = await (adminDb.collection('shortened_links') as any)
+    .where('orgId', '==', orgId)
+    .get()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const referencedLinks = linksSnap.docs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((d: any) => ({ id: d.id, ...d.data() }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((l: any) => {
+      if (!bodyHtml) return false
+      return (
+        (l.shortCode && bodyHtml.includes(l.shortCode)) ||
+        (l.shortUrl && bodyHtml.includes(l.shortUrl))
+      )
+    })
+
+  // Send window — earliest sentAt for this broadcast → +30 days. Used so
+  // per-link click rollups don't include unrelated background traffic.
+  const startMs =
+    tsToMs(broadcast.sendStartedAt) ??
+    tsToMs(broadcast.scheduledFor) ??
+    tsToMs(broadcast.createdAt) ??
+    Date.now() - 90 * DAY_MS
+  const windowEndMs = startMs + 60 * DAY_MS
+
+  // Get the set of contactIds that received this broadcast (for unique counts
+  // and to filter shortened-link clicks back to this broadcast).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const emailsSnap: any = await (adminDb.collection('emails') as any)
+    .where('orgId', '==', orgId)
+    .where('broadcastId', '==', broadcastId)
+    .limit(MAX_EMAILS_PER_QUERY)
+    .get()
+  const recipientIds = new Set<string>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const doc of emailsSnap.docs) {
+    const e = { id: doc.id, ...doc.data() } as Email
+    if (e.deleted === true) continue
+    if (e.contactId) recipientIds.add(e.contactId)
+  }
+
+  // Tally clicks per URL.
+  type Agg = { clicks: number; uniqueContactIds: Set<string> }
+  const perUrl = new Map<string, Agg>()
+
+  // Helper to add a click.
+  const addClick = (url: string, contactId?: string | null) => {
+    const a = perUrl.get(url) ?? { clicks: 0, uniqueContactIds: new Set<string>() }
+    a.clicks += 1
+    if (contactId) a.uniqueContactIds.add(contactId)
+    perUrl.set(url, a)
+  }
+
+  // Pull per-link click subcollection for each referenced shortened link.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const link of referencedLinks) {
+    const url = (link.originalUrl as string) ?? ''
+    if (!url) continue
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const clicksSnap: any = await (adminDb
+        .collection('shortened_links')
+        .doc(link.id)
+        .collection('clicks') as any)
+        .where('timestamp', '>=', Timestamp.fromDate(new Date(startMs)))
+        .where('timestamp', '<', Timestamp.fromDate(new Date(windowEndMs)))
+        .limit(MAX_EMAILS_PER_QUERY)
+        .get()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const c of clicksSnap.docs) {
+        const data = c.data()
+        const cid: string | undefined = data?.contactId
+        // If we can't attribute to a contact, still count the click but
+        // only if the click happened in the broadcast send window (we already
+        // constrained timestamps above).
+        if (cid && !recipientIds.has(cid)) continue
+        addClick(url, cid ?? null)
+      }
+    } catch {
+      // Subcollection query may fail without an index — fall back to
+      // counting the link's total clickCount in the window. We can't filter
+      // by date precisely without the subcollection, so we approximate with
+      // 1 unique per recipient who clicked any email in the broadcast.
+      const fallbackClicks = typeof link.clickCount === 'number' ? link.clickCount : 0
+      if (fallbackClicks > 0) addClick(url)
+    }
+  }
+
+  // For broadcast bodies that don't use shortened links, fall back to
+  // counting `clickedAt` per email and attributing a single click to the
+  // first `<a href>` we find in the body.
+  if (perUrl.size === 0 && positions.size > 0) {
+    let totalClickedEmails = 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const doc of emailsSnap.docs) {
+      const e = { id: doc.id, ...doc.data() } as Email
+      if (e.deleted === true) continue
+      if (!e.clickedAt) continue
+      totalClickedEmails += 1
+    }
+    if (totalClickedEmails > 0) {
+      // Distribute clicks across the body's <a href> tags using the position
+      // as a weight — top links get more credit. This is a reasonable
+      // heuristic when we lack per-link granularity.
+      const urls = Array.from(positions.entries()).sort((a, b) => a[1] - b[1])
+      const weights = urls.map((_, i) => urls.length - i) // top link weight=N
+      const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
+      for (let i = 0; i < urls.length; i++) {
+        const [url] = urls[i]
+        const share = Math.round((totalClickedEmails * weights[i]) / totalWeight)
+        if (share > 0) {
+          perUrl.set(url, {
+            clicks: share,
+            uniqueContactIds: new Set<string>(),
+          })
+        }
+      }
+    }
+  }
+
+  const totalClicks = Array.from(perUrl.values()).reduce((s, v) => s + v.clicks, 0)
+  const linkStats: LinkClickStat[] = Array.from(perUrl.entries())
+    .map(([url, v]) => ({
+      url,
+      clicks: v.clicks,
+      uniqueClicks: v.uniqueContactIds.size,
+      percentOfTotalClicks: totalClicks > 0 ? Math.round((v.clicks / totalClicks) * 10_000) / 10_000 : 0,
+      positionInEmail: positions.get(url),
+    }))
+    .sort((a, b) => b.clicks - a.clicks)
+
+  return { broadcastId, totalClicks, linkStats }
+}
+
+// ── Send-time matrix ────────────────────────────────────────────────────────
+
+const SEND_TIME_MIN_SAMPLES = 10
+
+/**
+ * 7x24 send-time grid. For each (dayOfWeek, hour) bucket in the org timezone
+ * we count sends + opens, and pick best/worst cells (with a min-sample
+ * threshold so noisy 1-sample cells don't dominate).
+ */
+export async function getSendTimeMatrix(
+  orgId: string,
+  range: DateRange,
+): Promise<SendTimeMatrix> {
+  // Read org timezone (best-effort).
+  let timezone = 'UTC'
+  try {
+    const orgSnap = await adminDb.collection('organizations').doc(orgId).get()
+    const data = orgSnap.data()
+    const tz = data?.settings?.timezone
+    if (typeof tz === 'string' && tz.trim()) timezone = tz.trim()
+  } catch {
+    // Default to UTC.
+  }
+
+  const emails = await fetchEmailsInRange(orgId, range)
+
+  // Initialise 7x24 cells.
+  const cells: SendTimeCell[][] = Array.from({ length: 7 }, () =>
+    Array.from({ length: 24 }, () => ({ sent: 0, opened: 0, openRate: 0 })),
+  )
+
+  let totalSamples = 0
+  for (const e of emails) {
+    const sentMs = tsToMs(e.sentAt)
+    if (sentMs === null) continue
+    const utc = new Date(sentMs)
+    let dow = 0
+    let hr = 0
+    try {
+      dow = dayOfWeekInTimezone(utc, timezone)
+      hr = hourInTimezone(utc, timezone)
+    } catch {
+      // Fallback to UTC if Intl rejects the timezone for some reason.
+      dow = utc.getUTCDay()
+      hr = utc.getUTCHours()
+    }
+    if (dow < 0 || dow > 6 || hr < 0 || hr > 23) continue
+    cells[dow][hr].sent += 1
+    if (emailIsOpened(e)) cells[dow][hr].opened += 1
+    totalSamples += 1
+  }
+
+  // Compute open rates.
+  for (let d = 0; d < 7; d++) {
+    for (let h = 0; h < 24; h++) {
+      const c = cells[d][h]
+      c.openRate = safeRate(c.opened, c.sent)
+    }
+  }
+
+  // Find best/worst cells. Require min samples to qualify.
+  let bestDay = 0
+  let bestHour = 0
+  let worstDay = 0
+  let worstHour = 0
+  let bestRate = -1
+  let worstRate = 2 // any rate ≤ 1 will undercut this
+  let foundBest = false
+  let foundWorst = false
+  for (let d = 0; d < 7; d++) {
+    for (let h = 0; h < 24; h++) {
+      const c = cells[d][h]
+      if (c.sent < SEND_TIME_MIN_SAMPLES) continue
+      if (c.openRate > bestRate) {
+        bestRate = c.openRate
+        bestDay = d
+        bestHour = h
+        foundBest = true
+      }
+      if (c.openRate < worstRate) {
+        worstRate = c.openRate
+        worstDay = d
+        worstHour = h
+        foundWorst = true
+      }
+    }
+  }
+
+  // If no cell met the threshold, fall back to the cell with the most sends.
+  if (!foundBest || !foundWorst) {
+    let maxSent = -1
+    for (let d = 0; d < 7; d++) {
+      for (let h = 0; h < 24; h++) {
+        if (cells[d][h].sent > maxSent) {
+          maxSent = cells[d][h].sent
+          bestDay = d
+          bestHour = h
+        }
+      }
+    }
+    worstDay = bestDay
+    worstHour = bestHour
+  }
+
+  return {
+    cells,
+    bestDay,
+    bestHour,
+    worstDay,
+    worstHour,
+    totalSamples,
+    timezone,
+  }
 }

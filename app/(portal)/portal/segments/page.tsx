@@ -1,7 +1,14 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import type {
+  BehavioralRule,
+  EngagementScoreRule,
+} from '@/lib/crm/segments'
+import { BehavioralRuleEditor } from '@/components/admin/segments/BehavioralRuleEditor'
+import { EngagementRuleEditor } from '@/components/admin/segments/EngagementRuleEditor'
+import { PREDEFINED_SEGMENTS } from '@/lib/crm/predefined-segments'
 
 const STAGES = ['', 'new', 'contacted', 'replied', 'demo', 'proposal', 'won', 'lost']
 const TYPES = ['', 'lead', 'prospect', 'client', 'churned']
@@ -13,6 +20,8 @@ interface SegmentFilters {
   stage?: string
   type?: string
   source?: string
+  behavioral?: BehavioralRule[]
+  engagement?: EngagementScoreRule
 }
 
 interface Segment {
@@ -30,6 +39,8 @@ interface FormState {
   stage: string
   type: string
   source: string
+  behavioral: BehavioralRule[]
+  engagement: EngagementScoreRule | null
 }
 
 const EMPTY_FORM: FormState = {
@@ -39,6 +50,8 @@ const EMPTY_FORM: FormState = {
   stage: '',
   type: '',
   source: '',
+  behavioral: [],
+  engagement: null,
 }
 
 function filtersFromForm(f: FormState): SegmentFilters {
@@ -51,6 +64,8 @@ function filtersFromForm(f: FormState): SegmentFilters {
   if (f.stage) filters.stage = f.stage
   if (f.type) filters.type = f.type
   if (f.source) filters.source = f.source
+  if (f.behavioral.length) filters.behavioral = f.behavioral
+  if (f.engagement) filters.engagement = f.engagement
   return filters
 }
 
@@ -62,6 +77,8 @@ function formFromSegment(s: Segment): FormState {
     stage: s.filters?.stage ?? '',
     type: s.filters?.type ?? '',
     source: s.filters?.source ?? '',
+    behavioral: Array.isArray(s.filters?.behavioral) ? s.filters.behavioral : [],
+    engagement: s.filters?.engagement ?? null,
   }
 }
 
@@ -197,6 +214,25 @@ export default function PortalSegmentsPage() {
     }
   }
 
+  function applyTemplate(presetId: string, target: 'new' | 'edit') {
+    const preset = PREDEFINED_SEGMENTS.find((p) => p.id === presetId)
+    if (!preset) return
+    const setForm = target === 'new' ? setNewForm : setEditForm
+    const cur = target === 'new' ? newForm : editForm
+    setForm({
+      ...cur,
+      name: cur.name || preset.name,
+      description: cur.description || preset.description,
+      tags: (preset.filters.tags ?? []).join(', '),
+      stage: preset.filters.stage ?? '',
+      type: preset.filters.type ?? '',
+      source: preset.filters.source ?? '',
+      behavioral: preset.filters.behavioral ?? [],
+      engagement: preset.filters.engagement ?? null,
+    })
+    if (target === 'new') setShowNew(true)
+  }
+
   const renderForm = (
     form: FormState,
     setForm: (f: FormState) => void,
@@ -205,8 +241,33 @@ export default function PortalSegmentsPage() {
     saving: boolean,
     error: string,
     submitLabel: string,
+    target: 'new' | 'edit',
   ) => (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-5">
+      {/* Template picker */}
+      <div className="space-y-1">
+        <label className="text-[10px] uppercase tracking-widest text-[var(--color-pib-text-muted)] font-mono">
+          Use template
+        </label>
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) applyTemplate(e.target.value, target)
+            e.target.value = ''
+          }}
+          className="pib-input w-full md:w-72"
+        >
+          <option value="" className="bg-black">
+            — Choose a recipe —
+          </option>
+          {PREDEFINED_SEGMENTS.map((p) => (
+            <option key={p.id} value={p.id} className="bg-black">
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] uppercase tracking-widest text-[var(--color-pib-text-muted)] font-mono">
@@ -291,6 +352,15 @@ export default function PortalSegmentsPage() {
           </select>
         </div>
       </div>
+
+      <BehavioralBlock
+        rules={form.behavioral}
+        engagement={form.engagement}
+        filters={filtersFromForm(form)}
+        onRulesChange={(rules) => setForm({ ...form, behavioral: rules })}
+        onEngagementChange={(e) => setForm({ ...form, engagement: e })}
+      />
+
       {error && (
         <p className="text-[11px]" style={{ color: 'var(--color-pib-danger, #FCA5A5)' }}>
           {error}
@@ -315,7 +385,8 @@ export default function PortalSegmentsPage() {
           <div>
             <h1 className="pib-page-title">Segments</h1>
             <p className="pib-page-sub max-w-2xl">
-              Save reusable filters across your contact base — slice by tag, stage, type, or source.
+              Save reusable filters across your contact base — slice by tag, stage, type, source,
+              or email engagement.
             </p>
           </div>
           {!showNew && (
@@ -343,6 +414,7 @@ export default function PortalSegmentsPage() {
             savingNew,
             newError,
             'Create segment',
+            'new',
           )}
         </section>
       )}
@@ -378,6 +450,12 @@ export default function PortalSegmentsPage() {
             if (s.filters?.type) filterChips.push(`type: ${s.filters.type}`)
             if (s.filters?.source) filterChips.push(`source: ${s.filters.source}`)
             if (s.filters?.tags?.length) filterChips.push(`tags: ${s.filters.tags.join(', ')}`)
+            if (s.filters?.behavioral?.length) {
+              filterChips.push(
+                `${s.filters.behavioral.length} behavioral rule${s.filters.behavioral.length === 1 ? '' : 's'}`,
+              )
+            }
+            if (s.filters?.engagement) filterChips.push('engagement score')
 
             return (
               <div key={s.id} className="bento-card !p-5">
@@ -392,6 +470,7 @@ export default function PortalSegmentsPage() {
                       savingEdit,
                       editError,
                       'Save changes',
+                      'edit',
                     )}
                   </div>
                 ) : (
@@ -439,6 +518,76 @@ export default function PortalSegmentsPage() {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+interface BehavioralBlockProps {
+  rules: BehavioralRule[]
+  engagement: EngagementScoreRule | null
+  filters: SegmentFilters
+  onRulesChange: (rules: BehavioralRule[]) => void
+  onEngagementChange: (rule: EngagementScoreRule | null) => void
+}
+
+/**
+ * Wraps the two behavioral editors and runs a debounced live preview hitting
+ * /api/v1/crm/segments/preview every time the filter shape changes.
+ */
+function BehavioralBlock({
+  rules,
+  engagement,
+  filters,
+  onRulesChange,
+  onEngagementChange,
+}: BehavioralBlockProps) {
+  const [liveCount, setLiveCount] = useState<number | null>(null)
+  const [liveLoading, setLiveLoading] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reqIdRef = useRef(0)
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(async () => {
+      const myId = ++reqIdRef.current
+      setLiveLoading(true)
+      try {
+        const res = await fetch('/api/v1/crm/segments/preview', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ filters }),
+        })
+        if (!res.ok) {
+          if (reqIdRef.current === myId) setLiveCount(null)
+          return
+        }
+        const body = await res.json()
+        const count = body?.data?.count ?? body?.count
+        if (reqIdRef.current === myId && typeof count === 'number') {
+          setLiveCount(count)
+        }
+      } catch {
+        if (reqIdRef.current === myId) setLiveCount(null)
+      } finally {
+        if (reqIdRef.current === myId) setLiveLoading(false)
+      }
+    }, 500)
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+    // Re-run whenever the JSON-shape of filters changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(filters)])
+
+  return (
+    <div className="space-y-5 pt-2 border-t border-[var(--color-pib-line)]">
+      <BehavioralRuleEditor
+        rules={rules}
+        onChange={onRulesChange}
+        liveCount={liveCount}
+        liveCountLoading={liveLoading}
+      />
+      <EngagementRuleEditor rule={engagement} onChange={onEngagementChange} />
     </div>
   )
 }

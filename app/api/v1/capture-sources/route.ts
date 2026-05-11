@@ -19,14 +19,107 @@ import type { ApiUser } from '@/lib/api/types'
 import {
   CaptureSource,
   DEFAULT_WIDGET_THEME,
+  DEFAULT_RATE_LIMIT,
+  DEFAULT_BLOCK_STATS,
+  DEFAULT_DISPLAY_CONFIG,
   LEAD_CAPTURE_SOURCES,
   VALID_CAPTURE_TYPES,
   VALID_FIELD_TYPES,
   type CaptureField,
+  type CaptureSourceRateLimit,
   type CaptureSourceType,
   type CaptureWidgetTheme,
   type DoubleOptInMode,
+  type WidgetDisplayConfig,
+  type WidgetDisplayMode,
+  type WidgetDisplayStep,
+  type WidgetPosition,
 } from '@/lib/lead-capture/types'
+
+const VALID_DISPLAY_MODES: WidgetDisplayMode[] = [
+  'inline',
+  'popup',
+  'slide-in',
+  'exit-intent',
+  'multi-step',
+]
+const VALID_POSITIONS: WidgetPosition[] = [
+  'center',
+  'bottom-right',
+  'bottom-left',
+  'top-right',
+  'top-left',
+]
+
+function sanitizeDisplaySteps(input: unknown): WidgetDisplayStep[] {
+  if (!Array.isArray(input)) return []
+  return input
+    .map((raw): WidgetDisplayStep | null => {
+      if (!raw || typeof raw !== 'object') return null
+      const r = raw as Record<string, unknown>
+      const headingText = typeof r.headingText === 'string' ? r.headingText : ''
+      const subheadingText = typeof r.subheadingText === 'string' ? r.subheadingText : ''
+      const buttonText = typeof r.buttonText === 'string' && r.buttonText.trim()
+        ? r.buttonText.trim()
+        : 'Continue'
+      const fieldsArr = Array.isArray(r.fields)
+        ? r.fields.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+        : []
+      return { headingText, subheadingText, buttonText, fields: fieldsArr }
+    })
+    .filter((s): s is WidgetDisplayStep => s !== null)
+}
+
+function sanitizeDisplay(input: unknown): WidgetDisplayConfig {
+  if (!input || typeof input !== 'object') return { ...DEFAULT_DISPLAY_CONFIG }
+  const r = input as Record<string, unknown>
+  const mode = (typeof r.mode === 'string' ? r.mode : 'inline') as WidgetDisplayMode
+  const safeMode = VALID_DISPLAY_MODES.includes(mode) ? mode : 'inline'
+  const out: WidgetDisplayConfig = { mode: safeMode }
+  if (typeof r.triggerDelaySeconds === 'number' && r.triggerDelaySeconds >= 0 && r.triggerDelaySeconds <= 3600) {
+    out.triggerDelaySeconds = Math.floor(r.triggerDelaySeconds)
+  }
+  if (typeof r.triggerScrollPercent === 'number' && r.triggerScrollPercent >= 0 && r.triggerScrollPercent <= 100) {
+    out.triggerScrollPercent = Math.floor(r.triggerScrollPercent)
+  }
+  if (typeof r.triggerPagesViewed === 'number' && r.triggerPagesViewed >= 0 && r.triggerPagesViewed <= 1000) {
+    out.triggerPagesViewed = Math.floor(r.triggerPagesViewed)
+  }
+  if (typeof r.triggerOnExitIntent === 'boolean') out.triggerOnExitIntent = r.triggerOnExitIntent
+  if (typeof r.dismissCooldownDays === 'number' && r.dismissCooldownDays >= 0 && r.dismissCooldownDays <= 3650) {
+    out.dismissCooldownDays = Math.floor(r.dismissCooldownDays)
+  }
+  if (typeof r.suppressForSubscribedDays === 'number' && r.suppressForSubscribedDays >= 0 && r.suppressForSubscribedDays <= 3650) {
+    out.suppressForSubscribedDays = Math.floor(r.suppressForSubscribedDays)
+  }
+  if (Array.isArray(r.showOnPaths)) {
+    out.showOnPaths = r.showOnPaths.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+  }
+  if (Array.isArray(r.hideOnPaths)) {
+    out.hideOnPaths = r.hideOnPaths.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+  }
+  if (typeof r.position === 'string' && VALID_POSITIONS.includes(r.position as WidgetPosition)) {
+    out.position = r.position as WidgetPosition
+  }
+  if (r.steps !== undefined) out.steps = sanitizeDisplaySteps(r.steps)
+  return out
+}
+
+function sanitizeRateLimit(input: unknown): CaptureSourceRateLimit {
+  if (!input || typeof input !== 'object') return { ...DEFAULT_RATE_LIMIT }
+  const r = input as Record<string, unknown>
+  return {
+    enabled: typeof r.enabled === 'boolean' ? r.enabled : DEFAULT_RATE_LIMIT.enabled,
+    maxPerHourPerIp:
+      typeof r.maxPerHourPerIp === 'number' && r.maxPerHourPerIp > 0
+        ? Math.floor(r.maxPerHourPerIp)
+        : DEFAULT_RATE_LIMIT.maxPerHourPerIp,
+    maxPerDayPerEmail:
+      typeof r.maxPerDayPerEmail === 'number' && r.maxPerDayPerEmail > 0
+        ? Math.floor(r.maxPerDayPerEmail)
+        : DEFAULT_RATE_LIMIT.maxPerDayPerEmail,
+  }
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -150,6 +243,16 @@ export const POST = withAuth(
       notifyEmails: strArray(body.notifyEmails),
       widgetTheme: sanitizeTheme(body.widgetTheme),
       active: body.active === false ? false : true,
+      // Spam protection defaults — secure-by-default, requires explicit opt-in
+      // for Turnstile only (which needs a site key).
+      turnstileEnabled: body.turnstileEnabled === true,
+      turnstileSiteKey:
+        typeof body.turnstileSiteKey === 'string' ? body.turnstileSiteKey.trim() : '',
+      honeypotEnabled: body.honeypotEnabled === false ? false : true,
+      blockDisposableEmails: body.blockDisposableEmails === false ? false : true,
+      rateLimit: sanitizeRateLimit(body.rateLimit),
+      stats: { blocked: { ...DEFAULT_BLOCK_STATS } },
+      display: sanitizeDisplay(body.display),
       ...actorFrom(user),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

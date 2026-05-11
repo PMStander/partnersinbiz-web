@@ -10,31 +10,13 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import type { SegmentFilters } from '@/lib/crm/segments'
+import { sanitizeSegmentFilters } from '@/lib/crm/segments'
 
 const ARRAY_CONTAINS_ANY_LIMIT = 10
 
 type Params = { params: Promise<{ id: string }> }
 
-function sanitizeFilters(input: unknown): SegmentFilters {
-  const f = (input ?? {}) as Record<string, unknown>
-  const filters: SegmentFilters = {}
-  if (Array.isArray(f.tags)) {
-    filters.tags = f.tags.filter((t): t is string => typeof t === 'string' && !!t)
-  }
-  if (Array.isArray(f.capturedFromIds)) {
-    filters.capturedFromIds = f.capturedFromIds.filter(
-      (t): t is string => typeof t === 'string' && !!t,
-    )
-  }
-  if (typeof f.stage === 'string') filters.stage = f.stage as SegmentFilters['stage']
-  if (typeof f.type === 'string') filters.type = f.type as SegmentFilters['type']
-  if (typeof f.source === 'string') filters.source = f.source as SegmentFilters['source']
-  if (f.createdAfter != null) {
-    filters.createdAfter = f.createdAfter as SegmentFilters['createdAfter']
-  }
-  return filters
-}
+const sanitizeFilters = sanitizeSegmentFilters
 
 export const GET = withAuth('client', async (_req, user, context) => {
   const { id } = await (context as Params).params

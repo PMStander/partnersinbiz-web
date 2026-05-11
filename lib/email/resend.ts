@@ -24,6 +24,18 @@ export interface CampaignSendInput {
   subject: string
   html: string
   text: string
+  /**
+   * Extra SMTP headers. Merged with any auto-added List-Unsubscribe headers
+   * (see `listUnsubscribeUrl`). Caller-supplied keys win on conflict.
+   */
+  headers?: Record<string, string>
+  /**
+   * If set, the send adds:
+   *   List-Unsubscribe:        <{url}>
+   *   List-Unsubscribe-Post:   List-Unsubscribe=One-Click
+   * which is required by Gmail/Yahoo bulk-sender rules (RFC 8058).
+   */
+  listUnsubscribeUrl?: string
 }
 
 export interface CampaignSendResult {
@@ -39,6 +51,21 @@ export interface CampaignSendResult {
  */
 export async function sendCampaignEmail(input: CampaignSendInput): Promise<CampaignSendResult> {
   const resend = getResendClient()
+
+  // Build the final header set. Auto-headers go in first so a caller can
+  // intentionally override them (e.g. a transactional path that wants its
+  // own List-Unsubscribe value).
+  const headers: Record<string, string> = {}
+  if (input.listUnsubscribeUrl) {
+    headers['List-Unsubscribe'] = `<${input.listUnsubscribeUrl}>`
+    headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
+  }
+  if (input.headers) {
+    for (const [k, v] of Object.entries(input.headers)) {
+      headers[k] = v
+    }
+  }
+
   const { data, error } = await resend.emails.send({
     from: input.from,
     to: input.to,
@@ -47,6 +74,7 @@ export async function sendCampaignEmail(input: CampaignSendInput): Promise<Campa
     subject: input.subject,
     html: input.html,
     text: input.text,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   })
   if (error || !data?.id) {
     return { ok: false, resendId: '', error: error?.message ?? 'Resend send failed' }

@@ -7,22 +7,40 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { LineChart, BarChart, Donut } from './charts'
+import { LineChart, BarChart, Donut, heatmapShade, heatmapTextColor } from './charts'
 import type {
   OrgEmailOverview,
   EngagementTimeseries,
   ContactEngagement,
   OrgComparisonRow,
+  CohortAnalysis,
+  SendTimeMatrix,
 } from '@/lib/email-analytics/aggregate'
+import type { RevenueOverview } from '@/lib/email-analytics/attribution'
+import type { BenchmarkComparison, PerformanceBand } from '@/lib/email-analytics/benchmarks'
 
-type TabKey = 'overview' | 'engagement' | 'broadcasts' | 'leaderboard'
+type TabKey =
+  | 'overview'
+  | 'engagement'
+  | 'broadcasts'
+  | 'cohorts'
+  | 'revenue'
+  | 'send-time'
+  | 'benchmarks'
+  | 'leaderboard'
 
 const TABS: Array<{ key: TabKey; label: string; adminOnly?: boolean }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'engagement', label: 'Engagement' },
   { key: 'broadcasts', label: 'Broadcasts' },
+  { key: 'cohorts', label: 'Cohorts' },
+  { key: 'revenue', label: 'Revenue' },
+  { key: 'send-time', label: 'Send time' },
+  { key: 'benchmarks', label: 'Benchmarks' },
   { key: 'leaderboard', label: 'Leaderboard', adminOnly: true },
 ]
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -89,6 +107,10 @@ export default function EmailAnalyticsDashboard({
       {tab === 'overview' && <OverviewTab orgId={orgId} from={from} to={to} />}
       {tab === 'engagement' && <EngagementTab orgId={orgId} />}
       {tab === 'broadcasts' && <BroadcastsTab orgId={orgId} from={from} to={to} />}
+      {tab === 'cohorts' && <CohortsTab orgId={orgId} from={from} to={to} />}
+      {tab === 'revenue' && <RevenueTab orgId={orgId} from={from} to={to} />}
+      {tab === 'send-time' && <SendTimeTab orgId={orgId} from={from} to={to} />}
+      {tab === 'benchmarks' && <BenchmarksTab orgId={orgId} from={from} to={to} />}
       {tab === 'leaderboard' && isAdmin && <LeaderboardTab from={from} to={to} />}
     </div>
   )
@@ -441,6 +463,549 @@ function LeaderboardTab({ from, to }: { from: string; to: string }) {
         ))}
       </tbody>
     </table>
+  )
+}
+
+// ── Cohorts tab ─────────────────────────────────────────────────────────────
+
+function CohortsTab({ orgId, from, to }: { orgId: string; from: string; to: string }) {
+  const [state, setState] = useState<{ data: CohortAnalysis | null; loading: boolean; key: string }>(
+    { data: null, loading: true, key: '' },
+  )
+
+  useEffect(() => {
+    const key = `${orgId}|${from}|${to}`
+    const fromIso = new Date(from).toISOString()
+    const toIso = new Date(`${to}T23:59:59.999Z`).toISOString()
+    let cancelled = false
+    fetch(
+      `/api/v1/email-analytics/cohort?orgId=${orgId}&from=${fromIso}&to=${toIso}&weeksToShow=12`,
+    )
+      .then((r) => r.json())
+      .then((b) => {
+        if (cancelled) return
+        setState({ data: b.data ?? null, loading: false, key })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, from, to])
+
+  const loading = state.loading || state.key !== `${orgId}|${from}|${to}`
+  const data = state.data
+
+  if (loading) return <div className="h-64 rounded-xl bg-surface-container animate-pulse" />
+  if (!data || data.cohorts.length === 0) {
+    return (
+      <Empty>
+        No cohort data — once contacts sign up in this window we can chart their week-over-week
+        engagement here.
+      </Empty>
+    )
+  }
+
+  const weeksToShow = data.weeksToShow
+  const headers: number[] = []
+  for (let i = 0; i < weeksToShow; i++) headers.push(i)
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-on-surface-variant">
+        Rows = ISO-week each cohort signed up (UTC Monday). Cells = % of cohort that opened or
+        clicked an email that week.
+      </p>
+      <div className="overflow-x-auto rounded-xl bg-surface-container">
+        <table className="w-full text-xs border-separate border-spacing-0">
+          <thead>
+            <tr>
+              <th className="text-left p-2 text-on-surface-variant font-medium sticky left-0 bg-surface-container z-10">
+                Signup week
+              </th>
+              <th className="text-right p-2 text-on-surface-variant font-medium">Size</th>
+              {headers.map((i) => (
+                <th key={i} className="p-2 text-on-surface-variant font-medium text-center">
+                  W{i}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.cohorts.map((c) => (
+              <tr key={c.cohortStart}>
+                <td className="p-2 text-on-surface text-xs whitespace-nowrap sticky left-0 bg-surface-container z-10">
+                  {c.cohortStart}
+                </td>
+                <td className="p-2 text-on-surface-variant tabular-nums text-right">
+                  {c.cohortSize}
+                </td>
+                {headers.map((i) => {
+                  const ret = c.retentionPercent[i]
+                  if (typeof ret !== 'number') {
+                    return <td key={i} className="p-2 text-on-surface-variant text-center">—</td>
+                  }
+                  const bg = heatmapShade(ret)
+                  const fg = heatmapTextColor(ret)
+                  return (
+                    <td
+                      key={i}
+                      className="p-2 text-center tabular-nums border border-outline-variant/30"
+                      style={{ background: bg, color: fg }}
+                      title={`Week ${i}: ${pct(ret)}`}
+                    >
+                      {pct(ret)}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Revenue tab ─────────────────────────────────────────────────────────────
+
+function zar(amount: number): string {
+  return new Intl.NumberFormat('en-ZA', {
+    style: 'currency',
+    currency: 'ZAR',
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+function RevenueTab({ orgId, from, to }: { orgId: string; from: string; to: string }) {
+  const [state, setState] = useState<{ data: RevenueOverview | null; loading: boolean; key: string }>(
+    { data: null, loading: true, key: '' },
+  )
+
+  useEffect(() => {
+    const key = `${orgId}|${from}|${to}`
+    const fromIso = new Date(from).toISOString()
+    const toIso = new Date(`${to}T23:59:59.999Z`).toISOString()
+    let cancelled = false
+    fetch(`/api/v1/email-analytics/revenue?orgId=${orgId}&from=${fromIso}&to=${toIso}`)
+      .then((r) => r.json())
+      .then((b) => {
+        if (cancelled) return
+        setState({ data: b.data ?? null, loading: false, key })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, from, to])
+
+  const loading = state.loading || state.key !== `${orgId}|${from}|${to}`
+  const data = state.data
+
+  if (loading) return <div className="h-64 rounded-xl bg-surface-container animate-pulse" />
+  if (!data || (data.totalRevenue === 0 && data.totalConversions === 0)) {
+    return (
+      <Empty>
+        No attributed revenue yet. Revenue shows up here once a deal or invoice closes within 30
+        days of a contact clicking an email.
+      </Empty>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Kpi label="Total revenue" value={zar(data.totalRevenue)} />
+        <Kpi label="Conversions" value={data.totalConversions} />
+        <Kpi
+          label="Avg deal size"
+          value={
+            data.totalConversions > 0
+              ? zar(Math.round(data.totalRevenue / data.totalConversions))
+              : zar(0)
+          }
+        />
+      </div>
+
+      <Section title="Revenue by day">
+        {data.revenueByDay.length === 0 ? (
+          <Empty>No daily breakdown.</Empty>
+        ) : (
+          <LineChart
+            series={[
+              {
+                name: 'Revenue',
+                points: data.revenueByDay.map((d) => ({ x: d.date, y: d.revenue })),
+              },
+              {
+                name: 'Conversions',
+                points: data.revenueByDay.map((d) => ({ x: d.date, y: d.conversions })),
+              },
+            ]}
+          />
+        )}
+      </Section>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <Section title="Top performing emails">
+          {data.topPerformingEmails.length === 0 ? (
+            <Empty>No attributed emails.</Empty>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-on-surface-variant text-left">
+                <tr>
+                  <th className="py-2">Subject</th>
+                  <th className="py-2 text-right">Conversions</th>
+                  <th className="py-2 text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.topPerformingEmails.map((e) => (
+                  <tr key={e.emailId} className="border-t border-outline-variant">
+                    <td className="py-2 text-on-surface truncate max-w-xs">
+                      {e.subject || <span className="text-on-surface-variant italic">No subject</span>}
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{e.conversions}</td>
+                    <td className="py-2 text-right tabular-nums">{zar(e.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Section>
+
+        <Section title="Top performing sources">
+          {data.topPerformingSources.length === 0 ? (
+            <Empty>No attributed sources.</Empty>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-on-surface-variant text-left">
+                <tr>
+                  <th className="py-2">Source</th>
+                  <th className="py-2">Name</th>
+                  <th className="py-2 text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.topPerformingSources.map((s) => (
+                  <tr key={`${s.source}|${s.sourceId}`} className="border-t border-outline-variant">
+                    <td className="py-2 text-on-surface-variant text-xs">{s.source}</td>
+                    <td className="py-2 text-on-surface truncate max-w-xs">{s.name}</td>
+                    <td className="py-2 text-right tabular-nums">{zar(s.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Section>
+      </div>
+    </div>
+  )
+}
+
+// ── Send-time tab ───────────────────────────────────────────────────────────
+
+function SendTimeTab({ orgId, from, to }: { orgId: string; from: string; to: string }) {
+  const [state, setState] = useState<{ data: SendTimeMatrix | null; loading: boolean; key: string }>(
+    { data: null, loading: true, key: '' },
+  )
+
+  useEffect(() => {
+    const key = `${orgId}|${from}|${to}`
+    const fromIso = new Date(from).toISOString()
+    const toIso = new Date(`${to}T23:59:59.999Z`).toISOString()
+    let cancelled = false
+    fetch(`/api/v1/email-analytics/send-time-matrix?orgId=${orgId}&from=${fromIso}&to=${toIso}`)
+      .then((r) => r.json())
+      .then((b) => {
+        if (cancelled) return
+        setState({ data: b.data ?? null, loading: false, key })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, from, to])
+
+  const loading = state.loading || state.key !== `${orgId}|${from}|${to}`
+  const data = state.data
+
+  if (loading) return <div className="h-64 rounded-xl bg-surface-container animate-pulse" />
+  if (!data || data.totalSamples === 0) {
+    return <Empty>No send activity in this window — nothing to plot.</Empty>
+  }
+
+  // Compute max openRate to normalise the heatmap, and find best cell stats.
+  let maxOpenRate = 0
+  for (const row of data.cells) {
+    for (const cell of row) {
+      if (cell.openRate > maxOpenRate) maxOpenRate = cell.openRate
+    }
+  }
+  const bestCell = data.cells[data.bestDay]?.[data.bestHour]
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-on-surface-variant">
+        Open rates by day-of-week and hour, in the org&apos;s timezone ({data.timezone}). Cells
+        need at least 10 sends to be eligible for best/worst.
+      </p>
+      <div className="overflow-x-auto rounded-xl bg-surface-container">
+        <table className="text-[10px] border-separate border-spacing-0 mx-auto">
+          <thead>
+            <tr>
+              <th className="p-1.5 text-on-surface-variant font-medium"></th>
+              {Array.from({ length: 24 }).map((_, h) => (
+                <th
+                  key={h}
+                  className="p-1 text-on-surface-variant font-medium text-center w-9"
+                >
+                  {String(h).padStart(2, '0')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.cells.map((row, d) => (
+              <tr key={d}>
+                <td className="p-1.5 text-on-surface-variant text-right font-medium pr-2">
+                  {DAY_LABELS[d]}
+                </td>
+                {row.map((cell, h) => {
+                  const norm = maxOpenRate > 0 ? cell.openRate / maxOpenRate : 0
+                  const bg = heatmapShade(norm)
+                  const fg = heatmapTextColor(norm)
+                  const isBest = d === data.bestDay && h === data.bestHour
+                  const isWorst = d === data.worstDay && h === data.worstHour
+                  return (
+                    <td
+                      key={h}
+                      className={`p-0 text-center tabular-nums border ${
+                        isBest
+                          ? 'border-amber-300 border-2'
+                          : isWorst
+                            ? 'border-red-500 border-2'
+                            : 'border-outline-variant/30'
+                      }`}
+                      style={{ background: bg, color: fg, minWidth: 28 }}
+                      title={`${DAY_LABELS[d]} ${String(h).padStart(2, '0')}:00 — ${pct(
+                        cell.openRate,
+                      )} open rate · ${cell.sent} sent`}
+                    >
+                      <div className="px-1 py-1 leading-tight">
+                        {cell.sent > 0 ? `${Math.round(cell.openRate * 100)}` : ''}
+                      </div>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {bestCell && bestCell.sent >= 1 ? (
+        <div className="rounded-xl bg-surface-container p-4 text-sm text-on-surface">
+          Best send time:{' '}
+          <span className="font-semibold text-amber-400">
+            {DAY_LABELS[data.bestDay]} at {String(data.bestHour).padStart(2, '0')}:00
+          </span>{' '}
+          — {pct(bestCell.openRate)} avg open rate ({bestCell.sent} sends)
+        </div>
+      ) : (
+        <Empty>Not enough data yet to pick a best slot — keep sending.</Empty>
+      )}
+    </div>
+  )
+}
+
+// ── Benchmarks tab ──────────────────────────────────────────────────────────
+
+const INDUSTRIES = [
+  'newsletter',
+  'ecommerce',
+  'saas',
+  'agency',
+  'nonprofit',
+  'b2b',
+  'media',
+  'finance',
+  'health',
+] as const
+
+function bandArrow(orgValue: number, ownValue: number): string {
+  if (orgValue > ownValue + 0.0001) return '↑'
+  if (orgValue < ownValue - 0.0001) return '↓'
+  return '→'
+}
+
+function bandColor(band: PerformanceBand, direction: 'higher' | 'lower'): string {
+  // For "higher is better" (open/click): above-p75 green, below-p25 red.
+  // For "lower is better" (bounce/unsub): above-p75 red, below-p25 green.
+  if (direction === 'higher') {
+    if (band === 'above-p75') return 'text-emerald-400'
+    if (band === 'p50-p75') return 'text-amber-300'
+    if (band === 'p25-p50') return 'text-amber-500'
+    return 'text-red-400'
+  }
+  if (band === 'above-p75') return 'text-red-400'
+  if (band === 'p50-p75') return 'text-amber-500'
+  if (band === 'p25-p50') return 'text-amber-300'
+  return 'text-emerald-400'
+}
+
+function bandLabel(band: PerformanceBand): string {
+  switch (band) {
+    case 'above-p75':
+      return '> p75'
+    case 'p50-p75':
+      return 'p50–p75'
+    case 'p25-p50':
+      return 'p25–p50'
+    case 'below-p25':
+      return '< p25'
+  }
+}
+
+function BenchmarksTab({ orgId, from, to }: { orgId: string; from: string; to: string }) {
+  const [industry, setIndustry] = useState<string>('')
+  const [state, setState] = useState<{
+    data: BenchmarkComparison | null
+    loading: boolean
+    key: string
+  }>({ data: null, loading: true, key: '' })
+
+  useEffect(() => {
+    const key = `${orgId}|${from}|${to}|${industry}`
+    const fromIso = new Date(from).toISOString()
+    const toIso = new Date(`${to}T23:59:59.999Z`).toISOString()
+    const industryQ = industry ? `&industry=${industry}` : ''
+    let cancelled = false
+    fetch(
+      `/api/v1/email-analytics/benchmarks?orgId=${orgId}&from=${fromIso}&to=${toIso}${industryQ}`,
+    )
+      .then((r) => r.json())
+      .then((b) => {
+        if (cancelled) return
+        setState({ data: b.data ?? null, loading: false, key })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, from, to, industry])
+
+  const loading = state.loading || state.key !== `${orgId}|${from}|${to}|${industry}`
+  const data = state.data
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm">
+        <label className="text-on-surface-variant">Industry</label>
+        <select
+          value={industry}
+          onChange={(e) => setIndustry(e.target.value)}
+          className="px-2 py-1 rounded-lg border border-outline-variant bg-surface text-on-surface"
+        >
+          <option value="">Auto (org default)</option>
+          {INDUSTRIES.map((i) => (
+            <option key={i} value={i}>
+              {i}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="h-64 rounded-xl bg-surface-container animate-pulse" />
+      ) : !data ? (
+        <Empty>Could not load benchmarks.</Empty>
+      ) : (
+        <BenchmarksTable data={data} />
+      )}
+    </div>
+  )
+}
+
+function BenchmarksTable({ data }: { data: BenchmarkComparison }) {
+  const rows: Array<{
+    key: keyof BenchmarkComparison['orgRates']
+    label: string
+    direction: 'higher' | 'lower'
+  }> = [
+    { key: 'openRate', label: 'Open rate', direction: 'higher' },
+    { key: 'clickRate', label: 'Click rate', direction: 'higher' },
+    { key: 'bounceRate', label: 'Bounce rate', direction: 'lower' },
+    { key: 'unsubRate', label: 'Unsubscribe rate', direction: 'lower' },
+  ]
+
+  return (
+    <div className="rounded-xl bg-surface-container overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="text-on-surface-variant text-left">
+          <tr className="border-b border-outline-variant">
+            <th className="py-2 px-3">Metric</th>
+            <th className="py-2 px-3 text-right">This window</th>
+            <th className="py-2 px-3 text-right">Your rolling 30d</th>
+            <th className="py-2 px-3 text-right">Industry p50</th>
+            <th className="py-2 px-3 text-right">Industry p25 / p75</th>
+            <th className="py-2 px-3">Band</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const orgValue = data.orgRates[row.key]
+            const ownValue = data.ownRolling30Day[row.key]
+            const benchKey = row.key as keyof Pick<
+              BenchmarkComparison['industry'],
+              'openRate' | 'clickRate' | 'bounceRate' | 'unsubRate'
+            >
+            const band = data.industry[benchKey]
+            const perfBand = data.performance[row.key]
+            const arrow = bandArrow(orgValue, ownValue)
+            const arrowColor =
+              row.direction === 'higher'
+                ? arrow === '↑'
+                  ? 'text-emerald-400'
+                  : arrow === '↓'
+                    ? 'text-red-400'
+                    : 'text-on-surface-variant'
+                : arrow === '↓'
+                  ? 'text-emerald-400'
+                  : arrow === '↑'
+                    ? 'text-red-400'
+                    : 'text-on-surface-variant'
+            return (
+              <tr key={row.key} className="border-t border-outline-variant">
+                <td className="py-2 px-3 text-on-surface">{row.label}</td>
+                <td className="py-2 px-3 text-right tabular-nums text-on-surface">
+                  <span className="inline-flex items-baseline gap-1.5">
+                    <span>{pct(orgValue)}</span>
+                    <span className={arrowColor + ' text-xs'}>{arrow}</span>
+                  </span>
+                </td>
+                <td className="py-2 px-3 text-right tabular-nums text-on-surface-variant">
+                  {pct(ownValue)}
+                </td>
+                <td className="py-2 px-3 text-right tabular-nums text-on-surface-variant">
+                  {pct(band.p50)}
+                </td>
+                <td className="py-2 px-3 text-right text-xs text-on-surface-variant tabular-nums">
+                  <span className="px-1.5 py-0.5 rounded bg-surface-container-high mr-1">
+                    p25 {pct(band.p25)}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-surface-container-high">
+                    p75 {pct(band.p75)}
+                  </span>
+                </td>
+                <td className={`py-2 px-3 ${bandColor(perfBand, row.direction)} text-xs font-medium`}>
+                  {bandLabel(perfBand)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <div className="px-3 py-2 text-xs text-on-surface-variant border-t border-outline-variant">
+        Industry: <span className="text-on-surface">{data.industry.industry}</span>.
+        Arrow compares &ldquo;This window&rdquo; to &ldquo;Your rolling 30d&rdquo;.
+      </div>
+    </div>
   )
 }
 

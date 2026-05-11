@@ -64,7 +64,13 @@ export interface Broadcast {
   description: string
   status: BroadcastStatus
 
-  // Sender — resolved through lib/email/resolveFrom.ts
+  // Multi-channel support. Defaults to 'email' when omitted. When 'sms', the
+  // cron renders `content.bodyText` as the SMS body, ignores subject/HTML/
+  // template/from-domain, and dispatches via lib/sms/send.sendSmsToContact().
+  channel?: 'email' | 'sms'
+
+  // Sender — resolved through lib/email/resolveFrom.ts (email channel only;
+  // SMS uses the org's Twilio messaging service / default number).
   fromDomainId: string
   fromName: string
   fromLocal: string
@@ -82,6 +88,18 @@ export interface Broadcast {
 
   // A/B testing configuration (optional — `EMPTY_AB` when not set up).
   ab?: AbConfig
+
+  // Preference topic this broadcast belongs to. Defaults to 'newsletter'.
+  // Used by `shouldSendToContact` to honour per-topic opt-outs and by the
+  // frequency cap to exempt transactional topics.
+  topicId?: string
+
+  // Send-time optimisation: when true, the cron treats `scheduledFor`'s
+  // local-clock time (in the org's timezone) as the *target wall time per
+  // recipient*. For each contact we only send once their local clock has
+  // reached that target. After `localDeliveryWindowHours` we send regardless.
+  audienceLocalDelivery?: boolean
+  localDeliveryWindowHours?: number   // default 24
 
   createdAt: Timestamp | null
   updatedAt: Timestamp | null

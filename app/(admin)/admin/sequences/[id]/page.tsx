@@ -4,8 +4,10 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import StepEditor from '@/components/admin/sequences/StepEditor'
+import GoalsEditor from '@/components/admin/sequences/GoalsEditor'
+import SequenceTreeView from '@/components/admin/sequences/SequenceTreeView'
 import AiAssistantPanel from '@/components/admin/email/AiAssistantPanel'
-import type { Sequence, SequenceStep } from '@/lib/sequences/types'
+import type { Sequence, SequenceStep, SequenceGoal } from '@/lib/sequences/types'
 
 const STATUS_OPTIONS = ['draft', 'active', 'paused'] as const
 
@@ -14,10 +16,12 @@ export default function SequenceDetailPage({ params }: { params: Promise<{ id: s
   const [id, setId] = useState<string | null>(null)
   const [seq, setSeq] = useState<Sequence | null>(null)
   const [steps, setSteps] = useState<SequenceStep[]>([])
+  const [goals, setGoals] = useState<SequenceGoal[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [enrollContactId, setEnrollContactId] = useState('')
   const [aiOpen, setAiOpen] = useState(false)
+  const [showTree, setShowTree] = useState(true)
 
   useEffect(() => {
     params.then((p) => {
@@ -27,6 +31,7 @@ export default function SequenceDetailPage({ params }: { params: Promise<{ id: s
         .then((b) => {
           setSeq(b.data)
           setSteps(b.data?.steps ?? [])
+          setGoals(Array.isArray(b.data?.goals) ? b.data.goals : [])
         })
         .finally(() => setLoading(false))
     })
@@ -38,7 +43,13 @@ export default function SequenceDetailPage({ params }: { params: Promise<{ id: s
     await fetch(`/api/v1/sequences/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: seq.name, description: seq.description, status: seq.status, steps }),
+      body: JSON.stringify({
+        name: seq.name,
+        description: seq.description,
+        status: seq.status,
+        steps,
+        goals,
+      }),
     })
     setSaving(false)
   }
@@ -61,6 +72,8 @@ export default function SequenceDetailPage({ params }: { params: Promise<{ id: s
 
   if (loading) return <div className="p-6 animate-pulse h-40 bg-surface-container rounded-xl" />
   if (!seq) return <div className="p-6 text-on-surface-variant">Sequence not found.</div>
+
+  const hasBranches = steps.some((s) => !!s.branch)
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -105,7 +118,31 @@ export default function SequenceDetailPage({ params }: { params: Promise<{ id: s
       </div>
 
       <div>
-        <h2 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-3">Steps</h2>
+        <h2 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-3">
+          Exit goals
+        </h2>
+        <GoalsEditor goals={goals} onChange={setGoals} />
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide">
+            Steps
+          </h2>
+          {hasBranches && (
+            <button
+              onClick={() => setShowTree(!showTree)}
+              className="text-xs text-on-surface-variant hover:underline"
+            >
+              {showTree ? 'Hide' : 'Show'} journey preview
+            </button>
+          )}
+        </div>
+        {hasBranches && showTree && (
+          <div className="mb-4 p-3 rounded-xl bg-surface-container">
+            <SequenceTreeView steps={steps} />
+          </div>
+        )}
         <StepEditor steps={steps} onChange={setSteps} />
       </div>
 

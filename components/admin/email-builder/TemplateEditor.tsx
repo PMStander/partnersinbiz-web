@@ -95,6 +95,49 @@ function defaultBlock(type: BlockType): Block {
           unsubscribeUrl: '{{unsubscribeUrl}}',
         },
       }
+    case 'amp-carousel':
+      return {
+        id,
+        type: 'amp-carousel',
+        props: {
+          slides: [
+            { imageUrl: 'https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?w=1200', alt: 'Slide 1' },
+            { imageUrl: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200', alt: 'Slide 2' },
+          ],
+          autoAdvance: 5,
+        },
+      }
+    case 'amp-accordion':
+      return {
+        id,
+        type: 'amp-accordion',
+        props: {
+          items: [
+            { heading: 'Frequently asked question 1', bodyHtml: 'Answer goes here.' },
+            { heading: 'Frequently asked question 2', bodyHtml: 'Another answer.' },
+          ],
+        },
+      }
+    case 'amp-form':
+      return {
+        id,
+        type: 'amp-form',
+        props: {
+          fields: [{ key: 'email', label: 'Email', type: 'email' }],
+          submitUrl: 'https://partnersinbiz.online/api/v1/capture-sources/<source_id>/submit',
+          successMessage: 'Thanks for subscribing!',
+          buttonText: 'Subscribe',
+        },
+      }
+    case 'amp-live-data':
+      return {
+        id,
+        type: 'amp-live-data',
+        props: {
+          endpoint: 'https://example.com/live-data.json',
+          template: '<p>Current: {{value}}</p>',
+        },
+      }
   }
 }
 

@@ -17,6 +17,7 @@ export interface TemplateVars {
   company?: string
   orgName?: string
   unsubscribeUrl?: string
+  preferencesUrl?: string
   // Allow arbitrary extras — campaigns may add custom fields per send.
   [key: string]: string | number | undefined
 }

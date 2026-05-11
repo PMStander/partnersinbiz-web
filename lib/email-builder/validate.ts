@@ -6,7 +6,14 @@
 // return them verbatim.
 
 import type {
+  AmpAccordionItem,
+  AmpCarouselSlide,
+  AmpFormField,
+  AmpFormFieldType,
   Block,
+  BlockCondition,
+  ConditionKind,
+  DarkModeMode,
   EmailDocument,
   ThemeConfig,
 } from './types'
@@ -37,10 +44,44 @@ function isAlign(v: unknown): v is 'left' | 'center' | 'right' {
   return v === 'left' || v === 'center' || v === 'right'
 }
 
+const CONDITION_KINDS: ConditionKind[] = [
+  'always',
+  'has-tag',
+  'not-has-tag',
+  'at-stage',
+  'not-at-stage',
+  'has-field',
+  'field-equals',
+  'field-not-empty',
+]
+
+// Returns a validated BlockCondition or `undefined` if `raw` is absent.
+// Unknown kinds are coerced to 'always' rather than failing (additive
+// compatibility: a future kind value shouldn't break older renderers).
+function validateCondition(raw: unknown): BlockCondition | undefined {
+  if (raw === undefined || raw === null) return undefined
+  if (!isObject(raw)) return undefined
+  const kind: ConditionKind = (CONDITION_KINDS as string[]).includes(raw.kind as string)
+    ? (raw.kind as ConditionKind)
+    : 'always'
+  const out: BlockCondition = { kind }
+  if (isString(raw.tag)) out.tag = raw.tag
+  if (isString(raw.stage)) out.stage = raw.stage
+  if (isString(raw.field)) out.field = raw.field
+  if (isString(raw.value)) out.value = raw.value
+  return out
+}
+
 function validateTheme(theme: unknown, errors: string[], path = 'theme'): ThemeConfig | null {
   if (!isObject(theme)) {
     errors.push(`${path} must be an object`)
     return null
+  }
+  // darkMode is optional. Only 'auto' | 'force-light' are accepted —
+  // anything else falls back to undefined (renderer treats as 'auto').
+  let darkMode: DarkModeMode | undefined
+  if (theme.darkMode === 'auto' || theme.darkMode === 'force-light') {
+    darkMode = theme.darkMode
   }
   const out: ThemeConfig = {
     primaryColor: isNonEmptyString(theme.primaryColor) ? theme.primaryColor : '#F5A623',
@@ -51,6 +92,7 @@ function validateTheme(theme: unknown, errors: string[], path = 'theme'): ThemeC
       : "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     contentWidth: isNumber(theme.contentWidth) ? theme.contentWidth : 600,
   }
+  if (darkMode) out.darkMode = darkMode
   return out
 }
 
@@ -80,12 +122,18 @@ function validateBlock(raw: unknown, path: string, errors: string[], depth: numb
 
   const id = raw.id
   const type = raw.type
+  const condition = validateCondition(raw.condition)
+
+  // Helper to attach condition only when present, preserving the old shape
+  // for blocks that don't specify one (backwards-compatible storage).
+  const withCondition = <B extends Block>(b: B): B =>
+    condition ? ({ ...b, condition } as B) : b
 
   switch (type) {
     case 'hero': {
       if (!isString(props.backgroundColor)) errors.push(`${path}.props.backgroundColor is required`)
       if (!isString(props.headline)) errors.push(`${path}.props.headline is required`)
-      return {
+      return withCondition({
         id,
         type: 'hero',
         props: {
@@ -98,23 +146,23 @@ function validateBlock(raw: unknown, path: string, errors: string[], depth: numb
           ctaColor: isString(props.ctaColor) ? props.ctaColor : undefined,
           textColor: isString(props.textColor) ? props.textColor : undefined,
         },
-      }
+      })
     }
     case 'heading': {
       if (!isString(props.text)) errors.push(`${path}.props.text is required`)
       const level = props.level === 1 || props.level === 2 || props.level === 3 ? props.level : 2
       const align = isAlign(props.align) ? props.align : 'left'
-      return { id, type: 'heading', props: { text: isString(props.text) ? props.text : '', level, align } }
+      return withCondition({ id, type: 'heading', props: { text: isString(props.text) ? props.text : '', level, align } })
     }
     case 'paragraph': {
       if (!isString(props.html)) errors.push(`${path}.props.html is required`)
       const align = isAlign(props.align) ? props.align : 'left'
-      return { id, type: 'paragraph', props: { html: isString(props.html) ? props.html : '', align } }
+      return withCondition({ id, type: 'paragraph', props: { html: isString(props.html) ? props.html : '', align } })
     }
     case 'button': {
       if (!isString(props.text)) errors.push(`${path}.props.text is required`)
       if (!isString(props.url)) errors.push(`${path}.props.url is required`)
-      return {
+      return withCondition({
         id,
         type: 'button',
         props: {
@@ -125,11 +173,11 @@ function validateBlock(raw: unknown, path: string, errors: string[], depth: numb
           align: isAlign(props.align) ? props.align : 'center',
           fullWidth: props.fullWidth === true,
         },
-      }
+      })
     }
     case 'image': {
       if (!isString(props.src)) errors.push(`${path}.props.src is required`)
-      return {
+      return withCondition({
         id,
         type: 'image',
         props: {
@@ -139,26 +187,26 @@ function validateBlock(raw: unknown, path: string, errors: string[], depth: numb
           width: isNumber(props.width) ? props.width : undefined,
           align: isAlign(props.align) ? props.align : 'center',
         },
-      }
+      })
     }
     case 'divider': {
-      return {
+      return withCondition({
         id,
         type: 'divider',
         props: {
           color: isString(props.color) ? props.color : '#e5e7eb',
           thickness: isNumber(props.thickness) ? props.thickness : 1,
         },
-      }
+      })
     }
     case 'spacer': {
-      return {
+      return withCondition({
         id,
         type: 'spacer',
         props: {
           height: isNumber(props.height) ? props.height : 24,
         },
-      }
+      })
     }
     case 'columns': {
       if (depth >= 1) {
@@ -181,14 +229,14 @@ function validateBlock(raw: unknown, path: string, errors: string[], depth: numb
         const v = validateBlock(b, `${path}.props.columns[1][${i}]`, errors, depth + 1, totalCount)
         if (v) rOut.push(v)
       })
-      return { id, type: 'columns', props: { columns: [lOut, rOut] } }
+      return withCondition({ id, type: 'columns', props: { columns: [lOut, rOut] } })
     }
     case 'footer': {
       if (!isString(props.orgName)) errors.push(`${path}.props.orgName is required`)
       if (!isString(props.address)) errors.push(`${path}.props.address is required`)
       if (!isString(props.unsubscribeUrl)) errors.push(`${path}.props.unsubscribeUrl is required`)
       const socialRaw = isObject(props.social) ? props.social : null
-      return {
+      return withCondition({
         id,
         type: 'footer',
         props: {
@@ -205,7 +253,100 @@ function validateBlock(raw: unknown, path: string, errors: string[], depth: numb
               }
             : undefined,
         },
+      })
+    }
+    case 'amp-carousel': {
+      const slidesRaw = Array.isArray(props.slides) ? props.slides : []
+      if (slidesRaw.length === 0) {
+        errors.push(`${path}.props.slides must be a non-empty array`)
       }
+      const slides: AmpCarouselSlide[] = []
+      slidesRaw.forEach((s: unknown, i: number) => {
+        if (!isObject(s)) {
+          errors.push(`${path}.props.slides[${i}] must be an object`)
+          return
+        }
+        if (!isString(s.imageUrl)) {
+          errors.push(`${path}.props.slides[${i}].imageUrl is required`)
+        }
+        slides.push({
+          imageUrl: isString(s.imageUrl) ? s.imageUrl : '',
+          alt: isString(s.alt) ? s.alt : '',
+          linkUrl: isString(s.linkUrl) ? s.linkUrl : undefined,
+        })
+      })
+      const autoAdvance =
+        isNumber(props.autoAdvance) && props.autoAdvance >= 1000 ? props.autoAdvance : undefined
+      return withCondition({
+        id,
+        type: 'amp-carousel',
+        props: { slides, autoAdvance },
+      })
+    }
+    case 'amp-accordion': {
+      const itemsRaw = Array.isArray(props.items) ? props.items : []
+      if (itemsRaw.length === 0) {
+        errors.push(`${path}.props.items must be a non-empty array`)
+      }
+      const items: AmpAccordionItem[] = []
+      itemsRaw.forEach((it: unknown, i: number) => {
+        if (!isObject(it)) {
+          errors.push(`${path}.props.items[${i}] must be an object`)
+          return
+        }
+        if (!isString(it.heading)) {
+          errors.push(`${path}.props.items[${i}].heading is required`)
+        }
+        items.push({
+          heading: isString(it.heading) ? it.heading : '',
+          bodyHtml: isString(it.bodyHtml) ? it.bodyHtml : '',
+        })
+      })
+      return withCondition({ id, type: 'amp-accordion', props: { items } })
+    }
+    case 'amp-form': {
+      if (!isString(props.submitUrl)) errors.push(`${path}.props.submitUrl is required`)
+      const fieldsRaw = Array.isArray(props.fields) ? props.fields : []
+      if (fieldsRaw.length === 0) {
+        errors.push(`${path}.props.fields must be a non-empty array`)
+      }
+      const fields: AmpFormField[] = []
+      fieldsRaw.forEach((f: unknown, i: number) => {
+        if (!isObject(f)) {
+          errors.push(`${path}.props.fields[${i}] must be an object`)
+          return
+        }
+        if (!isString(f.key) || !f.key.trim()) {
+          errors.push(`${path}.props.fields[${i}].key is required`)
+        }
+        const fType: AmpFormFieldType = f.type === 'email' ? 'email' : 'text'
+        fields.push({
+          key: isString(f.key) ? f.key : '',
+          label: isString(f.label) ? f.label : '',
+          type: fType,
+        })
+      })
+      return withCondition({
+        id,
+        type: 'amp-form',
+        props: {
+          fields,
+          submitUrl: isString(props.submitUrl) ? props.submitUrl : '',
+          successMessage: isString(props.successMessage) ? props.successMessage : 'Thanks!',
+          buttonText: isString(props.buttonText) ? props.buttonText : 'Submit',
+        },
+      })
+    }
+    case 'amp-live-data': {
+      if (!isString(props.endpoint)) errors.push(`${path}.props.endpoint is required`)
+      return withCondition({
+        id,
+        type: 'amp-live-data',
+        props: {
+          endpoint: isString(props.endpoint) ? props.endpoint : '',
+          template: isString(props.template) ? props.template : '',
+        },
+      })
     }
     default:
       errors.push(`${path}.type "${type}" is not a known block type`)

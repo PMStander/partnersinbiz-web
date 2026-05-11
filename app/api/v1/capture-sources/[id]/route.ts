@@ -10,13 +10,107 @@ import type { ApiUser } from '@/lib/api/types'
 import {
   CaptureSource,
   DEFAULT_WIDGET_THEME,
+  DEFAULT_RATE_LIMIT,
   LEAD_CAPTURE_SOURCES,
   VALID_CAPTURE_TYPES,
   VALID_FIELD_TYPES,
   type CaptureField,
+  type CaptureSourceRateLimit,
   type CaptureWidgetTheme,
   type DoubleOptInMode,
+  type WidgetDisplayConfig,
+  type WidgetDisplayMode,
+  type WidgetDisplayStep,
+  type WidgetPosition,
 } from '@/lib/lead-capture/types'
+
+const VALID_DISPLAY_MODES: WidgetDisplayMode[] = [
+  'inline',
+  'popup',
+  'slide-in',
+  'exit-intent',
+  'multi-step',
+]
+const VALID_POSITIONS: WidgetPosition[] = [
+  'center',
+  'bottom-right',
+  'bottom-left',
+  'top-right',
+  'top-left',
+]
+
+function sanitizeDisplaySteps(input: unknown): WidgetDisplayStep[] {
+  if (!Array.isArray(input)) return []
+  return input
+    .map((raw): WidgetDisplayStep | null => {
+      if (!raw || typeof raw !== 'object') return null
+      const r = raw as Record<string, unknown>
+      const headingText = typeof r.headingText === 'string' ? r.headingText : ''
+      const subheadingText = typeof r.subheadingText === 'string' ? r.subheadingText : ''
+      const buttonText = typeof r.buttonText === 'string' && r.buttonText.trim()
+        ? r.buttonText.trim()
+        : 'Continue'
+      const fieldsArr = Array.isArray(r.fields)
+        ? r.fields.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+        : []
+      return { headingText, subheadingText, buttonText, fields: fieldsArr }
+    })
+    .filter((s): s is WidgetDisplayStep => s !== null)
+}
+
+function sanitizeDisplay(input: unknown): WidgetDisplayConfig | undefined {
+  if (input === null || input === undefined) return undefined
+  if (typeof input !== 'object') return undefined
+  const r = input as Record<string, unknown>
+  const mode = (typeof r.mode === 'string' ? r.mode : 'inline') as WidgetDisplayMode
+  if (!VALID_DISPLAY_MODES.includes(mode)) return undefined
+  const out: WidgetDisplayConfig = { mode }
+  if (typeof r.triggerDelaySeconds === 'number' && r.triggerDelaySeconds >= 0 && r.triggerDelaySeconds <= 3600) {
+    out.triggerDelaySeconds = Math.floor(r.triggerDelaySeconds)
+  }
+  if (typeof r.triggerScrollPercent === 'number' && r.triggerScrollPercent >= 0 && r.triggerScrollPercent <= 100) {
+    out.triggerScrollPercent = Math.floor(r.triggerScrollPercent)
+  }
+  if (typeof r.triggerPagesViewed === 'number' && r.triggerPagesViewed >= 0 && r.triggerPagesViewed <= 1000) {
+    out.triggerPagesViewed = Math.floor(r.triggerPagesViewed)
+  }
+  if (typeof r.triggerOnExitIntent === 'boolean') out.triggerOnExitIntent = r.triggerOnExitIntent
+  if (typeof r.dismissCooldownDays === 'number' && r.dismissCooldownDays >= 0 && r.dismissCooldownDays <= 3650) {
+    out.dismissCooldownDays = Math.floor(r.dismissCooldownDays)
+  }
+  if (typeof r.suppressForSubscribedDays === 'number' && r.suppressForSubscribedDays >= 0 && r.suppressForSubscribedDays <= 3650) {
+    out.suppressForSubscribedDays = Math.floor(r.suppressForSubscribedDays)
+  }
+  if (Array.isArray(r.showOnPaths)) {
+    out.showOnPaths = r.showOnPaths.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+  }
+  if (Array.isArray(r.hideOnPaths)) {
+    out.hideOnPaths = r.hideOnPaths.filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+  }
+  if (typeof r.position === 'string' && VALID_POSITIONS.includes(r.position as WidgetPosition)) {
+    out.position = r.position as WidgetPosition
+  }
+  if (r.steps !== undefined) {
+    out.steps = sanitizeDisplaySteps(r.steps)
+  }
+  return out
+}
+
+function sanitizeRateLimit(input: unknown): CaptureSourceRateLimit {
+  if (!input || typeof input !== 'object') return { ...DEFAULT_RATE_LIMIT }
+  const r = input as Record<string, unknown>
+  return {
+    enabled: typeof r.enabled === 'boolean' ? r.enabled : DEFAULT_RATE_LIMIT.enabled,
+    maxPerHourPerIp:
+      typeof r.maxPerHourPerIp === 'number' && r.maxPerHourPerIp > 0
+        ? Math.floor(r.maxPerHourPerIp)
+        : DEFAULT_RATE_LIMIT.maxPerHourPerIp,
+    maxPerDayPerEmail:
+      typeof r.maxPerDayPerEmail === 'number' && r.maxPerDayPerEmail > 0
+        ? Math.floor(r.maxPerDayPerEmail)
+        : DEFAULT_RATE_LIMIT.maxPerDayPerEmail,
+  }
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -111,6 +205,21 @@ export const PUT = withAuth('client', async (req: NextRequest, user: ApiUser, co
   if (body.notifyEmails !== undefined) patch.notifyEmails = strArray(body.notifyEmails)
   if (body.widgetTheme !== undefined) patch.widgetTheme = sanitizeTheme(body.widgetTheme)
   if (typeof body.active === 'boolean') patch.active = body.active
+
+  // Spam protection
+  if (typeof body.turnstileEnabled === 'boolean') patch.turnstileEnabled = body.turnstileEnabled
+  if (typeof body.turnstileSiteKey === 'string') patch.turnstileSiteKey = body.turnstileSiteKey.trim()
+  if (typeof body.honeypotEnabled === 'boolean') patch.honeypotEnabled = body.honeypotEnabled
+  if (typeof body.blockDisposableEmails === 'boolean') {
+    patch.blockDisposableEmails = body.blockDisposableEmails
+  }
+  if (body.rateLimit !== undefined) patch.rateLimit = sanitizeRateLimit(body.rateLimit)
+
+  // Display & triggers config
+  if (body.display !== undefined) {
+    const cleaned = sanitizeDisplay(body.display)
+    patch.display = cleaned ?? { mode: 'inline' }
+  }
 
   await adminDb.collection(LEAD_CAPTURE_SOURCES).doc(id).update({
     ...patch,

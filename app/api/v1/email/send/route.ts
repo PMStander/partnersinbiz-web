@@ -21,8 +21,10 @@ import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { getResendClient, FROM_ADDRESS, plainTextToHtml, htmlToPlainText } from '@/lib/email/resend'
 import { signUnsubscribeToken } from '@/lib/email/unsubscribeToken'
+import { isSuppressed } from '@/lib/email/suppressions'
 import { checkQuota } from '@/lib/platform/quotas'
 import type { ApiUser } from '@/lib/api/types'
+import { shouldSendToContact } from '@/lib/preferences/store'
 
 export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) => {
   const body = await req.json()
@@ -47,6 +49,26 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) =
   const scope = resolveOrgScope(user, requestedOrgId)
   if (!scope.ok) return apiError(scope.error, scope.status)
   const orgId = scope.orgId
+
+  // Refuse to send to addresses on the org suppression list (hard bounce,
+  // complaint, manual unsub, or active soft-bounce hold).
+  if (await isSuppressed(orgId, to)) {
+    return apiError('Recipient is on the suppression list for this organisation', 422)
+  }
+
+  // Preferences gate. Transactional sends bypass topic/frequency opt-outs
+  // (topicId='transactional' is documented as not turn-offable) but still
+  // honour a hard global unsubscribe.
+  // The caller can override the topic via `body.topicId` — defaults to
+  // 'transactional' since this endpoint is the transactional send path.
+  const requestedTopicId =
+    typeof body.topicId === 'string' && body.topicId.trim() ? body.topicId.trim() : 'transactional'
+  if (contactId) {
+    const prefsCheck = await shouldSendToContact({ contactId, orgId, topicId: requestedTopicId })
+    if (!prefsCheck.allowed) {
+      return apiError(`Recipient has opted out: ${prefsCheck.reason ?? 'no reason'}`, 422)
+    }
+  }
 
   const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://partnersinbiz.online'
   const unsubscribeToken = contactId
@@ -85,12 +107,18 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) =
     sequenceId,
     sequenceStep,
     variantId: '',
+    topicId: requestedTopicId,
     deleted: false,
     createdAt: FieldValue.serverTimestamp(),
   })
 
-  // 2. Call Resend
+  // 2. Call Resend (with one-click List-Unsubscribe when we have a token).
   const resend = getResendClient()
+  const sendHeaders: Record<string, string> = {}
+  if (unsubscribeUrl) {
+    sendHeaders['List-Unsubscribe'] = `<${unsubscribeUrl}>`
+    sendHeaders['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
+  }
   const { data, error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: to.trim(),
@@ -98,6 +126,7 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) =
     subject: subject.trim(),
     html: finalBodyHtml,
     text: finalBodyText,
+    headers: Object.keys(sendHeaders).length > 0 ? sendHeaders : undefined,
   })
 
   if (error || !data?.id) {

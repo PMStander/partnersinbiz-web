@@ -2,6 +2,71 @@
 import type { Timestamp } from 'firebase-admin/firestore'
 import type { AbConfig } from '@/lib/ab-testing/types'
 
+// ── Branching / Goal / Wait-Until ───────────────────────────────────────────
+//
+// All three features are OPTIONAL on existing sequences. Sequences without
+// `branch`/`waitUntil`/`goals` fall through to linear progression.
+
+/**
+ * Conditions evaluated against an enrollment's send history and the contact
+ * itself. Used by branch rules, exit goals, and (a subset of) wait-until
+ * conditions.
+ */
+export type BranchCondition =
+  | { kind: 'opened' }
+  | { kind: 'not-opened' }
+  | { kind: 'clicked' }
+  | { kind: 'not-clicked' }
+  | { kind: 'clicked-link'; urlSubstring: string }
+  | { kind: 'contact-has-tag'; tag: string }
+  | { kind: 'contact-at-stage'; stage: string }
+  | { kind: 'replied' }
+  | { kind: 'days-since-step'; days: number }
+
+export interface SequenceBranchRule {
+  condition: BranchCondition
+  /** 0-based index into sequence.steps. Use -1 to exit the sequence. */
+  nextStepNumber: number
+  /** Days to wait after this step sent before checking this rule. Default 1. */
+  evaluateAfterDays: number
+}
+
+export interface SequenceBranch {
+  /** Evaluated in order; first match wins. */
+  rules: SequenceBranchRule[]
+  /** Fallback when no rule matches. -1 to exit. */
+  defaultNextStepNumber: number
+}
+
+/**
+ * Wait-until conditions — gate progression to a step until the condition
+ * becomes true (or maxWaitDays expires).
+ */
+export type WaitCondition =
+  | { kind: 'business-hours'; timezone?: string; startHourLocal: number; endHourLocal: number }
+  | { kind: 'day-of-week'; daysOfWeek: number[]; timezone?: string }
+  | { kind: 'contact-tag-added'; tag: string }
+  | { kind: 'contact-stage-reached'; stage: string }
+  | { kind: 'goal-hit'; goalId: string }
+
+export interface WaitUntil {
+  condition: WaitCondition
+  /** Safety cap. After this many days waiting, fall through per onTimeout. */
+  maxWaitDays: number
+  onTimeout: 'send' | 'exit'
+}
+
+/**
+ * Sequence-level exit goals. Evaluated BEFORE every step send. If any goal
+ * matches, the enrollment exits immediately.
+ */
+export interface SequenceGoal {
+  id: string
+  label: string
+  condition: BranchCondition
+  exitReason?: string
+}
+
 export interface SequenceStep {
   stepNumber: number
   delayDays: number
@@ -11,6 +76,23 @@ export interface SequenceStep {
   // Optional A/B testing config for this step. Backwards-compatible — existing
   // steps without `ab` continue to send as a single variant.
   ab?: AbConfig
+  // Optional per-step preference topic override. Defaults to the sequence's
+  // `topicId` (which defaults to 'newsletter').
+  topicId?: string
+  // Optional branch evaluation AFTER this step sends. When unset, the cron
+  // advances linearly (currentStep + 1).
+  branch?: SequenceBranch
+  // Optional wait-until gate BEFORE this step sends. When unset, this step
+  // sends as soon as `nextSendAt` is reached.
+  waitUntil?: WaitUntil
+  // Multi-channel support. Defaults to 'email' when omitted (every step that
+  // existed before SMS was added is implicitly email). When set to 'sms',
+  // the cron sends via lib/sms/send.sendSmsToContact() using `smsBody` and
+  // skips the email subject/body/template rendering entirely.
+  channel?: 'email' | 'sms'
+  // SMS body — used only when channel === 'sms'. Plain text with the same
+  // `{{var}}` interpolation as bodyHtml/bodyText.
+  smsBody?: string
 }
 
 export type SequenceStatus = 'draft' | 'active' | 'paused'
@@ -22,6 +104,12 @@ export interface Sequence {
   description: string
   status: SequenceStatus
   steps: SequenceStep[]
+  // Preference topic for every step in this sequence. Defaults to
+  // 'newsletter'. The cron passes this to `shouldSendToContact` so
+  // contacts opted-out of the topic are skipped automatically.
+  topicId?: string
+  // Sequence-level exit goals — checked before every step advance.
+  goals?: SequenceGoal[]
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
   deleted?: boolean
@@ -30,7 +118,35 @@ export interface Sequence {
 export type SequenceInput = Omit<Sequence, 'id' | 'createdAt' | 'updatedAt'>
 
 export type EnrollmentStatus = 'active' | 'completed' | 'paused' | 'exited'
-export type ExitReason = 'replied' | 'unsubscribed' | 'manual' | 'completed' | 'bounced'
+export type ExitReason =
+  | 'replied'
+  | 'unsubscribed'
+  | 'manual'
+  | 'completed'
+  | 'bounced'
+  | 'goal-hit'
+  | 'branch-exit'
+  | 'cycle-detected'
+  | 'wait-timeout'
+
+/**
+ * One entry on the path an enrollment has taken through a branching sequence.
+ * Appended after each successful send and after each branch evaluation.
+ */
+export interface EnrollmentPathEntry {
+  stepNumber: number
+  sentAt?: Timestamp | null
+  branchTaken?: {
+    matchedRuleIndex: number   // -1 means default
+    condition?: BranchCondition
+    nextStepNumber: number
+  }
+  goalHit?: {
+    goalId: string
+    label: string
+  }
+  at: Timestamp | null
+}
 
 export interface SequenceEnrollment {
   id: string
@@ -45,6 +161,15 @@ export interface SequenceEnrollment {
   exitReason?: ExitReason
   completedAt?: Timestamp | null
   deleted?: boolean
+  // Set after a step with `branch` has sent. While set, the cron is waiting
+  // to evaluate branch rules at this instant rather than sending.
+  pendingBranchEvalAt?: Timestamp | null
+  // Set when a step with `waitUntil` is gated. Used to enforce maxWaitDays.
+  waitingSince?: Timestamp | null
+  // Step-numbers visited (in order) — used to detect cycles in branch graphs.
+  visitedSteps?: number[]
+  // Full traversal record for the admin UI / debugging.
+  path?: EnrollmentPathEntry[]
 }
 
 export type EnrollmentInput = Omit<SequenceEnrollment, 'id' | 'enrolledAt'>

@@ -20,6 +20,8 @@ import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import { validateBroadcastForSend } from '@/lib/broadcasts/validate'
+import { runPreflight } from '@/lib/email/preflight'
+import { preflightInputForBroadcast } from '@/lib/email/preflight-source'
 import { resolveBroadcastAudience } from '@/lib/broadcasts/audience'
 import {
   buildSendContext,
@@ -57,12 +59,41 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser, c
     return apiError('Validation failed', 422, { issues: validation.issues })
   }
 
+  // Preflight quality gate. Same `force: true` escape hatch as /schedule.
+  const force = body.force === true
+  const preflightInput = await preflightInputForBroadcast(broadcast)
+  const preflight = await runPreflight(preflightInput)
+  if (!preflight.pass && !force) {
+    return apiError('Preflight failed', 422, {
+      error: 'Preflight failed',
+      issues: preflight.issues,
+      report: preflight,
+    })
+  }
+  if (!preflight.pass && force) {
+    console.warn(
+      '[broadcast/send-now] force=true bypass with',
+      preflight.errorCount,
+      'errors on broadcast',
+      id,
+    )
+  }
+
+  const preflightAudit = {
+    pass: preflight.pass,
+    errorCount: preflight.errorCount,
+    warningCount: preflight.warningCount,
+    forced: !preflight.pass && force,
+    scannedAt: preflight.scannedAt,
+  }
+
   // Path A: schedule for "now" and let the cron pick it up.
   if (!immediate) {
     await ref.update({
       status: 'scheduled',
       scheduledFor: Timestamp.now(),
       'stats.audienceSize': validation.audienceSize,
+      lastPreflight: preflightAudit,
       ...lastActorFrom(user),
       updatedAt: FieldValue.serverTimestamp(),
     })
@@ -87,6 +118,7 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser, c
     status: 'sending',
     sendStartedAt: FieldValue.serverTimestamp(),
     'stats.audienceSize': validation.audienceSize,
+    lastPreflight: preflightAudit,
     ...lastActorFrom(user),
     updatedAt: FieldValue.serverTimestamp(),
   })

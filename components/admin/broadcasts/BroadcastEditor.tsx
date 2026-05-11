@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AiAssistantPanel from '@/components/admin/email/AiAssistantPanel'
+import PreflightPanel from '@/components/admin/email/PreflightPanel'
 import type { Broadcast, BroadcastStatus } from '@/lib/broadcasts/types'
+import type { PreflightReport } from '@/lib/email/preflight'
+import { countSmsSegments } from '@/lib/sms/twilio'
 
-type Tab = 'audience' | 'content' | 'schedule' | 'stats'
+type Tab = 'audience' | 'content' | 'schedule' | 'preflight' | 'stats'
 
 const STATUS_COLORS: Record<BroadcastStatus, string> = {
   draft: 'bg-surface-container text-on-surface-variant',
@@ -76,6 +79,21 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
   const [tagInput, setTagInput] = useState('')
   const [contactInput, setContactInput] = useState('')
   const [aiOpen, setAiOpen] = useState(false)
+  const [preflight, setPreflight] = useState<PreflightReport | null>(null)
+  const [preflightLoading, setPreflightLoading] = useState(false)
+
+  const runPreflight = useCallback(async () => {
+    setPreflightLoading(true)
+    try {
+      const r = await fetch(`/api/v1/broadcasts/${id}/preflight`, { method: 'POST' })
+      const b = await r.json()
+      if (r.ok && b?.data?.report) setPreflight(b.data.report as PreflightReport)
+    } catch {
+      // Non-fatal — UI shows "preflight unavailable" via null state.
+    } finally {
+      setPreflightLoading(false)
+    }
+  }, [id])
 
   const readOnly = !['draft', 'paused', 'scheduled'].includes(broadcast.status)
 
@@ -148,6 +166,13 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
     }
   }, [tab, broadcast.orgId, refreshPreview])
 
+  // Auto-run preflight when the operator opens the preflight or schedule tab.
+  useEffect(() => {
+    if (tab === 'preflight' || tab === 'schedule') {
+      runPreflight()
+    }
+  }, [tab, runPreflight])
+
   // Live stats polling on the stats tab.
   useEffect(() => {
     if (tab !== 'stats') return
@@ -174,12 +199,15 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
         body: JSON.stringify({
           name: broadcast.name,
           description: broadcast.description,
+          channel: broadcast.channel ?? 'email',
           fromDomainId: broadcast.fromDomainId,
           fromName: broadcast.fromName,
           fromLocal: broadcast.fromLocal,
           replyTo: broadcast.replyTo,
           content: broadcast.content,
           audience: broadcast.audience,
+          audienceLocalDelivery: broadcast.audienceLocalDelivery ?? false,
+          localDeliveryWindowHours: broadcast.localDeliveryWindowHours ?? 24,
         }),
       })
       if (res.ok) setSavedAt(Date.now())
@@ -187,6 +215,12 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
       setSaving(false)
     }
   }, [broadcast, id])
+
+  const channel: 'email' | 'sms' = broadcast.channel ?? 'email'
+  const isSms = channel === 'sms'
+  const smsSegInfo = useMemo(() => countSmsSegments(broadcast.content?.bodyText ?? ''), [
+    broadcast.content?.bodyText,
+  ])
 
   const remove = useCallback(async () => {
     if (!confirm('Delete this broadcast?')) return
@@ -291,12 +325,15 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
     { key: 'audience', label: 'Audience', show: true },
     { key: 'content', label: 'Content', show: true },
     { key: 'schedule', label: 'Schedule', show: true },
+    { key: 'preflight', label: 'Preflight', show: true },
     {
       key: 'stats',
       label: 'Stats',
       show: ['sending', 'sent', 'paused', 'scheduled'].includes(broadcast.status),
     },
   ]
+
+  const preflightBlocking = preflight !== null && !preflight.pass
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -349,6 +386,36 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
           placeholder="Broadcast name"
         />
         <p className="text-sm text-on-surface-variant">{headerSubtext}</p>
+      </div>
+
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-on-surface-variant font-medium">Channel:</span>
+        <div className="inline-flex rounded-lg border border-outline-variant overflow-hidden">
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => setBroadcast((prev) => ({ ...prev, channel: 'email' }))}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+              channel === 'email'
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface text-on-surface-variant hover:text-on-surface'
+            } disabled:opacity-50`}
+          >
+            Email
+          </button>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => setBroadcast((prev) => ({ ...prev, channel: 'sms' }))}
+            className={`px-3 py-1.5 text-xs font-medium border-l border-outline-variant transition-colors ${
+              channel === 'sms'
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface text-on-surface-variant hover:text-on-surface'
+            } disabled:opacity-50`}
+          >
+            SMS
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-1 border-b border-outline-variant">
@@ -519,7 +586,7 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
         </div>
       )}
 
-      {tab === 'content' && (
+      {tab === 'content' && !isSms && (
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -661,6 +728,40 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
         </div>
       )}
 
+      {tab === 'content' && isSms && (
+        <div className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-on-surface mb-1">
+              SMS body
+            </label>
+            <textarea
+              disabled={readOnly}
+              value={broadcast.content?.bodyText ?? ''}
+              onChange={(e) => setContent({ bodyText: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface text-on-surface text-sm font-mono disabled:opacity-70"
+              rows={6}
+              placeholder="Use {{firstName}}, {{orgName}} for personalisation. Reply STOP to opt out."
+            />
+            <div className="mt-1 flex items-center justify-between text-xs text-on-surface-variant">
+              <span>
+                {smsSegInfo.characters} chars · {smsSegInfo.segments} segment
+                {smsSegInfo.segments === 1 ? '' : 's'} · {smsSegInfo.encoding.toUpperCase()}
+              </span>
+              {smsSegInfo.segments > 1 && (
+                <span className="text-amber-600 dark:text-amber-400">
+                  Multi-segment SMS bills per segment.
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-on-surface-variant mt-2">
+              SMS broadcasts skip the template, subject, preheader, and From-domain fields. Contacts
+              without a phone number are silently skipped at send time. The org&apos;s configured
+              Twilio messaging service (or default From number) is used.
+            </p>
+          </div>
+        </div>
+      )}
+
       {tab === 'schedule' && (
         <div className="space-y-5">
           <div>
@@ -677,17 +778,78 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
             </p>
           </div>
 
+          <div className="rounded-xl border border-outline-variant p-3 space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                disabled={readOnly}
+                checked={broadcast.audienceLocalDelivery ?? false}
+                onChange={(e) =>
+                  setBroadcast((prev) => ({ ...prev, audienceLocalDelivery: e.target.checked }))
+                }
+                className="mt-1 h-4 w-4 rounded border-outline text-primary"
+              />
+              <div className="text-sm">
+                <div className="font-medium text-on-surface">Deliver at recipient&apos;s local time</div>
+                <p className="text-xs text-on-surface-variant mt-0.5">
+                  Send to each contact only once their local clock reaches the scheduled hour
+                  (e.g. 9am in their timezone). Falls back to send-anyway after the window expires.
+                </p>
+              </div>
+            </label>
+            {broadcast.audienceLocalDelivery && (
+              <div className="ml-7">
+                <label className="block text-xs text-on-surface-variant mb-1">
+                  Local delivery window (hours)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={168}
+                  disabled={readOnly}
+                  value={broadcast.localDeliveryWindowHours ?? 24}
+                  onChange={(e) =>
+                    setBroadcast((prev) => ({
+                      ...prev,
+                      localDeliveryWindowHours: Math.max(1, Math.min(168, parseInt(e.target.value, 10) || 24)),
+                    }))
+                  }
+                  className="w-24 px-3 py-2 rounded-lg border border-outline-variant bg-surface text-on-surface text-sm"
+                />
+                <p className="text-xs text-on-surface-variant mt-1">
+                  After this many hours past the scheduled time, anyone still outside their local
+                  window gets sent regardless.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {preflightBlocking && (
+            <div className="rounded-xl border border-red-400/40 bg-red-50/60 dark:bg-red-500/10 p-3 text-sm">
+              <div className="font-semibold text-red-700 dark:text-red-300">
+                Preflight found {preflight?.errorCount} issue{preflight?.errorCount === 1 ? '' : 's'} that block sending.
+              </div>
+              <button
+                onClick={() => setTab('preflight')}
+                className="mt-1 text-xs text-red-700 dark:text-red-300 underline"
+              >
+                View preflight report →
+              </button>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={schedule}
-              disabled={readOnly}
+              disabled={readOnly || preflightBlocking || preflightLoading}
+              title={preflightBlocking ? 'Fix preflight errors first' : ''}
               className="px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-medium disabled:opacity-50"
             >
               Schedule
             </button>
             <button
               onClick={sendNow}
-              disabled={readOnly}
+              disabled={readOnly || preflightBlocking || preflightLoading}
+              title={preflightBlocking ? 'Fix preflight errors first' : ''}
               className="px-4 py-2 rounded-lg bg-surface-container text-on-surface text-sm font-medium disabled:opacity-50"
             >
               Send now
@@ -697,6 +859,19 @@ export default function BroadcastEditor({ id, initial, onBack, onDeleted }: Prop
             <p className="text-sm text-red-600 whitespace-pre-wrap">{scheduleError}</p>
           )}
         </div>
+      )}
+
+      {tab === 'preflight' && (
+        <PreflightPanel
+          report={preflight}
+          loading={preflightLoading}
+          onRefresh={runPreflight}
+          onJumpToTab={(target) => {
+            if (target === 'content' || target === 'audience' || target === 'schedule') {
+              setTab(target)
+            }
+          }}
+        />
       )}
 
       {aiOpen && (

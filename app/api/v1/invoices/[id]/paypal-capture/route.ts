@@ -16,6 +16,7 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { actorFrom, lastActorFrom } from '@/lib/api/actor'
 import { capturePayPalOrder } from '@/lib/payments/paypal'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import { tryAttributeInvoicePaid } from '@/lib/email-analytics/attribution-hooks'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,6 +106,15 @@ export const POST = withAuth('admin', async (req, user, ctx) => {
         console.error('[webhook-dispatch-error] payment.received', err)
       }
     }
+
+    // Best-effort: attribute the paid invoice to the most recent email click.
+    await tryAttributeInvoicePaid({
+      orgId,
+      contactId: typeof invoice.contactId === 'string' ? invoice.contactId : null,
+      invoiceId: id,
+      amount: Number(invoice.total ?? 0),
+      currency: typeof invoice.currency === 'string' ? invoice.currency : 'ZAR',
+    })
 
     return apiSuccess({ id, status: 'paid', captureId: capture.captureId })
   } catch (err) {

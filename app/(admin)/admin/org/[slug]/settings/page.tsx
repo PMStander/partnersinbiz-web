@@ -15,6 +15,10 @@ interface OrgForm {
   notificationEmail: string
   defaultApprovalRequired: boolean
   timezone: string
+  // Email send-time optimisation
+  preferredSendHourLocal: number
+  preferredSendDaysOfWeek: number[]
+  replyNotifyEmails: string
   // Billing address
   line1: string
   line2: string
@@ -39,6 +43,7 @@ interface OrgForm {
 const emptyForm: OrgForm = {
   name: '', website: '', description: '', industry: '', billingEmail: '',
   status: 'active', notificationEmail: '', defaultApprovalRequired: false, timezone: '',
+  preferredSendHourLocal: 9, preferredSendDaysOfWeek: [1, 2, 3, 4, 5], replyNotifyEmails: '',
   line1: '', line2: '', city: '', state: '', postalCode: '', country: '',
   vatNumber: '', registrationNumber: '', phone: '',
   bankName: '', accountHolder: '', accountNumber: '', branchCode: '',
@@ -93,6 +98,16 @@ export default function OrgSettingsPage() {
           notificationEmail: settings.notificationEmail ?? '',
           defaultApprovalRequired: settings.defaultApprovalRequired ?? false,
           timezone: settings.timezone ?? '',
+          preferredSendHourLocal:
+            typeof settings.preferredSendHourLocal === 'number'
+              ? settings.preferredSendHourLocal
+              : 9,
+          preferredSendDaysOfWeek: Array.isArray(settings.preferredSendDaysOfWeek)
+            ? settings.preferredSendDaysOfWeek
+            : [1, 2, 3, 4, 5],
+          replyNotifyEmails: Array.isArray(settings.replyNotifyEmails)
+            ? settings.replyNotifyEmails.join(', ')
+            : '',
           line1: addr.line1 ?? '',
           line2: addr.line2 ?? '',
           city: addr.city ?? '',
@@ -135,6 +150,12 @@ export default function OrgSettingsPage() {
           notificationEmail: form.notificationEmail,
           defaultApprovalRequired: form.defaultApprovalRequired,
           timezone: form.timezone,
+          preferredSendHourLocal: form.preferredSendHourLocal,
+          preferredSendDaysOfWeek: form.preferredSendDaysOfWeek,
+          replyNotifyEmails: form.replyNotifyEmails
+            .split(/[\s,]+/)
+            .map((e) => e.trim().toLowerCase())
+            .filter((e) => e && e.includes('@')),
         },
         billingDetails: {
           address: {
@@ -274,6 +295,76 @@ export default function OrgSettingsPage() {
                 <option value="Pacific/Auckland">Pacific/Auckland (NZST, UTC+12)</option>
                 <option value="UTC">UTC</option>
               </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Email send-time + reply notifications */}
+        <div className="pib-card space-y-4">
+          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Email send-time</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="pib-label">Preferred send hour (local)</label>
+              <select
+                value={form.preferredSendHourLocal}
+                onChange={e => update('preferredSendHourLocal', parseInt(e.target.value, 10))}
+                className="pib-select"
+              >
+                {Array.from({ length: 24 }).map((_, h) => (
+                  <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-on-surface-variant/60 mt-1">
+                Sequence steps and broadcasts will target this hour in the recipient&apos;s local timezone.
+              </p>
+            </div>
+            <div>
+              <label className="pib-label">Preferred send days</label>
+              <div className="flex gap-1 flex-wrap">
+                {[
+                  { v: 0, l: 'Sun' },
+                  { v: 1, l: 'Mon' },
+                  { v: 2, l: 'Tue' },
+                  { v: 3, l: 'Wed' },
+                  { v: 4, l: 'Thu' },
+                  { v: 5, l: 'Fri' },
+                  { v: 6, l: 'Sat' },
+                ].map((d) => {
+                  const active = form.preferredSendDaysOfWeek.includes(d.v)
+                  return (
+                    <button
+                      key={d.v}
+                      type="button"
+                      onClick={() =>
+                        update(
+                          'preferredSendDaysOfWeek',
+                          active
+                            ? form.preferredSendDaysOfWeek.filter((x) => x !== d.v)
+                            : [...form.preferredSendDaysOfWeek, d.v].sort(),
+                        )
+                      }
+                      className={`px-2.5 py-1 rounded-md text-xs ${active ? 'bg-primary text-on-primary' : 'bg-[var(--color-surface-container)] text-on-surface-variant'}`}
+                    >
+                      {d.l}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-[11px] text-on-surface-variant/60 mt-1">
+                Steps that fall on excluded days roll forward to the next allowed day.
+              </p>
+            </div>
+            <div className="col-span-2">
+              <label className="pib-label">Reply notification recipients</label>
+              <input
+                value={form.replyNotifyEmails}
+                onChange={e => update('replyNotifyEmails', e.target.value)}
+                className="pib-input"
+                placeholder="sales@company.com, growth@company.com"
+              />
+              <p className="text-[11px] text-on-surface-variant/60 mt-1">
+                Comma-separated. These addresses get notified whenever a contact replies (or bounces / unsubscribes via reply).
+              </p>
             </div>
           </div>
         </div>

@@ -140,6 +140,64 @@ export function BarChart({
   )
 }
 
+// ── Heatmap cell shade helper ───────────────────────────────────────────────
+
+/**
+ * Returns an amber shade for a normalised value 0..1. Used by cohort and
+ * send-time grids. Lower = darker background, higher = stronger amber.
+ */
+export function heatmapShade(value: number): string {
+  const t = Math.max(0, Math.min(1, value))
+  if (t === 0) return 'rgba(245, 158, 11, 0.06)'
+  // Pure CSS rgba so we don't need Tailwind dynamic classes.
+  const alpha = 0.1 + t * 0.7
+  return `rgba(245, 158, 11, ${alpha.toFixed(3)})`
+}
+
+/**
+ * Returns the readable text colour to use on top of a heatmap cell — light
+ * on dark cells (high values), dim on faint cells (low values).
+ */
+export function heatmapTextColor(value: number): string {
+  return value > 0.5 ? '#0f172a' : 'rgba(226, 232, 240, 0.85)'
+}
+
+// ── Horizontal bar with relative + absolute counts ──────────────────────────
+
+export function CountBar({
+  label,
+  value,
+  max,
+  rightLabel,
+}: {
+  label: string
+  value: number
+  max: number
+  rightLabel?: string
+}) {
+  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-on-surface truncate" title={label}>
+            {label.length > 60 ? label.slice(0, 59) + '…' : label}
+          </span>
+          <span className="text-on-surface-variant text-xs tabular-nums whitespace-nowrap">
+            {rightLabel ?? value.toLocaleString()}
+          </span>
+        </div>
+        <div className="h-1.5 mt-1 rounded-full bg-surface-container-high overflow-hidden">
+          <div
+            className="h-full bg-amber-500"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Donut chart ─────────────────────────────────────────────────────────────
 
 export function Donut({
