@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '@/lib/firebase/config'
+import { auth, getClientAuth } from '@/lib/firebase/config'
 import { logout } from '@/lib/firebase/auth'
 
 interface NavItem {
@@ -16,21 +16,16 @@ interface NavItem {
 }
 
 const NAV_LINKS: NavItem[] = [
-  { href: '/portal/dashboard',       label: 'Dashboard',      icon: 'space_dashboard',  group: 'work' },
-  { href: '/portal/project',         label: 'Projects',       icon: 'rocket_launch',    group: 'work' },
-  { href: '/portal/social',          label: 'Social',         icon: 'share',            group: 'work' },
-  { href: '/portal/seo',             label: 'SEO',            icon: 'trending_up',      group: 'work' },
-  { href: '/portal/contacts',        label: 'Contacts',       icon: 'contacts',         group: 'work' },
-  { href: '/portal/campaigns',       label: 'Campaigns',      icon: 'campaign',         group: 'work' },
-  { href: '/portal/capture-sources', label: 'Capture Sources', icon: 'inventory_2',     group: 'work' },
-  { href: '/portal/integrations',    label: 'Integrations',   icon: 'extension',        group: 'work' },
-  { href: '/portal/properties',      label: 'Properties',     icon: 'apartment',        group: 'data' },
-  { href: '/portal/reports',         label: 'Reports',        icon: 'analytics',        group: 'data' },
-  { href: '/portal/data',            label: 'Data',           icon: 'database',         group: 'data' },
-  { href: '/portal/segments',        label: 'Segments',       icon: 'filter_alt',       group: 'data' },
-  { href: '/portal/email-domains',   label: 'Email Domains',  icon: 'dns',              group: 'data' },
-  { href: '/portal/messages',        label: 'Messages',       icon: 'forum',            group: 'comms' },
-  { href: '/portal/payments',        label: 'Payments',       icon: 'payments',         group: 'comms' },
+  { href: '/portal/dashboard',          label: 'Dashboard',  icon: 'space_dashboard', group: 'work' },
+  { href: '/portal/project',            label: 'Projects',   icon: 'rocket_launch',   group: 'work' },
+  { href: '/portal/campaigns',          label: 'Campaigns',  icon: 'campaign',        group: 'work' },
+  { href: '/portal/social',             label: 'Social',     icon: 'share',           group: 'work' },
+  { href: '/portal/seo',                label: 'SEO',        icon: 'trending_up',     group: 'work' },
+  { href: '/portal/reports',            label: 'Reports',    icon: 'analytics',       group: 'data' },
+  { href: '/portal/branding',           label: 'Branding',   icon: 'palette',         group: 'comms' },
+  { href: '/portal/messages',           label: 'Messages',   icon: 'forum',           group: 'comms' },
+  { href: '/portal/payments',           label: 'Payments',   icon: 'payments',        group: 'comms' },
+  { href: '/portal/settings',           label: 'Settings',   icon: 'settings',        group: 'comms' },
 ]
 
 const GROUP_LABELS: Record<NavItem['group'], string> = {
@@ -48,19 +43,35 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname()
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
+  const [orgName, setOrgName] = useState('')
   const [checking, setChecking] = useState(true)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        router.push('/login')
-      } else {
-        setEmail(user.email ?? '')
-        setName(user.displayName ?? user.email?.split('@')[0] ?? '')
-        setChecking(false)
-      }
+    let cancelled = false
+    let unsubscribe: (() => void) | null = null
+
+    getClientAuth().authStateReady().then(() => {
+      if (cancelled) return
+      unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (!user) {
+          router.push('/login')
+        } else {
+          setEmail(user.email ?? '')
+          setName(user.displayName ?? user.email?.split('@')[0] ?? '')
+          setChecking(false)
+          fetch('/api/v1/portal/org')
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d?.org?.name) setOrgName(d.org.name) })
+            .catch(() => {})
+        }
+      })
     })
+
+    return () => {
+      cancelled = true
+      unsubscribe?.()
+    }
   }, [router])
 
   useEffect(() => {
@@ -114,11 +125,16 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         {/* Brand */}
         <Link
           href="/portal/dashboard"
-          className="flex items-center gap-2.5 px-5 h-16 border-b border-[var(--color-pib-line)] shrink-0"
+          className="flex items-center gap-2.5 px-5 py-3 min-h-16 border-b border-[var(--color-pib-line)] shrink-0"
         >
-          <Image src="/pib-logo-512.png" alt="Partners in Biz" width={28} height={28} className="rounded-md object-contain" />
-          <span className="font-display text-lg leading-none">Partners in Biz</span>
-          <span className="ml-auto pill !text-[10px] !py-0.5 !px-2">Client</span>
+          <Image src="/pib-logo-512.png" alt="Partners in Biz" width={28} height={28} className="rounded-md object-contain shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <span className="font-display text-base leading-tight">Partners in Biz</span>
+            {orgName && (
+              <span className="text-[11px] text-[var(--color-pib-text-muted)] truncate leading-tight mt-0.5">{orgName}</span>
+            )}
+          </div>
+          <span className="ml-auto pill !text-[10px] !py-0.5 !px-2 shrink-0">Client</span>
         </Link>
 
         {/* Nav groups */}

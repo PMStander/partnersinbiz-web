@@ -143,7 +143,7 @@ export function AssetGrid({
                 <div className="flex items-baseline justify-between gap-3">
                   <h3 className="text-base font-medium">
                     {(post as unknown as { title?: string }).title ??
-                      post.content?.slice(0, 80) ??
+                      (typeof post.content === 'string' ? post.content.slice(0, 80) : undefined) ??
                       'Untitled video'}
                   </h3>
                   <span className="text-xs text-[var(--color-pib-text-muted)] uppercase tracking-wide">
