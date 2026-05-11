@@ -53,16 +53,11 @@ export const GET = withPortalAuth(async (req: NextRequest, uid: string) => {
   // Cap end at today.
   period.end = now.toISOString().slice(0, 10)
 
-  const [snapshot, properties, connections, reports, last] = await Promise.all([
-    snapshotKpis({
-      orgId,
-      period,
-      previousPeriod: lastCompletedMonth(tz),
-    }),
-    listProps(orgId),
-    listConnectionsForOrg(orgId),
-    listReports(orgId, 6),
-    Promise.resolve(null),
+  const [snapshot, properties, connections, reports] = await Promise.all([
+    snapshotKpis({ orgId, period, previousPeriod: lastCompletedMonth(tz) }).catch(() => null),
+    listProps(orgId).catch(() => []),
+    listConnectionsForOrg(orgId).catch(() => []),
+    listReports(orgId, 6).catch(() => []),
   ])
 
   // Strip ciphertext from connections shown in portal.
@@ -75,8 +70,8 @@ export const GET = withPortalAuth(async (req: NextRequest, uid: string) => {
     ok: true,
     orgId,
     period,
-    kpis: snapshot.kpis,
-    series: snapshot.series,
+    kpis: snapshot?.kpis ?? null,
+    series: snapshot?.series ?? null,
     properties,
     connections: safeConnections,
     reports: reports.map((r) => ({
@@ -89,6 +84,5 @@ export const GET = withPortalAuth(async (req: NextRequest, uid: string) => {
       sentAt: r.sentAt,
       createdAt: r.createdAt,
     })),
-    last,
   })
 })
