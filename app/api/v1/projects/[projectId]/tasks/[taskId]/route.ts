@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { getProjectForUser } from '@/lib/projects/access'
 import {
   buildProjectTaskUpdateData,
   notificationPriority,
@@ -15,6 +16,8 @@ type RouteContext = { params: Promise<{ projectId: string; taskId: string }> }
 export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
   const { projectId, taskId } = await (ctx as RouteContext).params
   const body = await req.json().catch(() => ({})) as Record<string, unknown>
+  const access = await getProjectForUser(projectId, user)
+  if (!access.ok) return apiError(access.error, access.status)
 
   const ref = adminDb.collection('projects').doc(projectId).collection('tasks').doc(taskId)
   const doc = await ref.get()
@@ -64,6 +67,8 @@ export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
 
 export const DELETE = withAuth('client', async (req: NextRequest, user, ctx) => {
   const { projectId, taskId } = await (ctx as RouteContext).params
+  const access = await getProjectForUser(projectId, user)
+  if (!access.ok) return apiError(access.error, access.status)
   await adminDb.collection('projects').doc(projectId).collection('tasks').doc(taskId).delete()
   return apiSuccess({ deleted: true })
 })

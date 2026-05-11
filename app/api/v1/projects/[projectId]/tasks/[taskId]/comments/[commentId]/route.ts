@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { getProjectForUser } from '@/lib/projects/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,8 @@ type RouteContext = { params: Promise<{ projectId: string; taskId: string; comme
 // PATCH - Mark comment as agent picked up
 export const PATCH = withAuth('admin', async (req: NextRequest, user, ctx) => {
   const { projectId, taskId, commentId } = await (ctx as RouteContext).params
+  const access = await getProjectForUser(projectId, user)
+  if (!access.ok) return apiError(access.error, access.status)
 
   try {
     const body = await req.json()

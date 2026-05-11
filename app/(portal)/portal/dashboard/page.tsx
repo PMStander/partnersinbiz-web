@@ -195,7 +195,7 @@ export default function PortalDashboard() {
             Your business at a glance — revenue, projects, and the latest report your team has shipped.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-2">
-            <Link href="/portal/project" className="btn-pib-accent">
+            <Link href="/portal/projects" className="btn-pib-accent">
               View projects
               <span className="material-symbols-outlined text-base">arrow_outward</span>
             </Link>

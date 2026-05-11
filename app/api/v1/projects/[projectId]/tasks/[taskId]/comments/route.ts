@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { notifyNewComment } from '@/lib/notifications/notify'
 import { logActivity } from '@/lib/activity/log'
+import { getProjectForUser } from '@/lib/projects/access'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,8 @@ type RouteContext = { params: Promise<{ projectId: string; taskId: string }> }
 // GET - List all comments for a task
 export const GET = withAuth('client', async (req: NextRequest, user, ctx) => {
   const { projectId, taskId } = await (ctx as RouteContext).params
+  const access = await getProjectForUser(projectId, user)
+  if (!access.ok) return apiError(access.error, access.status)
 
   const ref = adminDb.collection('projects').doc(projectId).collection('tasks').doc(taskId)
   const doc = await ref.get()
@@ -41,6 +44,8 @@ export const GET = withAuth('client', async (req: NextRequest, user, ctx) => {
 // POST - Create a comment
 export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
   const { projectId, taskId } = await (ctx as RouteContext).params
+  const access = await getProjectForUser(projectId, user)
+  if (!access.ok) return apiError(access.error, access.status)
 
   try {
     const body = await req.json()

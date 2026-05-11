@@ -4,6 +4,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { logActivity } from '@/lib/activity/log'
+import { getProjectForUser } from '@/lib/projects/access'
 import {
   buildProjectTaskCreateData,
   notificationPriority,
@@ -16,6 +17,9 @@ type RouteContext = { params: Promise<{ projectId: string }> }
 
 export const GET = withAuth('client', async (req: NextRequest, user, ctx) => {
   const { projectId } = await (ctx as RouteContext).params
+  const access = await getProjectForUser(projectId, user)
+  if (!access.ok) return apiError(access.error, access.status)
+
   const snapshot = await adminDb
     .collection('projects')
     .doc(projectId)
@@ -32,10 +36,9 @@ export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
   const { projectId } = await (ctx as RouteContext).params
   const body = await req.json().catch(() => ({})) as Record<string, unknown>
 
-  const projectRef = adminDb.collection('projects').doc(projectId)
-  const projectDoc = await projectRef.get()
-  if (!projectDoc.exists) return apiError('Project not found', 404)
-  const project = projectDoc.data() ?? {}
+  const access = await getProjectForUser(projectId, user)
+  if (!access.ok) return apiError(access.error, access.status)
+  const project = access.doc.data() ?? {}
 
   const taskData = buildProjectTaskCreateData(body, projectId, typeof project.orgId === 'string' ? project.orgId : undefined)
   if (!taskData.ok) return apiError(taskData.error, taskData.status ?? 400)

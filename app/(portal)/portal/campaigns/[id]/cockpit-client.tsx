@@ -28,11 +28,13 @@ interface Props {
   campaign: AnyObj
   assets: AnyObj
   brand: PreviewBrand | undefined
+  orgName: string
+  monthLabel: string
   shareToken?: string
   shareEnabled: boolean
 }
 
-export function CockpitClient({ campaignId, campaign, assets: initialAssets, brand, shareToken, shareEnabled }: Props) {
+export function CockpitClient({ campaignId, campaign, assets: initialAssets, brand, orgName, monthLabel, shareToken, shareEnabled }: Props) {
   const router = useRouter()
   const search = useSearchParams()
   const tabParam = search.get('tab')
@@ -87,7 +89,8 @@ export function CockpitClient({ campaignId, campaign, assets: initialAssets, bra
         <div className="flex items-end justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-3xl md:text-5xl font-headline font-bold">
-              {campaign.name}
+              {orgName ? `${orgName} — ` : ''}Marketing Preview
+              {monthLabel && <span className="text-[var(--org-text-muted,var(--color-pib-text-muted))]"> · {monthLabel}</span>}
             </h1>
             {description && (
               <p className="text-sm text-[var(--org-text-muted,var(--color-pib-text-muted))] mt-2 max-w-2xl">
@@ -134,13 +137,13 @@ export function CockpitClient({ campaignId, campaign, assets: initialAssets, bra
       </header>
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <SmallStat label="Blogs" value={split.blogs.length} />
+        <SmallStat label="Blog Posts" value={split.blogs.length} />
         <SmallStat label="Videos" value={split.videos.length} />
         <SmallStat label="Social Captions" value={split.allSocial.length} />
-        <SmallStat label="Awaiting" value={totalAwaiting} accent />
+        <SmallStat label="Awaiting review" value={totalAwaiting} accent />
       </section>
 
-      <nav className="border-b border-[var(--color-pib-line)] flex flex-wrap gap-1 overflow-x-auto">
+      <nav className="border-b border-[var(--org-border,var(--color-pib-line))] flex flex-wrap gap-1 overflow-x-auto">
         {TABS.map(t => {
           const isActive = t.key === tab
           const count = countFor(t.key, split)
@@ -153,7 +156,7 @@ export function CockpitClient({ campaignId, campaign, assets: initialAssets, bra
                 'px-4 py-2.5 text-sm font-label whitespace-nowrap border-b-2 -mb-px transition-colors',
                 isActive
                   ? 'text-[var(--org-text,var(--color-pib-text))]'
-                  : 'border-transparent text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)]',
+                  : 'border-transparent text-[var(--org-text-muted,var(--color-pib-text-muted))] hover:text-[var(--org-text,var(--color-pib-text))]',
               ].join(' ')}
               style={
                 isActive
@@ -163,7 +166,7 @@ export function CockpitClient({ campaignId, campaign, assets: initialAssets, bra
             >
               {t.label}
               {count !== null && (
-                <span className="ml-2 text-[10px] text-[var(--color-pib-text-muted)]">({count})</span>
+                <span className="ml-2 text-[10px] text-[var(--org-text-muted,var(--color-pib-text-muted))]">({count})</span>
               )}
             </button>
           )
@@ -247,7 +250,7 @@ export function CockpitClient({ campaignId, campaign, assets: initialAssets, bra
         )}
       </div>
 
-      <footer className="pt-6 mt-12 border-t border-[var(--color-pib-line)] flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--color-pib-text-muted)]">
+      <footer className="pt-6 mt-12 border-t border-[var(--org-border,var(--color-pib-line))] flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--org-text-muted,var(--color-pib-text-muted))]">
         <p>
           {totalAwaiting > 0
             ? `${totalAwaiting} asset${totalAwaiting === 1 ? '' : 's'} awaiting your review.`

@@ -3,8 +3,8 @@ import { cookies } from 'next/headers'
 import { redirect, notFound } from 'next/navigation'
 import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { loadCampaignWithAssets } from '@/lib/campaigns/load'
-import { getBrandKitForOrg } from '@/lib/brand-kit/store'
 import type { PreviewBrand } from '@/components/campaign-preview'
+import { toPreviewBrand, type BrandColorsLike } from '@/lib/organizations/toPreviewBrand'
 import { CockpitClient } from './cockpit-client'
 
 export const dynamic = 'force-dynamic'
@@ -30,6 +30,21 @@ function withAlpha(color: string, alpha: number): string {
   return `#${m[1]}${a}`
 }
 
+function monthLabel(value: unknown): string {
+  if (!value) return ''
+  let date: Date | null = null
+  if (value instanceof Date) date = value
+  else if (typeof value === 'string') {
+    const parsed = Date.parse(value)
+    if (!Number.isNaN(parsed)) date = new Date(parsed)
+  } else if (typeof value === 'object') {
+    const timestamp = value as { seconds?: number; _seconds?: number }
+    const seconds = timestamp.seconds ?? timestamp._seconds
+    if (typeof seconds === 'number') date = new Date(seconds * 1000)
+  }
+  return date ? new Intl.DateTimeFormat('en-ZA', { month: 'long', year: 'numeric' }).format(date) : ''
+}
+
 export default async function PortalCampaignCockpitPage({
   params,
 }: {
@@ -52,29 +67,20 @@ export default async function PortalCampaignCockpitPage({
     redirect(`/portal/campaigns/email/${id}`)
   }
 
-  const brandKit = await getBrandKitForOrg(user.orgId!)
-  const accent = brandKit.accentColor || brandKit.primaryColor
-
-  const previewBrand: PreviewBrand = {
-    palette: {
-      bg: brandKit.backgroundColor,
-      accent,
-      alert: '#FCA5A5',
-      text: brandKit.textColor,
-      muted: brandKit.mutedTextColor,
-    },
-    typography: {
-      heading: brandKit.fontFamilyHeadings,
-      body: brandKit.fontFamilyPrimary,
-    },
-    logoUrl: brandKit.logoUrl || undefined,
-  }
+  const orgSnap = await adminDb.collection('organizations').doc(user.orgId!).get()
+  const org = orgSnap.data() ?? {}
+  const settings = (org.settings ?? {}) as Record<string, unknown>
+  const brandColors = (settings.brandColors ?? undefined) as BrandColorsLike | undefined
+  const previewBrand: PreviewBrand | undefined = toPreviewBrand(brandColors, org.brandProfile)
+  const accent = brandColors?.accent ?? brandColors?.primary ?? '#F5A623'
 
   const styleVars = {
-    '--org-bg': brandKit.backgroundColor,
+    '--org-bg': brandColors?.background ?? 'var(--color-pib-bg)',
+    '--org-surface': brandColors?.surface ?? 'var(--color-pib-surface)',
     '--org-accent': accent,
-    '--org-text': brandKit.textColor,
-    '--org-text-muted': brandKit.mutedTextColor,
+    '--org-text': brandColors?.text ?? 'var(--color-pib-text)',
+    '--org-text-muted': brandColors?.textMuted ?? 'var(--color-pib-text-muted)',
+    '--org-border': brandColors?.border ?? 'var(--color-pib-line)',
     backgroundImage: `radial-gradient(1100px 480px at 0% -10%, ${withAlpha(accent, 0.08)} 0%, transparent 60%)`,
   } as CSSProperties
 
@@ -85,6 +91,8 @@ export default async function PortalCampaignCockpitPage({
         campaign={campaign}
         assets={assets}
         brand={previewBrand}
+        orgName={typeof org.name === 'string' ? org.name : ''}
+        monthLabel={monthLabel(campaign.createdAt)}
         shareToken={campaign.shareToken}
         shareEnabled={campaign.shareEnabled !== false}
       />

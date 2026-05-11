@@ -72,7 +72,7 @@ export default function EnquiryDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-8 max-w-3xl">
       <Link
-        href="/portal/project"
+        href="/portal/projects"
         className="inline-flex items-center gap-1 text-sm text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors"
       >
         <span className="material-symbols-outlined text-base">arrow_back</span>

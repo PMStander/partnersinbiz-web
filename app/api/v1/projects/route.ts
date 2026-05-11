@@ -1,6 +1,6 @@
 /**
- * GET  /api/v1/projects  — list all projects (admin only)
- * POST /api/v1/projects  — create a new project (admin only)
+ * GET  /api/v1/projects  — list projects (admin all/scoped, client own org)
+ * POST /api/v1/projects  — create a new project (admin selected org, client own org)
  */
 import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
@@ -47,14 +47,19 @@ function createdAtMillis(value: unknown): number {
   return 0
 }
 
-export const GET = withAuth('admin', async (req: NextRequest) => {
+export const GET = withAuth('client', async (req: NextRequest, user: ApiUser) => {
   const { searchParams } = new URL(req.url)
   const orgSlug = searchParams.get('orgSlug')
 
   let query: FirebaseFirestore.Query = adminDb.collection('projects')
 
+  if (user.role === 'client') {
+    if (!user.orgId) return apiSuccess([])
+    query = query.where('orgId', '==', user.orgId)
+  }
+
   // If orgSlug is provided, look up org by slug and filter by orgId
-  if (orgSlug) {
+  if (user.role !== 'client' && orgSlug) {
     const orgSnapshot = await adminDb
       .collection('organizations')
       .where('slug', '==', orgSlug)
@@ -66,7 +71,12 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
     }
 
     const orgId = orgSnapshot.docs[0].id
+    if (user.allowedOrgIds?.length && !user.allowedOrgIds.includes(orgId)) {
+      return apiError('Forbidden', 403)
+    }
     query = query.where('orgId', '==', orgId)
+  } else if (user.role === 'admin' && user.allowedOrgIds?.length) {
+    query = query.where('orgId', 'in', user.allowedOrgIds.slice(0, 30))
   }
 
   const snapshot = await query.get()
@@ -78,7 +88,7 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
   return apiSuccess(projects)
 })
 
-export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) => {
+export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) => {
   const body = await req.json()
 
   if (!body.name?.trim()) return apiError('Name is required')
@@ -86,10 +96,10 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
     return apiError('Invalid status')
   }
 
-  let orgId = body.orgId?.trim() ?? ''
+  let orgId = user.role === 'client' ? user.orgId ?? '' : body.orgId?.trim() ?? ''
 
   // If orgSlug is provided, look up the org by slug and get its ID
-  if (!orgId && body.orgSlug?.trim()) {
+  if (user.role !== 'client' && !orgId && body.orgSlug?.trim()) {
     const orgSnapshot = await adminDb
       .collection('organizations')
       .where('slug', '==', body.orgSlug.trim())
@@ -101,6 +111,11 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
     } else {
       return apiError('Organization not found', 404)
     }
+  }
+
+  if (!orgId) return apiError('Organization is required', 400)
+  if (user.role === 'admin' && user.allowedOrgIds?.length && !user.allowedOrgIds.includes(orgId)) {
+    return apiError('Forbidden', 403)
   }
 
   const clientId = body.clientId?.trim() || orgId
@@ -123,7 +138,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
   return apiSuccess({ id: docRef.id }, 201)
 })
 
-export const DELETE = withAuth('admin', async (req: NextRequest) => {
+export const DELETE = withAuth('admin', async (req: NextRequest, user: ApiUser) => {
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
 
@@ -132,6 +147,10 @@ export const DELETE = withAuth('admin', async (req: NextRequest) => {
   const docRef = adminDb.collection('projects').doc(id)
   const snap = await docRef.get()
   if (!snap.exists) return apiError('Project not found', 404)
+  const orgId = snap.data()?.orgId
+  if (user.allowedOrgIds?.length && typeof orgId === 'string' && !user.allowedOrgIds.includes(orgId)) {
+    return apiError('Forbidden', 403)
+  }
 
   await docRef.delete()
   return apiSuccess({ id })
