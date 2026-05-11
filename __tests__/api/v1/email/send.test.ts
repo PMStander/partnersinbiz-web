@@ -8,11 +8,11 @@ jest.mock('@/lib/firebase/admin', () => ({
 }))
 
 jest.mock('@/lib/email/resend', () => ({
-  getResendClient: jest.fn(() => ({
-    emails: {
-      send: jest.fn().mockResolvedValue({ data: { id: 'resend-id-1' }, error: null }),
-    },
-  })),
+  sendCampaignEmail: jest.fn().mockResolvedValue({
+    ok: true,
+    resendId: 'resend-id-1',
+    provider: 'resend',
+  }),
   FROM_ADDRESS: 'peet@partnersinbiz.online',
   plainTextToHtml: jest.fn((t: string) => `<p>${t}</p>`),
   htmlToPlainText: jest.fn((h: string) => h.replace(/<[^>]+>/g, '')),
@@ -115,12 +115,15 @@ describe('POST /api/v1/email/send', () => {
     expect(mockActivitiesAdd).not.toHaveBeenCalled()
   })
 
-  it('marks email as failed when Resend returns an error', async () => {
-    const { getResendClient } = require('@/lib/email/resend')
-    ;(getResendClient as jest.Mock).mockReturnValueOnce({
-      emails: {
-        send: jest.fn().mockResolvedValue({ data: null, error: { message: 'Bad API key' } }),
-      },
+  it('marks email as failed when the provider returns an error', async () => {
+    const resendModule = jest.requireMock('@/lib/email/resend') as {
+      sendCampaignEmail: jest.Mock
+    }
+    resendModule.sendCampaignEmail.mockResolvedValueOnce({
+      ok: false,
+      resendId: '',
+      provider: 'resend',
+      error: 'Bad API key',
     })
     const res = await POST(makeReq(validPayload))
     expect(res.status).toBe(502)

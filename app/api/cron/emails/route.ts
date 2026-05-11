@@ -125,6 +125,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         status: 'sent',
         from: resolved.from,
         resendId: sendResult.resendId,
+        provider: sendResult.provider,
+        providerMessageId: sendResult.resendId,
         sentAt: FieldValue.serverTimestamp(),
       })
 

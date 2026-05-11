@@ -19,7 +19,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import { getResendClient, FROM_ADDRESS, plainTextToHtml, htmlToPlainText } from '@/lib/email/resend'
+import { sendCampaignEmail, FROM_ADDRESS, plainTextToHtml, htmlToPlainText } from '@/lib/email/resend'
 import { signUnsubscribeToken } from '@/lib/email/unsubscribeToken'
 import { isSuppressed } from '@/lib/email/suppressions'
 import { checkQuota } from '@/lib/platform/quotas'
@@ -92,6 +92,8 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) =
     direction: 'outbound',
     contactId,
     resendId: '',
+    provider: '',
+    providerMessageId: '',
     from: FROM_ADDRESS,
     to: to.trim(),
     cc,
@@ -112,34 +114,30 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) =
     createdAt: FieldValue.serverTimestamp(),
   })
 
-  // 2. Call Resend (with one-click List-Unsubscribe when we have a token).
-  const resend = getResendClient()
-  const sendHeaders: Record<string, string> = {}
-  if (unsubscribeUrl) {
-    sendHeaders['List-Unsubscribe'] = `<${unsubscribeUrl}>`
-    sendHeaders['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
-  }
-  const { data, error } = await resend.emails.send({
+  // 2. Send via the configured provider (with one-click List-Unsubscribe when we have a token).
+  const sendResult = await sendCampaignEmail({
     from: FROM_ADDRESS,
     to: to.trim(),
     cc: cc.length ? cc : undefined,
     subject: subject.trim(),
     html: finalBodyHtml,
     text: finalBodyText,
-    headers: Object.keys(sendHeaders).length > 0 ? sendHeaders : undefined,
+    listUnsubscribeUrl: unsubscribeUrl,
   })
 
-  if (error || !data?.id) {
+  if (!sendResult.ok) {
     await adminDb.collection('emails').doc(docRef.id).update({
       status: 'failed',
     })
-    return apiError(error?.message ?? 'Resend send failed', 502)
+    return apiError(sendResult.error ?? 'Email send failed', 502)
   }
 
   // 3. Update status to sent
   await adminDb.collection('emails').doc(docRef.id).update({
     status: 'sent',
-    resendId: data.id,
+    resendId: sendResult.resendId,
+    providerMessageId: sendResult.resendId,
+    provider: sendResult.provider,
     sentAt: FieldValue.serverTimestamp(),
   })
 

@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/api/auth'
 import { adminDb } from '@/lib/firebase/admin'
 import { FieldValue } from 'firebase-admin/firestore'
-import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
+import { sendCampaignEmail, FROM_ADDRESS } from '@/lib/email/resend'
 import { getReport } from '@/lib/reports/generate'
 import { REPORTS_COLLECTION } from '@/lib/reports/types'
 
@@ -88,21 +88,16 @@ export const POST = withAuth('admin', async (req: NextRequest, _user, ctx) => {
 
   const link = `${appBaseUrl(req)}/reports/${report.publicToken}`
 
-  if (!process.env.RESEND_API_KEY) {
-    return NextResponse.json({ error: 'RESEND_API_KEY not configured' }, { status: 500 })
-  }
-  try {
-    const resend = getResendClient()
-    await resend.emails.send({
-      from: FROM_ADDRESS,
-      to: recipients,
-      subject: `${report.brand.orgName} · Performance report · ${report.period.start} → ${report.period.end}`,
-      html: emailHtml(report, link),
-      text: `${report.brand.orgName} — performance report for ${report.period.start} to ${report.period.end}.\n\n${report.exec_summary}\n\nFull report: ${link}\n\n— Partners in Biz`,
-    })
-  } catch (err) {
+  const sendResult = await sendCampaignEmail({
+    from: FROM_ADDRESS,
+    to: recipients,
+    subject: `${report.brand.orgName} · Performance report · ${report.period.start} → ${report.period.end}`,
+    html: emailHtml(report, link),
+    text: `${report.brand.orgName} — performance report for ${report.period.start} to ${report.period.end}.\n\n${report.exec_summary}\n\nFull report: ${link}\n\n— Partners in Biz`,
+  })
+  if (!sendResult.ok) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'send failed' },
+      { error: sendResult.error ?? 'send failed' },
       { status: 500 },
     )
   }
