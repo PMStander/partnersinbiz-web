@@ -6,7 +6,7 @@ import type { PreflightReport } from '@/lib/email/preflight'
 import BranchEditor from './BranchEditor'
 import WaitUntilEditor from './WaitUntilEditor'
 import PreflightPanel from '@/components/admin/email/PreflightPanel'
-import { countSmsSegments } from '@/lib/sms/twilio'
+import { countSmsSegments } from '@/lib/sms/segments'
 
 interface Props {
   steps: SequenceStep[]

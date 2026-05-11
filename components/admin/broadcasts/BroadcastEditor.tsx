@@ -5,7 +5,7 @@ import AiAssistantPanel from '@/components/admin/email/AiAssistantPanel'
 import PreflightPanel from '@/components/admin/email/PreflightPanel'
 import type { Broadcast, BroadcastStatus } from '@/lib/broadcasts/types'
 import type { PreflightReport } from '@/lib/email/preflight'
-import { countSmsSegments } from '@/lib/sms/twilio'
+import { countSmsSegments } from '@/lib/sms/segments'
 
 type Tab = 'audience' | 'content' | 'schedule' | 'preflight' | 'stats'
 
