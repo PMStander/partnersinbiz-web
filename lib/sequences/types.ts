@@ -1,5 +1,6 @@
 // lib/sequences/types.ts
 import type { Timestamp } from 'firebase-admin/firestore'
+import type { AbConfig } from '@/lib/ab-testing/types'
 
 export interface SequenceStep {
   stepNumber: number
@@ -7,6 +8,9 @@ export interface SequenceStep {
   subject: string
   bodyHtml: string
   bodyText: string
+  // Optional A/B testing config for this step. Backwards-compatible — existing
+  // steps without `ab` continue to send as a single variant.
+  ab?: AbConfig
 }
 
 export type SequenceStatus = 'draft' | 'active' | 'paused'

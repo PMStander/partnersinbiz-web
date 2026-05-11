@@ -71,6 +71,7 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
     bouncedAt: null,
     sequenceId,
     sequenceStep,
+    variantId: '',
     deleted: false,
     createdAt: FieldValue.serverTimestamp(),
   })

@@ -15,6 +15,7 @@ export interface Email {
   id: string
   orgId: string            // required after Phase 1 backfill
   campaignId: string       // "" if not part of a campaign
+  broadcastId: string      // "" if not part of a broadcast
   fromDomainId: string     // "" if sent from shared PIB domain
   direction: EmailDirection
   contactId: string        // "" if none linked
@@ -33,6 +34,11 @@ export interface Email {
   bouncedAt: Timestamp | null
   sequenceId: string       // "" if not part of a sequence
   sequenceStep: number | null
+  // A/B testing — when the parent broadcast or sequence step has an active
+  // AbConfig, this is the variant id (e.g. "a", "b") that this particular
+  // email was sent as. "" when no A/B testing applied. The webhook uses this
+  // to attribute opens / clicks / bounces back to the correct variant.
+  variantId: string
   createdAt: Timestamp | null
   deleted?: boolean
 }

@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { Webhook } from 'svix'
 import { adminDb } from '@/lib/firebase/admin'
+import { incrementVariantStat, type VariantStatField } from '@/lib/ab-testing/cronHelpers'
 
 // Resend webhook signature verification uses svix.
 // Set RESEND_WEBHOOK_SECRET (format: whsec_xxxx) in env to enforce verification.
@@ -84,10 +85,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const docRef = snapshot.docs[0].ref
   const emailData =
     typeof snapshot.docs[0].data === 'function'
-      ? ((snapshot.docs[0].data() as { campaignId?: string; contactId?: string }) ?? {})
+      ? ((snapshot.docs[0].data() as {
+          campaignId?: string
+          contactId?: string
+          variantId?: string
+          broadcastId?: string
+          sequenceId?: string
+          sequenceStep?: number | null
+        }) ?? {})
       : {}
   const campaignId = emailData?.campaignId ?? ''
   const contactId = emailData?.contactId ?? ''
+  const variantId = emailData?.variantId ?? ''
+  const broadcastId = emailData?.broadcastId ?? ''
+  const sequenceId = emailData?.sequenceId ?? ''
+  const sequenceStep = emailData?.sequenceStep ?? null
 
   let campaignStatField: string | null = null
 
@@ -138,6 +150,55 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       })
     } catch (err) {
       console.error('[email/webhook] failed to bump campaign stat', campaignId, campaignStatField, err)
+    }
+  }
+
+  // Broadcasts share the same stat field names (delivered/opened/clicked/
+  // bounced/unsubscribed) so we reuse campaignStatField verbatim.
+  if (campaignStatField && broadcastId) {
+    try {
+      await adminDb.collection('broadcasts').doc(broadcastId).update({
+        [campaignStatField]: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('[email/webhook] failed to bump broadcast stat', broadcastId, campaignStatField, err)
+    }
+  }
+
+  // A/B variant attribution — see lib/ab-testing/WEBHOOK-PATCH.md.
+  // Maps Resend event → per-variant stat field on the parent broadcast or
+  // sequence step. No-op when the email wasn't part of an A/B test.
+  const variantStatField: VariantStatField | null =
+    type === 'email.delivered' ? 'delivered'
+    : type === 'email.opened' ? 'opened'
+    : type === 'email.clicked' ? 'clicked'
+    : type === 'email.bounced' ? 'bounced'
+    : type === 'email.complained' ? 'unsubscribed'
+    : null
+
+  if (variantId && variantStatField) {
+    try {
+      if (broadcastId) {
+        await incrementVariantStat({
+          targetCollection: 'broadcasts',
+          targetId: broadcastId,
+          variantId,
+          field: variantStatField,
+        })
+      } else if (sequenceId && typeof sequenceStep === 'number') {
+        await incrementVariantStat({
+          targetCollection: 'sequences',
+          targetId: sequenceId,
+          stepNumber: sequenceStep,
+          variantId,
+          field: variantStatField,
+        })
+      }
+    } catch (err) {
+      console.error('[email/webhook] failed to bump variant stat', {
+        broadcastId, sequenceId, sequenceStep, variantId, variantStatField, err,
+      })
     }
   }
 

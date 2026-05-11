@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import StepEditor from '@/components/admin/sequences/StepEditor'
+import AiAssistantPanel from '@/components/admin/email/AiAssistantPanel'
 import type { Sequence, SequenceStep } from '@/lib/sequences/types'
 
 const STATUS_OPTIONS = ['draft', 'active', 'paused'] as const
@@ -16,6 +17,7 @@ export default function SequenceDetailPage({ params }: { params: Promise<{ id: s
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [enrollContactId, setEnrollContactId] = useState('')
+  const [aiOpen, setAiOpen] = useState(false)
 
   useEffect(() => {
     params.then((p) => {
@@ -67,6 +69,9 @@ export default function SequenceDetailPage({ params }: { params: Promise<{ id: s
           ← Sequences
         </button>
         <div className="flex gap-2">
+          <button onClick={() => setAiOpen(true)} className="px-4 py-2 rounded-lg bg-primary-container text-on-primary-container text-sm font-medium">
+            ✨ Generate with AI
+          </button>
           <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-medium disabled:opacity-50">
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -103,6 +108,32 @@ export default function SequenceDetailPage({ params }: { params: Promise<{ id: s
         <h2 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-3">Steps</h2>
         <StepEditor steps={steps} onChange={setSteps} />
       </div>
+
+      {aiOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setAiOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="h-full">
+            <AiAssistantPanel
+              mode="sequence"
+              orgId={seq.orgId}
+              onClose={() => setAiOpen(false)}
+              onApply={(r) => {
+                if (r.steps) {
+                  setSteps(
+                    r.steps.map((s) => ({
+                      stepNumber: s.stepNumber,
+                      delayDays: s.delayDays,
+                      subject: s.subject,
+                      bodyHtml: s.bodyHtml,
+                      bodyText: s.bodyText,
+                    })),
+                  )
+                }
+                setAiOpen(false)
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {seq.status === 'active' && (
         <div>

@@ -7,6 +7,9 @@ import { resolveFrom } from '@/lib/email/resolveFrom'
 import { interpolate, varsFromContact } from '@/lib/email/template'
 import { signUnsubscribeToken } from '@/lib/email/unsubscribeToken'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
+import { pickVariantForSend, incrementVariantStat } from '@/lib/ab-testing/cronHelpers'
+import { applyVariantOverrides } from '@/lib/ab-testing/apply'
+import type { AbConfig } from '@/lib/ab-testing/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -111,14 +114,37 @@ export async function GET(req: NextRequest) {
       const interpolatedHtml = interpolate(step.bodyHtml ?? '', vars)
       const interpolatedText = interpolate(step.bodyText ?? '', vars)
 
+      // A/B variant pick — applies only when step.ab.enabled === true.
+      const stepAb = (step.ab as AbConfig | undefined) ?? null
+      const variantPick = pickVariantForSend({
+        contactId: enrollment.contactId,
+        subjectId: `${enrollment.sequenceId}:${enrollment.currentStep}`,
+        ab: stepAb,
+      })
+      if (variantPick.defer) {
+        // Winner-only cohort excludes this contact for now; nextSendAt stays so
+        // the cron picks them up again after the winner is decided.
+        continue
+      }
+      const effective = applyVariantOverrides(
+        {
+          subject: interpolatedSubject,
+          bodyHtml: interpolatedHtml,
+          bodyText: interpolatedText,
+          fromName: campaign?.fromName ?? '',
+          scheduledFor: null,
+        },
+        variantPick.variant,
+      )
+
       // Send via Resend
       const sendResult = await sendCampaignEmail({
         from: resolved.from,
         to: contact.email,
         replyTo: campaign?.replyTo,
-        subject: interpolatedSubject,
-        html: interpolatedHtml,
-        text: interpolatedText,
+        subject: effective.subject,
+        html: effective.bodyHtml,
+        text: effective.bodyText,
       })
 
       // Create email doc
@@ -132,9 +158,9 @@ export async function GET(req: NextRequest) {
         from: resolved.from,
         to: contact.email,
         cc: [],
-        subject: interpolatedSubject,
-        bodyHtml: interpolatedHtml,
-        bodyText: interpolatedText,
+        subject: effective.subject,
+        bodyHtml: effective.bodyHtml,
+        bodyText: effective.bodyText,
         status: sendResult.ok ? 'sent' : 'failed',
         scheduledFor: null,
         sentAt: sendResult.ok ? FieldValue.serverTimestamp() : null,
@@ -143,8 +169,24 @@ export async function GET(req: NextRequest) {
         bouncedAt: null,
         sequenceId: enrollment.sequenceId,
         sequenceStep: enrollment.currentStep,
+        variantId: variantPick.variant?.id ?? '',
         createdAt: FieldValue.serverTimestamp(),
       })
+
+      // Variant-level sent-stat increment (best-effort).
+      if (sendResult.ok && variantPick.variant?.id) {
+        try {
+          await incrementVariantStat({
+            targetCollection: 'sequences',
+            targetId: enrollment.sequenceId,
+            stepNumber: enrollment.currentStep,
+            variantId: variantPick.variant.id,
+            field: 'sent',
+          })
+        } catch (err) {
+          console.error('[cron/sequences] variant stat increment failed', err)
+        }
+      }
 
       // Log activity
       await adminDb.collection('activities').add({

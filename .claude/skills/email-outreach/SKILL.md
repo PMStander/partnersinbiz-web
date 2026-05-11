@@ -1,25 +1,37 @@
 ---
 name: email-outreach
 description: >
-  Send, schedule, and track transactional + marketing emails, build multi-step drip sequences,
-  enroll contacts, manage unsubscribes, and track click-through on shortened links on Partners in Biz.
-  Also manage email campaigns (bulk sends targeting a segment or contact list) and sending domain
-  verification via Resend. Uses Resend under the hood. Use this skill whenever the user mentions
-  anything email- or link-tracking-related, including: "send an email", "draft email", "email a contact",
-  "email client", "schedule email", "send tomorrow", "send next week", "email queue", "scheduled emails",
-  "email status", "email delivered", "opened", "bounced", "complaint", "create email sequence",
-  "drip campaign", "nurture sequence", "onboarding email sequence", "welcome series",
-  "enroll contact in sequence", "unenroll", "sequence step", "skip step", "pause sequence",
-  "resume sequence", "shorten link", "tracked link", "short URL", "link analytics", "click stats",
-  "click rate", "UTM", "merge fields", "personalize email", "email template", "Resend webhook",
-  "email open rate", "email performance", "campaign", "email campaign", "launch campaign",
-  "bulk email", "sending domain", "verify domain", "DNS records", "email domain", "from domain",
-  "custom domain". If in doubt, trigger.
+  Complete email marketing platform — send, schedule, and track transactional + marketing emails;
+  build multi-step drip sequences; one-time broadcasts/newsletters; visual block-based email templates;
+  per-org sending domains; segments + audiences; lead capture with double-opt-in; embeddable newsletter
+  widgets; AI-generated emails, subject lines, and full sequences; A/B testing with auto-winner promotion;
+  click-tracked short links; engagement analytics. Uses Resend under the hood. Trigger whenever the user
+  mentions: "send an email", "draft email", "email a contact", "email client", "schedule email", "email queue",
+  "email status", "create email sequence", "drip campaign", "nurture sequence", "onboarding email sequence",
+  "welcome series", "enroll contact in sequence", "broadcast", "newsletter", "blast", "one-time email",
+  "email template", "template library", "visual builder", "email editor", "merge fields", "personalize email",
+  "segment", "audience", "tag", "lead capture", "newsletter signup", "subscribe form", "embed form",
+  "double opt-in", "confirmation email", "campaign", "email campaign", "launch campaign", "bulk email",
+  "sending domain", "verify domain", "DNS records", "email domain", "from domain", "custom domain",
+  "shorten link", "tracked link", "short URL", "link analytics", "click stats", "click rate", "UTM",
+  "generate email with AI", "write email", "AI subject lines", "rewrite email", "improve email",
+  "A/B test", "AB test", "split test", "subject line test", "winner promotion", "email analytics",
+  "engagement score", "open rate", "click rate", "bounce rate", "unsubscribe rate", "deliverability",
+  "Resend webhook", "complaint", "bounce", "unsubscribe". If in doubt, trigger.
 ---
 
 # Email Outreach — Partners in Biz Platform API
 
-Transactional email sending (via Resend), scheduled/future email, drip sequences with step-based progression, tracked shortened links with click stats, and webhook integration for delivery events.
+A complete email marketing system. Eight layers:
+
+1. **Sending** — transactional + drip + broadcast, all through Resend
+2. **Templates** — visual block-based builder + starter template library
+3. **Sequences** — multi-step drip with delays and variants
+4. **Broadcasts** — one-time blasts to segments/lists with optional A/B testing
+5. **Audiences** — segments + tags + lead capture forms with double-opt-in
+6. **Domains** — per-org sender verification through Resend
+7. **AI** — generate emails, sequences, subject variants, and rewrites
+8. **Analytics** — per-org / per-broadcast / per-sequence / per-contact dashboards
 
 ## Base URL & Authentication
 
@@ -31,28 +43,29 @@ https://partnersinbiz.online/api/v1
 Authorization: Bearer <AI_API_KEY>
 ```
 
-One public endpoint: `POST /email/webhook` — Resend delivery webhook receiver.
+Public (no-auth) endpoints — used by hosted forms / web hooks:
+- `POST /email/webhook` — Resend delivery webhook receiver
+- `POST /capture-sources/[id]/submit` — newsletter / lead capture form submit (CORS open)
+- `POST /api/embed/newsletter/[sourceId]/submit` — alias of above
+- `GET  /api/embed/newsletter/[sourceId]/widget.js` — embeddable widget JS bundle
+- `GET  /embed/newsletter/[sourceId]` — iframe-able signup page
+- `GET  /lead/confirm/[token]` — double-opt-in confirmation page
 
 ## Crons that drive this skill
 
-- `/api/cron/emails` — daily 6am UTC — processes scheduled emails whose `scheduledFor <= now`
-- `/api/cron/sequences` — daily 6am UTC — advances sequence enrollments to next step
+- `/api/cron/emails` — every 15 min — sends `scheduled` one-off emails whose `scheduledFor <= now`
+- `/api/cron/sequences` — every 15 min — advances active sequence enrollments to the next step
+- `/api/cron/broadcasts` — every 15 min — sends `scheduled` broadcasts, resumes mid-flight, finalizes A/B winners, dispatches winner-only fan-out
 
-## Collaboration primitives
-
-- Email records are commentable (`resourceType` not yet in spec for emails — use the `emails` doc audit trail)
-- Unsubscribes cascade: once a contact unsubscribes, all sequence enrollments pause + outbound to them is blocked
+All cron routes auth via `Authorization: Bearer ${CRON_SECRET}`.
 
 ---
 
-## API Reference
+# 1. Sending
 
-### Email — send & schedule
+## `POST /email/send` — auth: admin/ai
 
-#### `POST /email/send` — auth: admin
-Send an email immediately via Resend.
-
-Body:
+Send immediately via Resend. Body:
 ```json
 {
   "to": "jane@acme.com",
@@ -66,198 +79,246 @@ Body:
 }
 ```
 
-Required: `to`, `subject`, `bodyText` OR `bodyHtml`. If only one of bodyText/bodyHtml provided, the other is auto-generated.
+Required: `to`, `subject`, `bodyText` OR `bodyHtml`. Missing body is auto-generated from the other.
 
-Creates an `emails` doc (even on failure for audit). Links to CRM via `contactId` — auto-logs an `email_sent` activity.
+## `POST /email/schedule` — auth: admin/ai
 
-Response: `{ id, resendId, status: 'sent' | 'failed' }`.
-
-#### `POST /email/schedule` — auth: admin
-Schedule an email for future send.
-
-Body (same as `/send` plus):
 ```json
-{ "scheduledFor": "2026-04-20T09:00:00Z" }
+{ ... same as /send, plus: "scheduledFor": "2026-04-20T09:00:00Z" }
 ```
 
-Creates `emails` doc with `status: 'scheduled'`. Cron picks it up at `scheduledFor`.
+## `GET /email` — auth: admin
 
-Response: `{ id, status: 'scheduled', scheduledFor }`.
+Filters: `status` (`draft|scheduled|sent|failed|opened|clicked`), `direction` (`inbound|outbound`), `contactId`, `sequenceId`, `campaignId`, `broadcastId`, `page`, `limit`.
 
-#### `GET /email` — auth: admin
-List emails. Filters: `status` (`draft`|`scheduled`|`sent`|`failed`), `direction` (`inbound`|`outbound`), `contactId`, `sequenceId`, `page`, `limit`.
+## `GET /email/[id]` — auth: admin
+## `PUT /email/[id]` — auth: admin — only if `status === 'scheduled'`
+## `DELETE /email/[id]` — auth: admin — soft-delete (cancel)
 
-#### `GET /email/[id]` — auth: admin
-Full email record including `openedAt`, `clickedAt`, `bouncedAt`, `complaintAt`.
+## `POST /email/webhook` — **public**
 
-#### `PUT /email/[id]` — auth: admin
-Update a scheduled email's content or `scheduledFor`. Rejects if `status !== 'scheduled'`.
+Resend events handled: `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained`. The webhook:
+- updates the matching `emails` doc by `resendId`
+- rolls up to `campaigns.stats` / `broadcasts.stats` / variant stats (`broadcasts.ab.variants[i].<field>` / `sequences.steps[n].ab.variants[i].<field>`)
+- on `complained` → marks contact `unsubscribed`, pauses all active sequence enrollments for that contact
 
-#### `DELETE /email/[id]` — auth: admin
-Cancel a scheduled email (soft-delete). Sent emails cannot be deleted — only archived.
+---
 
-#### `POST /email/webhook` — **public**
-Resend delivery webhook receiver. Updates `emails` docs on events:
-- `email.delivered`
-- `email.opened` → sets `openedAt`
-- `email.clicked` → sets `clickedAt`
-- `email.bounced` → sets `bouncedAt`, `status: 'failed'`
-- `email.complained` → sets `complaintAt`, auto-unsubscribes the contact
+# 2. Visual Email Templates
 
-### Sequences (drip campaigns)
+Block-based email builder. Each template stores an `EmailDocument` = `{ subject, preheader, blocks[], theme }`. Renderer is table-based with inline styles + MSO conditionals → renders consistently in Outlook, Gmail, Apple Mail.
 
-#### `GET /sequences` — auth: admin
-List. Filters: `status` (`draft`|`active`|`paused`|`archived`), pagination.
+Block types: `hero`, `heading`, `paragraph`, `button`, `image`, `divider`, `spacer`, `columns`, `footer`.
 
-#### `POST /sequences` — auth: admin
-Body:
+5 starter templates ship out-of-the-box: **Weekly newsletter**, **Welcome — day one**, **Product launch**, **Re-engagement**, **Order receipt** — usable as-is or as duplication seeds.
+
+## `GET /email-templates?orgId=...&category=...` — auth: client
+
+Returns merged list of org-specific templates + all starters (starters have `isStarter: true`).
+
+Categories: `newsletter | welcome | product-launch | reengagement | transactional | custom`.
+
+## `POST /email-templates` — auth: client
+
+Body: `{ name, description?, category, document, orgId? }`. Validates the document via the block schema. Returns `{ id }`.
+
+## `GET /email-templates/[id]` — auth: client
+## `PUT /email-templates/[id]` — auth: client — starters 403
+## `DELETE /email-templates/[id]` — auth: client — starters 403
+
+## `POST /email-templates/[id]/render` — auth: client
+
+```json
+{ "vars": { "firstName": "Jane", "company": "Acme", "unsubscribeUrl": "..." } }
+```
+
+Returns `{ html, text, subject }` with the template fully interpolated. Use this before sending to preview the final output.
+
+## `POST /email-templates/[id]/duplicate` — auth: client
+
+Copies a template (including starters) into the org library. Returns `{ id }`.
+
+## `POST /email-builder/preview` — auth: client
+
+Stateless render — body `{ document, vars? }` → `{ html, text }`. Used by the visual builder for live preview.
+
+## `POST /email-templates/generate` — auth: client
+
+AI-generates a new template + saves it. Body:
+```json
+{
+  "kind": "newsletter",
+  "input": { "topic": "Property launch", "voice": {...}, "stories": [...], "orgName": "Partners in Biz" },
+  "orgId": "..."
+}
+```
+Returns `{ id, name, document }`. See AI section below for full input shapes.
+
+---
+
+# 3. Sequences (drip campaigns)
+
+A sequence is an ordered set of steps; each step has `delayDays`, `subject`, `bodyHtml`, `bodyText`, and optionally `ab` (A/B config — see A/B section).
+
+## `GET /sequences?orgId=...&status=...` — auth: client
+## `POST /sequences` — auth: client
+
 ```json
 {
   "name": "SaaS Onboarding",
   "description": "5-step welcome + activation",
   "status": "draft",
   "steps": [
-    { "order": 1, "dayOffset": 0, "subject": "Welcome {{firstName}}",
+    { "stepNumber": 1, "delayDays": 0, "subject": "Welcome {{firstName}}",
       "bodyText": "Thanks for signing up...", "bodyHtml": "..." },
-    { "order": 2, "dayOffset": 2, "subject": "Day 2: Get your first value",
-      "bodyText": "...", "bodyHtml": "..." },
-    { "order": 3, "dayOffset": 5, "subject": "How's it going?",
-      "bodyText": "..." },
-    { "order": 4, "dayOffset": 9, "subject": "Before you forget...",
-      "bodyText": "..." },
-    { "order": 5, "dayOffset": 14, "subject": "Your 2-week checkpoint",
-      "bodyText": "..." }
+    { "stepNumber": 2, "delayDays": 2, "subject": "Day 2: Get your first value",
+      "bodyText": "...", "bodyHtml": "..." }
   ]
 }
 ```
 
-Merge fields in subject/body: `{{firstName}}`, `{{lastName}}`, `{{email}}`, `{{company}}`, `{{customField.X}}`. Resolved against the enrolled contact at send time.
+Merge fields: `{{firstName}}`, `{{lastName}}`, `{{fullName}}`, `{{email}}`, `{{company}}`, `{{orgName}}`, `{{unsubscribeUrl}}`, plus any custom fields you supply.
 
-Required: `name`.
+## `GET/PUT/DELETE /sequences/[id]` — auth: client
 
-Response (201): `{ id }`.
+## `POST /sequences/[id]/enroll` — auth: client
 
-#### `GET /sequences/[id]` — auth: admin
-Full sequence with steps + enrollment counts.
-
-#### `PUT /sequences/[id]` — auth: admin
-Update name, description, status, steps. Changing steps mid-flight:
-- New steps beyond current max: applied to ongoing enrollments.
-- Removing/modifying already-sent steps: doesn't rewrite history.
-
-#### `DELETE /sequences/[id]` — auth: admin
-Soft-delete. Pauses all active enrollments.
-
-#### `POST /sequences/[id]/enroll` — auth: admin
-Enroll a contact (or batch).
-
-Body:
 ```json
-{ "contactId": "contact_abc" }
+{ "contactId": "..." }            // single
+{ "contactIds": ["...", "..."] }  // batch
 ```
 
-Or batch:
-```json
-{ "contactIds": ["contact_a", "contact_b", "contact_c"] }
-```
+## `GET /sequence-enrollments?sequenceId=...&contactId=...&status=...` — auth: client
+## `GET /sequence-enrollments/[id]` — auth: client
+## `PATCH /sequence-enrollments/[id]` — auth: client — `{ "status": "paused" | "active" | "completed" }`
+## `DELETE /sequence-enrollments/[id]` — auth: client
 
-Creates enrollment(s) in `sequence_enrollments` with `status: 'active'`, `currentStep: 0`, `startedAt: now`. Cron advances.
+## `POST /sequences/[id]/generate` — auth: client — AI-generates steps
 
-Response: `{ enrolled: count, enrollmentIds: [...] }`.
-
-### Sequence enrollments
-
-#### `GET /sequence-enrollments` — auth: admin
-Filters: `sequenceId`, `contactId`, `status` (`active`|`paused`|`completed`|`unsubscribed`|`failed`), pagination.
-
-Response items:
-```json
-{ "id": "enr_abc", "sequenceId": "seq_xyz", "contactId": "contact_abc",
-  "status": "active", "currentStep": 2, "startedAt": "...", "nextSendAt": "...",
-  "completedAt": null, "lastEmailId": "email_xyz" }
-```
-
-#### `GET /sequence-enrollments/[id]` — auth: admin
-
-#### `PATCH /sequence-enrollments/[id]` — auth: admin
-Update `status`:
-- `paused` — skips future sends
-- `active` — resume from current step
-- `completed` — marks finished
-- `unsubscribed` — auto-cascades from email.complained
-
-Body: `{ "status": "paused" }` or `{ "status": "active" }`.
-
-#### `DELETE /sequence-enrollments/[id]` — auth: admin
-Remove enrollment (rare — prefer status change).
-
-### Tracked short links
-
-#### `GET /links` — auth: client
-Paginated. Filter by `orgId` (via `withTenant`, derived from user record).
-
-Response items:
-```json
-{ "id": "link_abc", "orgId": "org_xyz", "slug": "promo-apr",
-  "targetUrl": "https://acme.com/april-promo",
-  "shortUrl": "https://partnersinbiz.online/l/promo-apr",
-  "clickCount": 42, "createdAt": "..." }
-```
-
-#### `POST /links` — auth: client
-Create a short link.
-
-Body:
 ```json
 {
-  "targetUrl": "https://acme.com/landing?source=email&utm_campaign=april",
-  "slug": "april-landing",
-  "description": "Email CTA April campaign"
+  "name": "Customer onboarding",
+  "goal": "Get a SaaS trial user to activate within 14 days",
+  "voice": { ... see AI section ... },
+  "steps": 5,
+  "cadence": "normal",
+  "audienceDescription": "...",
+  "context": "..."
 }
 ```
+Returns `{ updated: true, steps: [...] }` and writes onto the sequence.
 
-`slug` is optional — auto-generated if omitted. Must be unique per org. Short URL: `<PUBLIC_BASE_URL>/l/<slug>`.
+## `GET/PUT /sequences/[id]/steps/[stepNumber]/ab` — auth: client
 
-Response (201): `{ id, slug, shortUrl }`.
-
-#### `GET /links/[id]` — auth: client
-Full link record.
-
-#### `PUT /links/[id]` — auth: client
-Update `targetUrl` or `description`. Slug cannot be changed after creation.
-
-#### `DELETE /links/[id]` — auth: client
-Soft-delete (clicks on deleted links redirect to 404).
-
-#### `GET /links/[id]/stats` — auth: client
-Detailed analytics:
-```json
-{ "totalClicks": 142, "uniqueClicks": 98, "topReferrers": [...],
-  "topCountries": [...], "clicksByDay": [...], "clicksByHour": [...],
-  "browsers": {...}, "devices": {...} }
-```
-
-Click tracking happens on the public `/l/<slug>` route (not an API endpoint) which logs + redirects.
+A/B configuration for a single sequence step. See A/B section.
 
 ---
 
-### Campaigns (bulk sends targeting segments or contact lists)
+# 4. Broadcasts (one-time blasts / newsletters)
 
-Campaigns are a higher-level construct that ties a **sequence** to an **audience** (a segment or explicit contact list) and manages enrollment in bulk. Lifecycle: `draft` → `active` → `completed`. Campaigns in `active` or `completed` status are read-only.
+A broadcast is a single email blast to an audience snapshot. Use this for newsletters, announcements, one-off promotions. For ongoing nurture / multi-step, use a sequence.
 
-#### `GET /campaigns` — auth: client
-List campaigns for an org. Filters: `orgId`, `status` (`draft`|`scheduled`|`active`|`paused`|`completed`).
+## `GET /broadcasts?orgId=...&status=...&limit=...` — auth: client
 
-Response: array of campaign objects, ordered by `createdAt` desc, soft-deletes excluded.
+Statuses: `draft | scheduled | sending | sent | paused | failed | canceled`.
 
-#### `POST /campaigns` — auth: client
-Create a draft campaign.
+## `POST /broadcasts` — auth: client
 
-Body:
 ```json
 {
   "orgId": "org_xyz",
-  "name": "Q2 Nurture Blast",
+  "name": "Q2 newsletter",
+  "description": "Quarterly update",
+  "fromDomainId": "domain_abc",
+  "fromName": "Peet",
+  "fromLocal": "hello",
+  "replyTo": "peet@partnersinbiz.online",
+  "content": {
+    "templateId": "tpl_xyz",
+    "subject": "What we shipped this quarter — {{firstName}}",
+    "preheader": "5 new features, 3 wins",
+    "bodyHtml": "",
+    "bodyText": ""
+  },
+  "audience": {
+    "segmentId": "seg_smb",
+    "contactIds": [],
+    "tags": [],
+    "excludeUnsubscribed": true,
+    "excludeBouncedAt": true
+  }
+}
+```
+
+Either `templateId` (uses email_templates) OR inline `bodyHtml/bodyText`. Audience: any of segmentId, contactIds, tags — they are merged and de-duped.
+
+## `GET/PUT/DELETE /broadcasts/[id]` — auth: client
+
+PUT only allowed when status in `[draft, paused, scheduled]`.
+
+## `GET /broadcasts/[id]/preview` — auth: client
+
+Returns `{ audienceSize, sampleContacts: [{ email, name, company }, ...] }` — first 5 contacts so you can sanity-check before scheduling.
+
+## `POST /broadcasts/[id]/schedule` — auth: client
+
+```json
+{ "scheduledFor": "2026-05-20T09:00:00Z" }
+```
+Validates content + audience + sender. 422 with array of issues if invalid.
+
+## `POST /broadcasts/[id]/send-now` — auth: client
+
+Sets `scheduledFor: now` — next cron tick picks it up. Or pass `{ "immediate": true }` for synchronous send (max 100 recipients).
+
+## `POST /broadcasts/[id]/test` — auth: client
+
+```json
+{ "to": "you@example.com", "vars": { "firstName": "Test" } }
+```
+Sends a one-off test render. Does NOT enroll anyone or touch stats.
+
+## `POST /broadcasts/[id]/pause` — auth: client
+## `POST /broadcasts/[id]/resume` — auth: client
+
+## `GET /broadcasts/[id]/stats` — auth: client
+
+```json
+{
+  "stats": { "audienceSize": 1245, "sent": 1240, "delivered": 1212, "opened": 488, "clicked": 102, "bounced": 28, "unsubscribed": 3, "failed": 5, "queued": 1240 },
+  "rates": { "deliveryRate": 0.977, "openRate": 0.403, "clickRate": 0.084, "bounceRate": 0.023, "unsubRate": 0.0025 }
+}
+```
+
+## `POST /broadcasts/[id]/generate` — auth: client — AI-generates inline content
+
+```json
+{
+  "goal": "Announce the property launch to all leads",
+  "voice": { ... },
+  "contentLength": "medium",
+  "cta": { "text": "See the launch", "url": "https://..." }
+}
+```
+Writes subject + preheader + bodyHtml + bodyText onto the broadcast. Refuses 422 if `templateId` is already set.
+
+## `GET/PUT /broadcasts/[id]/ab` — auth: client — A/B config (see below)
+## `POST /broadcasts/[id]/ab/start` — auth: client — start winner-only test window
+## `POST /broadcasts/[id]/ab/declare-winner` — auth: client — pick winner manually
+
+---
+
+# 5. Campaigns (sequence + audience)
+
+A campaign ties a **sequence** to an **audience** (segment or explicit contact list) and manages enrollment in bulk. Use for multi-touch programs targeting a captured group.
+
+## `GET /campaigns?orgId=...&status=...` — auth: client
+## `POST /campaigns` — auth: client
+
+```json
+{
+  "orgId": "org_xyz",
+  "name": "Q2 SMB Nurture",
   "description": "Enroll all SMB leads in the 5-step nurture sequence",
   "fromDomainId": "domain_abc",
   "fromName": "Peet at Partners in Biz",
@@ -266,289 +327,538 @@ Body:
   "segmentId": "seg_smb",
   "contactIds": [],
   "sequenceId": "seq_nurture_5step",
-  "triggers": {
-    "captureSourceIds": [],
-    "tags": []
+  "triggers": { "captureSourceIds": ["src_newsletter"], "tags": ["smb"] }
+}
+```
+
+`triggers.captureSourceIds` auto-enrolls anyone captured via those lead-capture forms while the campaign is `active`.
+
+## `GET/PUT/DELETE /campaigns/[id]` — auth: client
+## `POST /campaigns/[id]/launch` — auth: client
+
+Resolves audience, bulk-enrolls into the sequence. Skips: unsubscribed, bounced, cross-org, already-enrolled-for-this-campaign.
+
+Response: `{ enrolled: 312, audienceSize: 340 }`.
+
+## `POST /campaigns/[id]/approve-all` — auth: client (content-engine campaigns)
+## `POST /campaigns/[id]/schedule` — auth: client (content-engine campaigns — bulk social posts)
+## `POST /campaigns/[id]/archive` — auth: client
+## `GET  /campaigns/[id]/assets` — auth: client (content-engine campaigns)
+
+---
+
+# 6. Segments & Audiences
+
+## `GET /crm/segments?orgId=...` — auth: client
+## `POST /crm/segments` — auth: client
+
+```json
+{
+  "name": "Active SA SMBs",
+  "description": "Captured via newsletter, tagged 'smb', stage 'new' or 'contacted'",
+  "filters": {
+    "tags": ["smb"],
+    "capturedFromIds": ["src_newsletter"],
+    "stage": "new",
+    "type": "lead",
+    "source": "form",
+    "createdAfter": "2026-01-01T00:00:00Z"
   }
 }
 ```
 
-Required: `name`. All other fields optional.
+Filters use AND across keys, OR within `tags`/`capturedFromIds`.
 
-Audience resolution at launch time:
-- Set `segmentId` to target all contacts matching a saved segment (resolved dynamically at launch).
-- Set `contactIds` (array of contact IDs) for an explicit list.
-- At least one of `segmentId` or `contactIds` must be present before launching.
+## `GET /crm/segments/[id]` — auth: client
+## `PUT /crm/segments/[id]` — auth: client
+## `DELETE /crm/segments/[id]` — auth: client
+## `GET /crm/segments/[id]/resolve?limit=...` — auth: client
 
-`sequenceId` must reference an existing, non-deleted sequence in the same org. Email sender: `{fromLocal}@{domain.name}` where `fromDomainId` references an `email_domains` record.
-
-Response (201): `{ id }`.
-
-#### `GET /campaigns/[id]` — auth: client
-Full campaign record.
-
-#### `PUT /campaigns/[id]` — auth: client
-Update any editable field. Only allowed when `status` is `draft` or `paused`; rejected with 422 for `active` or `completed`.
-
-Editable fields: `name`, `description`, `fromDomainId`, `fromName`, `fromLocal`, `replyTo`, `segmentId`, `contactIds`, `sequenceId`, `triggers`.
-
-Response: `{ id }`.
-
-#### `DELETE /campaigns/[id]` — auth: client
-Soft-delete. Does not cancel existing enrollments already created by a launch.
-
-#### `POST /campaigns/[id]/launch` — auth: client
-Launch a draft or paused campaign. Sets `status → active`, resolves audience, and bulk-enrolls contacts in the linked sequence.
-
-Pre-launch requirements (validated server-side; returns 422 if unmet):
-- Campaign must not already be `active` or `completed`
-- `sequenceId` must be set and point to an existing sequence with at least one step
-- `segmentId` or `contactIds` must be non-empty
-- Segment (if used) must exist and belong to the same org
-- Sequence must belong to the same org
-
-Enrollment behaviour:
-- Contacts with `unsubscribedAt` or `bouncedAt` are skipped automatically
-- Contacts from a different org are skipped
-- Already-enrolled contacts for this campaign (idempotency check on `campaignId` + `contactId`) are skipped
-- Each new enrollment creates a `sequence_enrollments` doc (`status: active`) and an `activities` doc (`type: sequence_enrolled`)
-
-Response:
-```json
-{ "enrolled": 312, "audienceSize": 340 }
-```
-
-`audienceSize` is the full resolved audience; `enrolled` is the net new enrollments created this launch (excluding skips).
+Returns the live contact list matching the segment. Used by campaign/broadcast preview.
 
 ---
 
-### Email Domains (Resend sending domain management)
+# 7. Lead Capture (forms, widgets, double-opt-in)
 
-Register custom sending domains with Resend, retrieve DNS verification records, and monitor verification status. Domain status syncs live from Resend on each `GET /[id]` call.
+A capture source is a configurable form: define fields, styling, success behaviour, and which sequences/campaigns to auto-enroll on submit. Comes with an embeddable JS widget + iframe.
 
-Domain status lifecycle: `pending` → `verified` (once DNS records propagate and Resend confirms).
+## `GET /capture-sources?orgId=...&active=...` — auth: client
+## `POST /capture-sources` — auth: client
 
-Use a verified domain's `id` as `fromDomainId` when creating campaigns so emails are sent from `{fromLocal}@{domainName}`.
-
-#### `GET /email/domains` — auth: client
-List all sending domains for an org. Filters: `orgId`.
-
-Response: array of domain objects, soft-deletes excluded.
-
-```json
-[{
-  "id": "domain_abc",
-  "orgId": "org_xyz",
-  "name": "mail.acme.com",
-  "resendDomainId": "res_dom_123",
-  "status": "verified",
-  "region": "us-east-1",
-  "dnsRecords": [...],
-  "createdAt": "...",
-  "lastSyncedAt": "..."
-}]
-```
-
-#### `POST /email/domains` — auth: client
-Register a new sending domain with Resend and store DNS records.
-
-Body:
-```json
-{ "orgId": "org_xyz", "name": "mail.acme.com" }
-```
-
-Required: `name` (valid domain name, lowercased). Domain must not already be registered for the same org (409 if duplicate).
-
-What happens:
-1. Validates domain name format
-2. Calls Resend `domains.create({ name })`
-3. Persists domain doc with `status: pending` and the DNS records returned by Resend
-4. Returns the DNS records the client must add to their DNS provider
-
-Response (201):
 ```json
 {
-  "id": "domain_abc",
-  "resendDomainId": "res_dom_123",
-  "status": "pending",
-  "dnsRecords": [
-    { "record": "SPF", "name": "mail.acme.com", "type": "TXT", "ttl": "Auto",
-      "status": "not_started", "value": "v=spf1 include:amazonses.com ~all", "priority": null },
-    { "record": "DKIM", "name": "resend._domainkey.mail.acme.com", "type": "TXT",
-      "ttl": "Auto", "status": "not_started", "value": "p=...", "priority": null },
-    { "record": "DMARC", "name": "_dmarc.mail.acme.com", "type": "TXT",
-      "ttl": "Auto", "status": "not_started", "value": "v=DMARC1; p=none;", "priority": null }
-  ]
+  "orgId": "org_xyz",
+  "name": "Newsletter — homepage",
+  "type": "newsletter",
+  "doubleOptIn": "on",
+  "confirmationSubject": "Confirm your subscription",
+  "confirmationBodyHtml": "<p>Click to confirm: <a href=\"{{confirmUrl}}\">Confirm</a></p>",
+  "successMessage": "Check your inbox!",
+  "successRedirectUrl": "https://partnersinbiz.online/thanks",
+  "fields": [
+    { "key": "firstName", "label": "First name", "type": "text", "required": false }
+  ],
+  "tagsToApply": ["newsletter", "homepage"],
+  "campaignIdsToEnroll": [],
+  "sequenceIdsToEnroll": ["seq_welcome"],
+  "notifyEmails": ["peet@partnersinbiz.online"],
+  "widgetTheme": {
+    "primaryColor": "#F5A623", "textColor": "#0A0A0B", "backgroundColor": "#ffffff",
+    "borderRadius": 12, "buttonText": "Subscribe",
+    "headingText": "Get the weekly", "subheadingText": "One email, every Friday. Unsubscribe anytime."
+  },
+  "active": true
 }
 ```
 
-#### `GET /email/domains/[id]` — auth: client
-Fetch domain and **refresh status live from Resend**. Always use this (not the list endpoint) to check current verification status — it calls `resend.domains.get(resendDomainId)` and updates the stored `status` and `dnsRecords` before responding.
+## `GET/PUT/DELETE /capture-sources/[id]` — auth: client
 
-Use this to poll until `status === 'verified'` after adding DNS records.
+## `POST /capture-sources/[id]/submit` — **PUBLIC, CORS open**
 
-Response: full domain object with refreshed `status` and `dnsRecords`.
+```json
+{ "email": "jane@example.com", "data": { "firstName": "Jane" }, "referer": "https://acme.com/" }
+```
 
-#### `DELETE /email/domains/[id]` — auth: client
-Soft-delete locally and best-effort remove from Resend (`resend.domains.remove`). Resend removal failure is logged but does not block the local soft-delete.
+Flow:
+1. Validates email
+2. Creates / updates contact (orgId+email dedup, merges tags)
+3. Stores submission
+4. If DOI on → sends confirmation email with `{{confirmUrl}}` substituted; returns `{ ok, requiresConfirmation: true, message }`
+5. If DOI off → auto-enrolls into sequenceIdsToEnroll + campaignIdsToEnroll + any active campaign whose triggers.captureSourceIds includes this source; sends `notifyEmails`; returns `{ ok, requiresConfirmation: false, message, redirect? }`
 
-Response: `{ id }`.
+Also exposed at `POST /api/embed/newsletter/[sourceId]/submit` for cleaner embed URLs.
+
+## `GET /capture-sources/[id]/submissions?page=...` — auth: client
+
+## Embed surfaces
+
+- **JS widget:** `<script src="https://partnersinbiz.online/embed/newsletter/<SOURCE_ID>/widget.js" async></script>` — renders inline (or pass `data-target="#anchor"` to mount elsewhere)
+- **Iframe:** `<iframe src="https://partnersinbiz.online/embed/newsletter/<SOURCE_ID>" width="100%" height="520" style="border:0;max-width:480px"></iframe>`
+- **DOI confirmation page:** `https://partnersinbiz.online/lead/confirm/<TOKEN>` — verifies HMAC, marks confirmed, runs auto-enroll
 
 ---
 
-## Workflow guides
+# 8. Email Domains (Resend verification)
 
-### 1. Send a one-off email
+## `GET /email/domains?orgId=...` — auth: client
+## `POST /email/domains` — auth: client — `{ orgId, name }` → returns DNS records to add at registrar
+## `GET /email/domains/[id]` — auth: client — refreshes live from Resend (poll until `status === 'verified'`)
+## `DELETE /email/domains/[id]` — auth: client — soft-delete + best-effort Resend remove
 
-```bash
-POST /email/send
-{ "to": "jane@acme.com", "subject": "Following up on our chat",
-  "bodyText": "Hi Jane,\n\nFollowing up on...\n\nBest,\nPeet",
-  "contactId": "contact_abc" }
+Use a verified domain's `id` as `fromDomainId` on campaigns / broadcasts so sends go from `<fromLocal>@<domainName>`.
+
+---
+
+# 9. AI Email Generation
+
+All generators use the same multi-kind `/email/generate` endpoint with a discriminated body.
+
+## `POST /email/generate` — auth: client (admin/ai)
+
+Common shape:
+```json
+{
+  "kind": "email" | "subjects" | "sequence" | "newsletter" | "winback" | "rewrite",
+  "input": { ... },
+  "orgId": "org_xyz"   // optional — if set + voice not provided, voice is loaded from organizations.settings.brandVoice
+}
 ```
 
-### 2. Schedule a follow-up
+### `kind: "email"` — single email
 
-```bash
-POST /email/schedule
-{ "to": "jane@acme.com", "subject": "Check-in", "bodyText": "...",
-  "scheduledFor": "2026-04-22T09:00:00Z", "contactId": "contact_abc" }
-
-# Cancel later if needed
-DELETE /email/email_xyz
+```json
+{
+  "kind": "email",
+  "input": {
+    "goal": "Follow up with cold lead after Properties demo",
+    "voice": { "tone": "founder-led", "audience": "SA SMB founders", "doNotUseWords": ["leverage","supercharge"], "sampleLines": ["Most agencies juggle five tools..."], "signOff": "— Peet" },
+    "audienceDescription": "SMB founder who saw the demo last week",
+    "context": "They were comparing us to Mailchimp + Webflow + GA",
+    "contentLength": "medium",
+    "cta": { "text": "Book a 15-min call", "url": "https://cal.com/peet" },
+    "outputMode": "inline"
+  }
+}
 ```
 
-### 3. Build and launch a nurture sequence
+Returns:
+```json
+{ "subject": "...", "preheader": "...", "bodyHtml": "...", "bodyText": "...", "modelUsed": "anthropic/claude-sonnet-4.6", "generatedAt": "2026-05-11T..." }
+```
+
+For `outputMode: "document"`, returns `{ subject, preheader, document: EmailDocument, modelUsed, generatedAt }` — drop straight into `/email-templates`.
+
+### `kind: "subjects"` — subject-line variants (A/B candidates)
+
+```json
+{ "kind": "subjects", "input": { "topic": "Properties launch", "voice": {...}, "count": 5, "body": "optional existing body" } }
+```
+Returns `{ subjects: ["...", "...", ...], modelUsed }`. Uses Haiku 4.5 for speed.
+
+### `kind: "sequence"` — full nurture series
+
+```json
+{
+  "kind": "sequence",
+  "input": {
+    "name": "Cold lead nurture",
+    "goal": "...",
+    "voice": {...},
+    "steps": 5,
+    "cadence": "normal",
+    "audienceDescription": "...",
+    "context": "..."
+  }
+}
+```
+Returns `{ name, description, steps: [{stepNumber, delayDays, subject, bodyHtml, bodyText}, ...], modelUsed }`.
+
+### `kind: "newsletter"` — block-based newsletter
+
+```json
+{
+  "kind": "newsletter",
+  "input": {
+    "topic": "What we shipped this quarter",
+    "voice": {...},
+    "stories": [
+      { "heading": "...", "bodyHint": "...", "ctaText": "Read more", "ctaUrl": "...", "imageUrl": "..." }
+    ],
+    "orgName": "Partners in Biz",
+    "unsubscribeUrl": "..."
+  }
+}
+```
+Returns `{ document, subject, preheader, modelUsed }` — an `EmailDocument` ready to save as a template.
+
+### `kind: "winback"` — re-engagement
+
+```json
+{
+  "kind": "winback",
+  "input": {
+    "contactName": "Jane",
+    "contactCompany": "Acme",
+    "daysSinceLastInteraction": 90,
+    "lastTopicOrProduct": "Properties module",
+    "voice": {...},
+    "offer": { "description": "30% off COMEBACK30 for the next 14 days", "ctaText": "Reactivate now", "ctaUrl": "..." }
+  }
+}
+```
+
+### `kind: "rewrite"` — improve an existing body
+
+```json
+{
+  "kind": "rewrite",
+  "input": {
+    "body": "...existing html or text...",
+    "voice": {...},
+    "instruction": "tighten" | "expand" | "soften" | "sharpen" | "translate-sa-english"
+  }
+}
+```
+
+### Voice presets (`lib/ai/voice-presets.ts`)
+
+- `PIB_FOUNDER_VOICE` — direct, founder-led, SA English (default)
+- `WARM_PROFESSIONAL` — friendly, polished service-business voice
+- `BOLD_STARTUP` — startup pitch energy
+- `CLINICAL_AUTHORITY` — law/health/finance
+- `PLAYFUL_BRAND` — consumer / e-commerce
+
+Pass any of these as `input.voice`. Or call `voiceFromOrg(orgId)` server-side / let the endpoint do it by passing top-level `orgId`.
+
+### Targeted generators
+
+- `POST /sequences/[id]/generate` — generates steps and PATCHes them onto the sequence
+- `POST /broadcasts/[id]/generate` — generates inline content and writes to the broadcast
+- `POST /email-templates/generate` — saves the result as a new `email_templates` doc
+
+---
+
+# 10. A/B Testing
+
+A/B is configured on **broadcasts** (whole-email) and **sequence steps** (per-step). Variants override one or more of: subject, body, fromName, sendTime.
+
+Two modes:
+- **`split`** — all variants sent, weights sum to 100, optionally auto-promote winner after `testDurationMinutes`
+- **`winner-only`** — variants sent only to a `testCohortPercent` of audience; after `testDurationMinutes` the system picks a winner and fans out to the remaining audience
+
+## `GET/PUT /broadcasts/[id]/ab` — auth: client
+
+```json
+{
+  "enabled": true,
+  "mode": "winner-only",
+  "variants": [
+    { "id": "a", "label": "Short subject", "overrides": [{ "kind": "subject", "subject": "What we shipped this quarter" }], "weight": 50, "sent": 0, "delivered": 0, "opened": 0, "clicked": 0, "bounced": 0, "unsubscribed": 0 },
+    { "id": "b", "label": "Question subject", "overrides": [{ "kind": "subject", "subject": "What did we ship this quarter, Jane?" }], "weight": 50, "sent": 0, "delivered": 0, "opened": 0, "clicked": 0, "bounced": 0, "unsubscribed": 0 }
+  ],
+  "testCohortPercent": 20,
+  "winnerMetric": "opens",
+  "testDurationMinutes": 240,
+  "autoPromote": true,
+  "status": "inactive",
+  "winnerVariantId": "",
+  "testStartedAt": null, "testEndsAt": null, "winnerDecidedAt": null
+}
+```
+
+PUT validates: enabled needs ≥2 variants; split mode requires weights sum to 100; winner-only requires testCohortPercent 1-50, testDurationMinutes ≥ 5. Only editable while broadcast in `draft` or `paused`.
+
+## `POST /broadcasts/[id]/ab/start` — auth: client
+
+Marks `ab.status = 'testing'` and stamps `testStartedAt` + `testEndsAt`. Use for winner-only mode after scheduling.
+
+## `POST /broadcasts/[id]/ab/declare-winner` — auth: client
+
+```json
+{ "variantId": "a" }   // manual
+{}                      // auto-pick from current stats
+```
+
+Sets `ab.winnerVariantId`, transitions `ab.status = 'winner-pending'`. Next cron tick dispatches winner to the remaining audience.
+
+## `GET/PUT /sequences/[id]/steps/[stepNumber]/ab` — auth: client
+
+Same shape, scoped to a single sequence step.
+
+Variant assignment is deterministic (HMAC of `contactId + ':' + broadcastId`) — re-running the same broadcast picks the same variant per contact.
+
+---
+
+# 11. Analytics
+
+## `GET /email-analytics/overview?orgId=...&from=...&to=...` — auth: client
+
+```json
+{
+  "range": { "from": "...", "to": "..." },
+  "totals": { "sent": 1245, "delivered": 1212, "opened": 488, "clicked": 102, "bounced": 28, "unsubscribed": 3, "failed": 5 },
+  "rates":  { "deliveryRate": 0.97, "openRate": 0.40, "clickRate": 0.08, "ctrOnOpens": 0.21, "bounceRate": 0.02, "unsubRate": 0.002 },
+  "bySource": {
+    "broadcast": { "sent": 800, "opened": 320, "clicked": 70 },
+    "campaign":  { "sent": 320, "opened": 140, "clicked": 28 },
+    "sequence":  { "sent": 95,  "opened": 24,  "clicked": 4 },
+    "oneOff":    { "sent": 30,  "opened": 4,   "clicked": 0 }
+  },
+  "topBroadcasts": [{ "id": "...", "name": "...", "sent": 800, "opened": 320, "clicked": 70, "openRate": 0.4, "clickRate": 0.087 }],
+  "topCampaigns": [...],
+  "worstBounces": [...]
+}
+```
+
+## `GET /email-analytics/timeseries?orgId=...&from=...&to=...&bucket=day|week` — auth: client
+
+```json
+{ "range": {...}, "bucket": "day", "series": [{ "date": "2026-04-01", "sent": 12, "delivered": 12, "opened": 5, "clicked": 1, "bounced": 0 }, ...] }
+```
+
+## `GET /email-analytics/broadcasts/[id]` — auth: client
+Per-broadcast detail (KPIs + timeline + topClicks + topDomains).
+
+## `GET /email-analytics/sequences/[id]` — auth: client
+Per-sequence (status breakdown + step funnel).
+
+## `GET /email-analytics/contacts?orgId=...&status=highly-engaged|engaged|cooling|dormant|unsubscribed|bounced&limit=...` — auth: client
+
+Engagement-scored contacts (score 0..100). Status buckets derived from score + recency.
+
+## `GET /email-analytics/leaderboard?from=...&to=...` — auth: **admin/ai only**
+
+Cross-org leaderboard — open rate / click rate / bounce rate per org. Platform-admin tool.
+
+---
+
+# 12. Tracked short links (CTA click stats)
+
+## `GET /links?orgId=...` — auth: client
+## `POST /links` — auth: client — `{ targetUrl, slug?, description? }` → `{ id, slug, shortUrl }`
+## `GET/PUT/DELETE /links/[id]` — auth: client (slug immutable)
+## `GET /links/[id]/stats` — auth: client — clicks, referrers, countries, day/hour buckets
+
+Public route `/l/<slug>` logs the click + 302s to targetUrl.
+
+---
+
+# Workflow guides (agent-ready recipes)
+
+## 1. Newsletter signup widget on a client's marketing site
 
 ```bash
-# Draft the sequence
+# Create the capture source
+POST /capture-sources
+{ "orgId":"acme", "name":"Newsletter — homepage", "type":"newsletter",
+  "doubleOptIn":"on", "successMessage":"Check your inbox!",
+  "fields":[{"key":"firstName","label":"First name","type":"text","required":false}],
+  "tagsToApply":["newsletter"], "sequenceIdsToEnroll":["seq_welcome_3step"],
+  "notifyEmails":["peet@partnersinbiz.online"],
+  "widgetTheme":{"primaryColor":"#F5A623","textColor":"#0A0A0B","backgroundColor":"#fff","borderRadius":12,"buttonText":"Subscribe","headingText":"Get the weekly","subheadingText":"One email, every Friday."},
+  "active":true }
+# → { id: "src_abc" }
+
+# Have the client paste this into their site:
+<script src="https://partnersinbiz.online/embed/newsletter/src_abc/widget.js" async></script>
+
+# Every signup → contact created/updated, DOI email sent, after confirmation → enrolled in seq_welcome_3step.
+```
+
+## 2. AI-generate a 5-step nurture sequence + activate it
+
+```bash
+# Create empty sequence
 POST /sequences
-{ "name": "SaaS Onboarding",
-  "status": "draft",
-  "steps": [
-    { "order": 1, "dayOffset": 0, "subject": "Welcome {{firstName}}", "bodyText": "..." },
-    { "order": 2, "dayOffset": 2, "subject": "Your first value", "bodyText": "..." },
-    { "order": 3, "dayOffset": 5, "subject": "Case study", "bodyText": "..." }
-  ] }
+{ "name":"SaaS onboarding", "description":"5-step onboarding", "status":"draft", "steps":[] }
+# → { id: "seq_abc" }
+
+# Have AI fill it in
+POST /sequences/seq_abc/generate
+{ "name":"SaaS onboarding", "goal":"Get a trial user to activate in 14 days",
+  "voice": <PIB_FOUNDER_VOICE>, "steps":5, "cadence":"normal" }
 
 # Activate
-PUT /sequences/seq_xyz
-{ "status": "active" }
+PUT /sequences/seq_abc { "status":"active" }
 
-# Enroll contacts
-POST /sequences/seq_xyz/enroll
-{ "contactIds": ["contact_a", "contact_b"] }
-
-# Monitor
-GET /sequence-enrollments?sequenceId=seq_xyz&status=active
+# Enroll contacts captured via the form
+POST /sequences/seq_abc/enroll { "contactIds": [...] }
 ```
 
-### 4. Pause a sequence for a specific contact
+## 3. Newsletter broadcast with A/B subject test
 
 ```bash
-PATCH /sequence-enrollments/enr_abc
-{ "status": "paused" }
+# Newsletter from template
+POST /broadcasts
+{ "orgId":"acme", "name":"April newsletter",
+  "fromDomainId":"dom_acme", "fromName":"Acme Studio", "fromLocal":"hello",
+  "content":{"templateId":"tpl_newsletter_apr","subject":"What's new this month","preheader":"3 stories + 1 win","bodyHtml":"","bodyText":""},
+  "audience":{"segmentId":"seg_active","contactIds":[],"tags":[],"excludeUnsubscribed":true,"excludeBouncedAt":true} }
+# → { id: "bc_abc" }
+
+# Generate 5 subject variants
+POST /email/generate
+{ "kind":"subjects", "input":{ "topic":"April newsletter recap", "voice": <PIB_FOUNDER_VOICE>, "count":5 } }
+# → { subjects: ["...", "..."] }
+
+# Wire 2 winners as A/B variants
+PUT /broadcasts/bc_abc/ab
+{ "enabled":true, "mode":"winner-only", "testCohortPercent":20, "winnerMetric":"opens",
+  "testDurationMinutes":240, "autoPromote":true,
+  "variants":[
+    {"id":"a","label":"Short","overrides":[{"kind":"subject","subject":"<short>"}],"weight":50,"sent":0,"delivered":0,"opened":0,"clicked":0,"bounced":0,"unsubscribed":0},
+    {"id":"b","label":"Question","overrides":[{"kind":"subject","subject":"<question>"}],"weight":50,"sent":0,"delivered":0,"opened":0,"clicked":0,"bounced":0,"unsubscribed":0}
+  ]}
+
+# Sanity-check the audience
+GET /broadcasts/bc_abc/preview
+# → { audienceSize: 1245, sampleContacts: [...] }
+
+# Schedule
+POST /broadcasts/bc_abc/schedule { "scheduledFor":"2026-05-15T09:00:00Z" }
+
+# Start the A/B window once it goes 'scheduled' — the cron will dispatch the test cohort first
+POST /broadcasts/bc_abc/ab/start
+
+# 4h later the cron auto-picks the winner and fans out to the remaining 80%.
+# Or manually:
+POST /broadcasts/bc_abc/ab/declare-winner { "variantId":"a" }
+
+# Watch it
+GET /broadcasts/bc_abc/stats
+GET /email-analytics/broadcasts/bc_abc
 ```
 
-### 5. Tracked link for email CTA
+## 4. Verify a custom sending domain
 
 ```bash
-POST /links
-{ "targetUrl": "https://acme.com/offer?utm_source=email&utm_campaign=q2",
-  "slug": "q2-offer" }
-# → { shortUrl: "https://partnersinbiz.online/l/q2-offer" }
+POST /email/domains { "orgId":"acme", "name":"mail.acme.com" }
+# → { id, dnsRecords:[...] }
 
-# Include {shortUrl} in your sequence email body
-
-# Later, check stats
-GET /links/link_abc/stats
-```
-
-### 6. Handle bounces / complaints
-
-Resend webhook auto-updates email records. Monitor via:
-```bash
-GET /email?status=failed&direction=outbound
-```
-
-A complaint auto-unsubscribes the contact — all active enrollments for that contact flip to `unsubscribed`.
-
-### 7. Launch a campaign to a segment
-
-```bash
-# 1. Ensure a verified domain exists
-POST /email/domains
-{ "orgId": "org_xyz", "name": "mail.acme.com" }
-# → Add the returned dnsRecords to your DNS provider
-
-# 2. Poll until verified
-GET /email/domains/domain_abc
+# Add each record at the registrar, then poll:
+GET /email/domains/dom_acme
 # Repeat until status === 'verified'
-
-# 3. Create the campaign draft
-POST /campaigns
-{ "orgId": "org_xyz", "name": "Q2 SMB Nurture",
-  "fromDomainId": "domain_abc", "fromName": "Peet", "fromLocal": "hello",
-  "segmentId": "seg_smb", "sequenceId": "seq_nurture" }
-
-# 4. Launch — enrolls all segment contacts in the sequence
-POST /campaigns/campaign_xyz/launch
-# → { enrolled: 312, audienceSize: 340 }
-
-# 5. Monitor enrollments
-GET /sequence-enrollments?sequenceId=seq_nurture&status=active
 ```
 
-### 8. Register and verify a custom sending domain
+## 5. Send a one-off email with a tracked CTA
 
 ```bash
-# Register with Resend — get DNS records back
-POST /email/domains
-{ "orgId": "org_xyz", "name": "mail.acme.com" }
-# → status: 'pending', dnsRecords: [{ record, name, type, value, ... }]
+POST /links { "targetUrl":"https://acme.com/landing?utm_source=email&utm_campaign=apr", "slug":"apr" }
+# → { shortUrl: "https://partnersinbiz.online/l/apr" }
 
-# Add each DNS record to your DNS provider (TXT records for SPF, DKIM, DMARC)
+POST /email/send
+{ "to":"jane@acme.com", "subject":"Quick follow-up",
+  "bodyHtml":"<p>Hi Jane, ...<a href=\"https://partnersinbiz.online/l/apr\">See the offer</a></p>",
+  "contactId":"contact_abc" }
 
-# Poll for verification (Resend can take a few minutes to hours)
-GET /email/domains/domain_abc
-# Repeat until status === 'verified'
-
-# Domain is now usable as fromDomainId in campaigns
+# Later
+GET /links/<id>/stats
 ```
 
-## Error reference
+## 6. Re-engagement campaign for cooling contacts
+
+```bash
+# Find cooling contacts via analytics
+GET /email-analytics/contacts?orgId=acme&status=cooling&limit=200
+# → array with contactIds
+
+# Generate a winback email
+POST /email/generate
+{ "kind":"winback",
+  "input":{ "contactName":"{{firstName}}", "daysSinceLastInteraction":60,
+    "voice":<PIB_FOUNDER_VOICE>,
+    "offer":{"description":"30% off COMEBACK30 for the next 14 days","ctaText":"Reactivate","ctaUrl":"https://..."} } }
+
+# Save as a one-shot broadcast and send-now
+POST /broadcasts
+{ "orgId":"acme", "name":"Winback April",
+  "content":{ "subject":"<from above>", "bodyHtml":"<from above>", "bodyText":"<from above>", "templateId":"", "preheader":"" },
+  "audience":{ "segmentId":"", "contactIds":<from analytics>, "tags":[], "excludeUnsubscribed":true, "excludeBouncedAt":true }, ... }
+POST /broadcasts/<id>/send-now
+```
+
+---
+
+# Error reference
 
 | HTTP | Error | Fix |
 |------|-------|-----|
 | 400 | `to is required` / `subject is required` | Supply fields |
 | 400 | `bodyText or bodyHtml is required` | At least one body |
 | 400 | `scheduledFor must be in the future` | Check timestamp |
-| 400 | `Slug already taken` | Pick a different slug |
-| 400 | `name is required` (campaign) | Supply campaign name |
-| 400 | `sequenceId not found` | Verify sequence exists and belongs to same org |
+| 400 | `name is required` | Required for sequence/campaign/broadcast/template |
+| 400 | `Invalid document` | Validate block shape — see `/email-builder/preview` for live errors |
 | 400 | `Invalid domain name` | Use a valid domain format (e.g. `mail.acme.com`) |
-| 404 | `Email not found` | Verify id |
-| 404 | `Campaign not found` | Verify id / not soft-deleted |
-| 404 | `Domain not found` | Verify id / not soft-deleted |
+| 400 | `At least 2 variants are required when A/B testing is enabled` | Add a second variant |
+| 400 | `Variant weights must sum to 100 in split mode` | Adjust weights |
+| 400 | `testCohortPercent must be between 1 and 50` | winner-only constraint |
+| 403 | `Starters are read-only` | Duplicate instead of editing |
+| 404 | not found | Verify id, not soft-deleted |
 | 409 | `Cannot edit a sent email` | Only scheduled/draft are editable |
-| 409 | `Domain already registered for this org` | Domain already exists; use existing record |
-| 422 | `Campaign has no sequence` | Set `sequenceId` before launching |
-| 422 | `Campaign has no audience` | Set `segmentId` or `contactIds` before launching |
+| 409 | `Domain already registered for this org` | Use the existing record |
+| 409 | `A/B config can only be edited while broadcast is draft or paused` | Pause first |
+| 422 | `Campaign has no sequence` / `has no audience` | Set the missing field |
 | 422 | `Audience is empty` | Segment resolved to zero contacts |
-| 422 | `Sequence has no steps` | Add at least one step to the sequence |
-| 422 | `Campaign is already active/completed` | Cannot re-launch or edit in these states |
+| 422 | `Sequence has no steps` | Add at least one step |
+| 422 | `Cannot generate inline content — template is set` | Clear `content.templateId` first |
 | 502 | `Resend rejected the domain` | Domain name invalid or Resend API error |
 
-## Agent patterns
+---
 
-1. **Link `contactId` on every outbound** — activity log stays clean.
-2. **Test before enroll** — `POST /email/send` with the rendered content to yourself before launching a sequence.
-3. **Watch the complaint rate** — a single complaint flags; 3+ in 7 days → pause outreach and investigate.
-4. **Use short links for every CTA** — you get click stats automatically.
-5. **Merge fields require contact data** — ensure contacts have `name`, `company`, etc. populated before enrolling.
-6. **Scheduling tip** — scheduled emails run at the cron cadence (daily 6am UTC). For precise timing, send directly and use `Retry-After` for rate limits.
-7. **Unsubscribe handling** — never send to a contact with `unsubscribed: true` or auto-unsubscribed via Resend complaint.
-8. **Campaigns vs. sequences** — use sequences for ongoing evergreen nurture (enroll one contact at a time); use campaigns for one-shot bulk sends to a segment or list. Campaigns enroll into a sequence under the hood.
-9. **Domain verification timing** — Resend DNS propagation can take minutes to hours. Poll `GET /email/domains/[id]` (not the list endpoint) as it refreshes status live from Resend.
-10. **`fromDomainId` must be verified** — campaigns will fail to send if the sending domain is still `pending`. Always confirm `status === 'verified'` before launching.
-11. **Launch idempotency** — relaunching a paused campaign skips contacts already enrolled in that campaign, so no duplicate enrollments.
+# Agent patterns
+
+1. **Always link `contactId`** on `/email/send` so the contact's activity timeline is clean.
+2. **Voice presets are your shortcut** — pass `PIB_FOUNDER_VOICE` for PiB-style; or supply `orgId` and the endpoint loads `org.settings.brandVoice` if defined.
+3. **Use templates over inline HTML.** Build once via the visual builder, reference by `templateId` on every broadcast — far easier to maintain.
+4. **Preview before sending.** `POST /email-templates/[id]/render` + `GET /broadcasts/[id]/preview` together tell you exactly who gets exactly what.
+5. **Generate subject variants for every broadcast** — `POST /email/generate {kind:"subjects"}` then wire the top 2 into `/ab` config. Use `mode:"winner-only"` with `autoPromote:true` for hands-off A/B.
+6. **Newsletter signup must use DOI.** GDPR / SA POPI compliance + better deliverability + cleaner list.
+7. **Watch the bounce + complaint rates.** A single complaint flags; 3+ in 7 days → pause sending and investigate. `GET /email-analytics/overview` shows `bounceRate` and `unsubRate`.
+8. **Tracked links on every CTA.** `POST /links` first, then embed `shortUrl` — automatic click attribution.
+9. **Segment + tag — not raw contactIds — for ongoing programs.** A segment evaluates fresh on each campaign launch; a contactIds list is frozen at the time of POST.
+10. **`fromDomainId` must be `verified`.** Sends from an unverified domain fall back to the shared PiB domain — fine for early experiments, bad for client-branded sends.
+11. **Idempotency**: every POST that creates a resource supports `Idempotency-Key` header. The broadcast cron is itself idempotent (`emails` collection has a unique `broadcastId+contactId` invariant — the cron skips already-sent contacts).
+12. **A/B is deterministic per contact.** Re-running a paused/restarted broadcast routes each contact to the same variant. No double-counting.
+13. **Engagement score (0..100)** = `opens × 5 + clicks × 15 − bounces × 30 − daysSinceLastEngaged × 0.5`, clamped. Use the `cooling`/`dormant` status filters on `/email-analytics/contacts` to find your winback audience.
+14. **No raw HTML in starters.** All 5 starter templates use the block model — easier to AI-edit, easier to remix per-org.
+15. **The complete capture → enroll loop:** `/capture-sources/[id]/submit` (public) → contact + tags applied → DOI confirm if on → auto-enroll all matching sequences + active campaigns whose `triggers.captureSourceIds` includes the source. No glue code needed.

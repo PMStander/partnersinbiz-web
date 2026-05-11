@@ -68,8 +68,11 @@ Run them in order. Phases 3–6 inside the production day can run heavily in par
 | **6. Social card backgrounds** | Reusable card images | `/social/media/upload` → URLs referenced on relevant posts | (covered in master plan) |
 | **7. Preview** | Public share URL: `https://partnersinbiz.online/c/[shareToken]` | (no work — already live the moment the campaign exists) | (this file) |
 | **8. Final summary** | Print campaign cockpit + portal + share URLs and asset counts | (stdout) | (this file) |
+| **9. Import from local** | Skip Phases 1–6 entirely when local content already exists from a previous run — use this canonical playbook to push existing `marketing/` content into a campaign on the platform | All four collections (`campaigns`, `seo_content`, `seo_drafts`, `social_posts`) | [`references/09-import-from-local.md`](references/09-import-from-local.md) |
 
 **Always read the relevant reference file before executing the phase.** They contain the prompts, code snippets, and gotchas that took a real production run to learn.
+
+> **For repeat runs / clients with existing content:** Phase 9 is the entry point, not Phase 0. If the client's `marketing/` folder already has blog-posts/, videos/, and social-media/ markdown, jump straight to [`references/09-import-from-local.md`](references/09-import-from-local.md) — running Phases 1–6 will regenerate content that may already be approved.
 
 For **app-specific work** (consumer apps), Phase 4 has a parallel sibling — run the `aso-appstore-screenshots` skill alongside Phase 4 to produce App Store / Play Store screenshots. The two skills compose cleanly.
 
@@ -85,6 +88,45 @@ The `ai` role bypasses tenant restrictions, so the engine can run for any client
 
 Idempotency: every write that could be retried uses an `Idempotency-Key` header. Keys follow the pattern `pib-engine-{campaignId}-{slot}-{platform}-{format}` so a retry on the same slot is safe.
 
+## ⚠ Firestore-direct writes for fields the API can't set
+
+Several blog fields are NOT in any API allow-list and MUST be written via Firebase Admin SDK directly into Firestore. The platform's own [import-pib-content.py](https://github.com/anthropics/) script does this and leaves a comment `"# fields not in PATCH allow-list"`. Stop trying to attach them via PATCH — you'll get `success: true` but the fields silently disappear.
+
+| Field | Set how | Why |
+|---|---|---|
+| `heroImageUrl` (on `seo_content`) | Firestore Admin: `db.collection("seo_content").doc(id).update({heroImageUrl: ...})` | Not in PATCH allow-list |
+| `draftPostId` (on `seo_content`)  | Firestore Admin (same as above)       | Not in PATCH allow-list, but the `POST /seo/content/[id]/draft` endpoint returns it — capture and persist it manually |
+| Blog body for **imported** content | Firestore Admin: `db.collection("seo_drafts").doc(id).set({body, ...})` | The `/draft` endpoint always invokes AI; if you want imported markdown, write the draft directly |
+
+**Setup** (once per Cowork session, takes ~10 lines of Python):
+
+```python
+from pathlib import Path
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+ENV_PATH = Path("/Users/peetstander/Cowork/Partners in Biz — Client Growth/partnersinbiz-web/.env.local")
+env = {k:v.strip().strip('"') for k,_,v in (l.partition("=") for l in ENV_PATH.read_text().splitlines() if "=" in l and not l.startswith("#"))}
+
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(credentials.Certificate({
+        "type": "service_account",
+        "project_id":   env["FIREBASE_ADMIN_PROJECT_ID"],
+        "client_email": env["FIREBASE_ADMIN_CLIENT_EMAIL"],
+        "private_key":  env["FIREBASE_ADMIN_PRIVATE_KEY"].replace("\\n", "\n"),
+        "token_uri":    "https://oauth2.googleapis.com/token",
+    }))
+db = firestore.client()
+
+# Now you can write:
+db.collection("seo_content").document(blog_id).update({
+    "heroImageUrl": uploaded_url,
+    "draftPostId":  draft_id,
+})
+```
+
+Use this for **every blog you create**, immediately after generating the draft. The page template at `/admin/org/[slug]/social/[campaignId]?tab=blogs` won't render images or open the body editor unless these two fields are set on the `seo_content` doc.
+
 ## API endpoints used
 
 ```
@@ -96,13 +138,17 @@ GET    /campaigns/[id]/assets                  roll-up to verify output
 
 # SEO (existing)
 GET    /seo/sprints?status=active&clientId={orgId}    find an active sprint to attach blogs to
+POST   /seo/sprints                                   create sprint — REQUIRES siteUrl + siteName
 POST   /seo/sprints/{sprintId}/content                create blog (with campaignId)
-POST   /seo/content/[id]/draft                        generate AI body
-PATCH  /seo/content/[id]                              attach heroImageUrl
+POST   /seo/content/[id]/draft                        generate AI body — returns draftPostId
+PATCH  /seo/content/[id]                              ⚠ allow-list: only [title, type, targetKeywordId,
+                                                        targetUrl, publishDate, status, liUrl, xUrl,
+                                                        internalLinksAdded, phase, campaignId, pillarId]
+                                                        — does NOT accept heroImageUrl or draftPostId
 
 # Social (existing)
 POST   /social/posts                                  create social post (with campaignId)
-PATCH  /social/posts/[id]                             attach media (image OR video multi-format)
+PUT    /social/posts/[id]                             attach media (image OR video multi-format)
 POST   /social/media/upload                           multipart upload, returns { url }
 
 # Tenant resolution

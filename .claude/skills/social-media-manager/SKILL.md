@@ -445,37 +445,77 @@ For videos with multiple format cuts (vertical Reel / 16:9 YouTube /
 urlYoutube, urlStories}` per `references/05-video-production.md` in
 the content-engine skill.
 
-**Step 3 — bulk-create posts with the campaignId**
+**Step 3 — create posts with the campaignId**
+
+> ⚠️ **KNOWN BUG — do NOT use `POST /posts/bulk/` for campaign imports.**
+> The bulk endpoint silently drops `campaignId` on every post — they get
+> created unlinked and won't appear in the campaign roll-up. Always use
+> single `POST /social/posts` per post when `campaignId` must be preserved.
 
 ```
-POST /social/posts/bulk
+POST /social/posts
 {
   "orgId": "{orgId}",
-  "posts": [
-    {
-      "content": "<caption text from local file>",
-      "platforms": ["instagram"],
-      "campaignId": "{campaignId}",
-      "format": "feed",
-      "media": [{ "type": "image", "url": "<from step 2>", "altText": "...", "order": 0 }],
-      "hashtags": ["..."],
-      "tags": ["..."]
-    }
-    // up to 50 per request
-  ]
+  "campaignId": "{campaignId}",
+  "content": "<caption text from local file>",
+  "platforms": ["instagram"],
+  "format": "feed",
+  "media": [{ "type": "image", "url": "<from step 2>", "altText": "...", "order": 0 }],
+  "hashtags": ["..."],
+  "tags": ["..."]
 }
 ```
 
-Posts created without `scheduledAt` land as `status: "draft"`. To put
-them straight into client review, also `POST /posts/[id]/submit` per
-post (or include `status: "pending_approval"` directly when creating).
+Loop this for every post — yes, one request each. It's slower but required.
 
-For chunks > 50, paginate: 50 per request, dedupe by `Idempotency-Key`
-header `import-{orgId}-{campaignId}-{batchIndex}`.
+Posts land as `status: "draft"` regardless of what you pass on create. To move
+them into the client review queue, call `POST /posts/[id]/submit` per post
+after creation. Do NOT pass `status: "pending_approval"` on create — it is
+silently ignored. The org routes to `client_review` (not `pending_approval`)
+if the client approval stage is enabled.
 
-**Step 4 — hand the campaign to the client for review**
+Use an `Idempotency-Key` header per post (`import-{orgId}-{campaignId}-{slug}-{platform}`)
+so retries don't create duplicates.
 
-Tell the client to open the org-themed drill-in:
+**Step 4 — activate campaign and hand to client for review**
+
+Before sharing the link, **two things have to be true** or the drill-in page
+will either crash with `t.map is not a function` or render empty cards:
+
+**4a — Set status to `active`.** The page guards against rendering `draft`
+campaigns:
+```
+PATCH /campaigns/{campaignId}
+{ "status": "active" }
+```
+
+**4b — Calendar must be a flat array of day-level entries**, NOT a nested
+`[{week, slots:[...]}]` shape. The template calls `.map()` on each entry
+expecting a flat object. Match this shape exactly:
+```
+calendar: [
+  { day, date, pillarId, channel: "blog"|"video"|"social", format, title, week }
+]
+```
+The `research`, `brandIdentity`, and `pillars` shapes are also strict —
+see content-engine SKILL for the canonical schemas (taglines is a dict
+with `{master, layered}`, brandIdentity uses `aestheticKeywords` not
+`aesthetic`, audiences use `{id, label, painPoints[]}`).
+
+**4c — Videos appear in the "Reels & TikTok" tab only when** `media[0].type === "video"`
+on a regular `social_posts` doc with `campaignId` set. There is no
+separate "videos" collection — the `/campaigns/[id]/assets` endpoint
+filters social posts by media type to populate the videos rollup. If
+the tab shows the empty "videos are produced by content-engine" state,
+your video posts have `media[0].type === "image"` (or no media). Fix:
+```
+PUT /social/posts/{id}
+{ "media": [{ "type":"video", "url":..., "thumbnailUrl":...,
+              "urlYoutube":..., "urlStories":..., "durationSec":...,
+              "altText":..., "order": 0 }] }
+```
+
+Then share the org-themed drill-in:
 
 ```
 https://partnersinbiz.online/admin/org/{slug}/social/{campaignId}
@@ -1467,7 +1507,7 @@ Never retry 4xx (except 429).
 ### Efficient Patterns
 
 1. **Fetch accounts once** — cache at session start; account IDs are needed for every post
-2. **Use bulk** — never create posts one-by-one; always use `/posts/bulk/`
+2. **Bulk for standalone posts only** — use `/posts/bulk/` only when posts have NO `campaignId`. For campaign imports, always use single `POST /posts/` per post (bulk silently drops `campaignId`)
 3. **Check health first** — `GET /health/` before a complex workflow if uptime is uncertain
 4. **Timestamps are UTC** — convert from user's timezone: SAST = UTC+2, EST = UTC−5, PST = UTC−8
 5. **Validate locally** — check content against platform char limits before the API call
