@@ -117,7 +117,9 @@ export async function createShortLink(
 /**
  * Resolves a short code to the original URL with UTM params appended
  */
-export async function resolveShortCode(shortCode: string): Promise<{ url: string; linkId: string } | null> {
+export async function resolveShortCode(
+  shortCode: string,
+): Promise<{ url: string; linkId: string; orgId: string; contactId?: string } | null> {
   const snapshot = await adminDb
     .collection('shortened_links')
     .where('shortCode', '==', shortCode)
@@ -129,7 +131,7 @@ export async function resolveShortCode(shortCode: string): Promise<{ url: string
   }
 
   const doc = snapshot.docs[0]
-  const data = doc.data() as Omit<ShortenedLink, 'createdAt' | 'updatedAt'>
+  const data = doc.data() as Omit<ShortenedLink, 'createdAt' | 'updatedAt'> & { contactId?: string }
 
   const utmParams: Record<string, string> = {}
   if (data.utmSource) utmParams.utm_source = data.utmSource
@@ -143,6 +145,8 @@ export async function resolveShortCode(shortCode: string): Promise<{ url: string
   return {
     url: finalUrl,
     linkId: doc.id,
+    orgId: data.orgId ?? '',
+    contactId: data.contactId,
   }
 }
 
@@ -154,15 +158,12 @@ export async function trackClick(
   linkId: string,
   orgId: string,
   request: Request,
+  opts?: { contactId?: string; destinationUrl?: string },
 ): Promise<void> {
   try {
     const referrer = request.headers.get('referer')
     const userAgent = request.headers.get('user-agent')
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
-
-    // TODO: Implement geolocation from IP (using a service like ip-geolocation-api)
-    // For now, we'll leave country as null
-    const country = null
 
     await adminDb.collection('shortened_links').doc(linkId).collection('clicks').add({
       linkId,
@@ -171,17 +172,33 @@ export async function trackClick(
       referrer,
       userAgent,
       ip,
-      country,
+      country: null,
     })
 
-    // Increment click count on the main link document
-    await adminDb
-      .collection('shortened_links')
-      .doc(linkId)
-      .update({
-        clickCount: FieldValue.increment(1),
-        updatedAt: FieldValue.serverTimestamp(),
+    await adminDb.collection('shortened_links').doc(linkId).update({
+      clickCount: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    // Write a link_click activity so the behavioral `link-url` segment scope
+    // can match contacts who clicked a specific URL. contactId is optional —
+    // it's only present when the link was created with a per-contact token.
+    if (orgId) {
+      await adminDb.collection('activities').add({
+        orgId,
+        contactId: opts?.contactId ?? '',
+        type: 'link_click',
+        summary: `Clicked tracked link`,
+        metadata: {
+          linkId,
+          destinationUrl: opts?.destinationUrl ?? '',
+          referrer,
+          userAgent,
+        },
+        createdBy: 'system',
+        createdAt: FieldValue.serverTimestamp(),
       })
+    }
   } catch (error) {
     console.error('[Links] Failed to track click:', error)
     // Don't throw — this is fire-and-forget

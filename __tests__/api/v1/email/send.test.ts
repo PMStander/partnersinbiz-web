@@ -18,6 +18,24 @@ jest.mock('@/lib/email/resend', () => ({
   htmlToPlainText: jest.fn((h: string) => h.replace(/<[^>]+>/g, '')),
 }))
 
+jest.mock('@/lib/email/suppressions', () => ({
+  isSuppressed: jest.fn().mockResolvedValue(false),
+  addSuppression: jest.fn().mockResolvedValue(undefined),
+  temporaryExpiryFromNow: jest.fn().mockReturnValue(null),
+}))
+
+jest.mock('@/lib/preferences/store', () => ({
+  shouldSendToContact: jest.fn().mockResolvedValue({ allowed: true }),
+}))
+
+jest.mock('@/lib/platform/quotas', () => ({
+  checkQuota: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('@/lib/email/unsubscribeToken', () => ({
+  signUnsubscribeToken: jest.fn().mockReturnValue('tok-abc'),
+}))
+
 import { adminDb } from '@/lib/firebase/admin'
 process.env.AI_API_KEY = 'test-key'
 

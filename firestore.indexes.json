@@ -938,16 +938,6 @@
         {
           "fieldPath": "orgId",
           "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "connections",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "orgId",
-          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",

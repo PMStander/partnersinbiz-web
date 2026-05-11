@@ -14,14 +14,11 @@
  *   (and the legacy `resendId` field) at send time, so we look the email doc
  *   up by `providerMessageId == messageId`.
  *
- * Signature verification: SNS HTTPS messages include `x-amz-sns-message-*`
- * headers and a SHA1/SHA256-with-RSA signature against a signing cert hosted
- * on `*.amazonaws.com`. Verifying it is non-trivial and not yet implemented —
- * we accept all messages but require:
- *   • Content-Type header to be application/json or text/plain (SNS default)
- *   • `x-amz-sns-topic-arn` to match SES_SNS_TOPIC_ARN if set
- * TODO: add full SigV4 signature check before production cutover.
+ * Signature verification: SNS signs each message with RSA. We verify using the
+ * PEM cert at SigningCertURL (must be from *.amazonaws.com). Enforced when
+ * SES_SNS_TOPIC_ARN is set; skipped in dev/test so local tooling still works.
  */
+import { createVerify } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
@@ -32,6 +29,43 @@ import {
   type SuppressionReason,
 } from '@/lib/email/suppressions'
 
+// SNS signing cert must come from an amazonaws.com subdomain
+const SNS_CERT_URL_RE = /^https:\/\/sns\.[a-z0-9-]+\.amazonaws\.com\//
+const certCache = new Map<string, string>()
+
+async function fetchSigningCert(url: string): Promise<string> {
+  if (!SNS_CERT_URL_RE.test(url)) throw new Error(`Untrusted SNS cert URL: ${url}`)
+  const cached = certCache.get(url)
+  if (cached) return cached
+  const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+  if (!res.ok) throw new Error(`Failed to fetch SNS signing cert: ${res.status}`)
+  const pem = await res.text()
+  certCache.set(url, pem)
+  return pem
+}
+
+// Field order per AWS SNS signature spec
+const NOTIFICATION_SIGN_FIELDS = ['Message', 'MessageId', 'Subject', 'Timestamp', 'TopicArn', 'Type']
+const CONFIRMATION_SIGN_FIELDS = ['Message', 'MessageId', 'SubscribeURL', 'Timestamp', 'Token', 'TopicArn', 'Type']
+
+function buildStringToSign(msg: Record<string, string>): string {
+  const fields = msg.Type === 'Notification' ? NOTIFICATION_SIGN_FIELDS : CONFIRMATION_SIGN_FIELDS
+  return fields.filter(f => msg[f] !== undefined).map(f => `${f}\n${msg[f]}\n`).join('')
+}
+
+async function verifySnsSignature(msg: Record<string, string>): Promise<void> {
+  const certUrl = msg.SigningCertURL
+  const signature = msg.Signature
+  if (!certUrl || !signature) throw new Error('Missing SNS signature fields')
+  const pem = await fetchSigningCert(certUrl)
+  const algorithm = msg.SignatureVersion === '2' ? 'SHA256withRSA' : 'sha1WithRSAEncryption'
+  const verifier = createVerify(algorithm)
+  verifier.update(buildStringToSign(msg))
+  if (!verifier.verify(pem, signature, 'base64')) {
+    throw new Error('SNS signature invalid')
+  }
+}
+
 interface SnsEnvelope {
   Type: string                              // 'Notification' | 'SubscriptionConfirmation' | 'UnsubscribeConfirmation'
   MessageId: string
@@ -40,6 +74,10 @@ interface SnsEnvelope {
   Timestamp?: string
   Token?: string
   SubscribeURL?: string
+  SigningCertURL?: string
+  Signature?: string
+  SignatureVersion?: string
+  Subject?: string
 }
 
 interface SesMailObject {
@@ -90,6 +128,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     console.warn(
       '[email/webhook/ses] SES_SNS_TOPIC_ARN is not set — accepting messages from any topic. Set this in production.',
     )
+  }
+
+  // Verify SNS signature when running in production (SES_SNS_TOPIC_ARN set).
+  // Skipped in dev/test so local tooling still works without a real SNS cert.
+  if (expectedTopic) {
+    try {
+      await verifySnsSignature(envelope as unknown as Record<string, string>)
+    } catch (err) {
+      console.error('[email/webhook/ses] SNS signature verification failed:', err)
+      return NextResponse.json({ error: 'Signature verification failed' }, { status: 403 })
+    }
   }
 
   // Subscription confirmation: SNS sends this once per subscription. We fetch

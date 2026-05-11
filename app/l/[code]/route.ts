@@ -31,7 +31,10 @@ export async function GET(
   }
 
   // Track the click (fire-and-forget, don't await)
-  trackClick(resolved.linkId, '', req).catch(() => {})
+  trackClick(resolved.linkId, resolved.orgId, req, {
+    contactId: resolved.contactId,
+    destinationUrl: resolved.url,
+  }).catch(() => {})
 
   // Redirect to the original URL with UTM params
   return new Response(null, {
