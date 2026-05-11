@@ -1,5 +1,17 @@
 // lib/email/resend.ts
+//
+// Campaign / sequence send entrypoint. Historically called Resend directly;
+// now delegates to whatever provider `getEmailProvider()` resolves to
+// (Resend or SES, switched by EMAIL_PROVIDER). The exported types preserve
+// the `resendId` field name for back-compat with existing callers — it now
+// holds the provider's message ID regardless of which provider sent the mail.
+//
+// Domain administration (resend.domains.*) still uses the Resend SDK directly
+// — see app/api/v1/email/domains/route.ts. That path is Resend-specific and
+// not abstracted here.
+
 import { Resend } from 'resend'
+import { getEmailProvider } from './provider'
 
 // FROM_ADDRESS is reserved for SYSTEM emails (ops notifications, approvals,
 // invoice mails sent on behalf of PIB itself). Campaign / sequence sends
@@ -8,7 +20,12 @@ export const FROM_ADDRESS = 'peet@partnersinbiz.online'
 
 let client: Resend | null = null
 
-/** Returns a singleton Resend client. Lazy-initialised so it is safe at build time. */
+/**
+ * Returns a singleton Resend client. Lazy-initialised so it is safe at build
+ * time. Used by Resend-specific admin endpoints (domain verification,
+ * audience management); send paths should use `sendCampaignEmail` so they
+ * benefit from the provider abstraction.
+ */
 export function getResendClient(): Resend {
   if (!client) {
     client = new Resend(process.env.RESEND_API_KEY)
@@ -18,7 +35,7 @@ export function getResendClient(): Resend {
 
 export interface CampaignSendInput {
   from: string                  // pre-formatted; resolve via lib/email/resolveFrom
-  to: string
+  to: string | string[]         // single recipient for campaigns; array allowed for system/digest mails
   cc?: string[]
   replyTo?: string
   subject: string
@@ -40,46 +57,37 @@ export interface CampaignSendInput {
 
 export interface CampaignSendResult {
   ok: boolean
-  resendId: string              // empty when ok=false
+  /** Provider-issued message ID. Empty when ok=false. Field name kept for back-compat. */
+  resendId: string
+  /** Which provider handled the send. */
+  provider: 'resend' | 'ses'
   error?: string
 }
 
 /**
- * Sends a campaign / sequence email through Resend using a per-call `from`.
- * Caller is responsible for resolving the sender (see lib/email/resolveFrom)
- * and for interpolating any template variables before passing html/text in.
+ * Sends a campaign / sequence email through the configured provider. Caller
+ * is responsible for resolving the sender (see lib/email/resolveFrom) and for
+ * interpolating any template variables before passing html/text in.
  */
 export async function sendCampaignEmail(input: CampaignSendInput): Promise<CampaignSendResult> {
-  const resend = getResendClient()
-
-  // Build the final header set. Auto-headers go in first so a caller can
-  // intentionally override them (e.g. a transactional path that wants its
-  // own List-Unsubscribe value).
-  const headers: Record<string, string> = {}
-  if (input.listUnsubscribeUrl) {
-    headers['List-Unsubscribe'] = `<${input.listUnsubscribeUrl}>`
-    headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
-  }
-  if (input.headers) {
-    for (const [k, v] of Object.entries(input.headers)) {
-      headers[k] = v
-    }
-  }
-
-  const { data, error } = await resend.emails.send({
+  const provider = getEmailProvider()
+  const result = await provider.send({
     from: input.from,
     to: input.to,
-    cc: input.cc?.length ? input.cc : undefined,
+    cc: input.cc,
     replyTo: input.replyTo,
     subject: input.subject,
     html: input.html,
     text: input.text,
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
+    headers: input.headers,
+    listUnsubscribeUrl: input.listUnsubscribeUrl,
   })
-  if (error || !data?.id) {
-    return { ok: false, resendId: '', error: error?.message ?? 'Resend send failed' }
+  return {
+    ok: result.ok,
+    resendId: result.messageId,
+    provider: result.provider,
+    error: result.error,
   }
-  return { ok: true, resendId: data.id }
 }
 
 /**

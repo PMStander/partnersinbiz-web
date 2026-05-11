@@ -9,7 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
 import { detectAnomalies, recordAnomaly, type Anomaly } from '@/lib/metrics/anomaly'
-import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
+import { sendCampaignEmail, FROM_ADDRESS } from '@/lib/email/resend'
+import { getEmailProvider } from '@/lib/email/provider'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -22,7 +23,7 @@ interface Summary {
 }
 
 async function notifyByEmail(orgId: string, anomalies: Anomaly[]): Promise<boolean> {
-  if (!process.env.RESEND_API_KEY) return false
+  if (!getEmailProvider().isConfigured()) return false
   const orgDoc = await adminDb.collection('organizations').doc(orgId).get()
   const orgData = orgDoc.data() as { name?: string; ownerEmail?: string } | undefined
   if (!orgData?.ownerEmail) return false
@@ -39,20 +40,18 @@ async function notifyByEmail(orgId: string, anomalies: Anomaly[]): Promise<boole
     <p style="font-size:12px;color:#888;margin-top:32px">Modified z-score uses median + MAD over the trailing 14 days. Threshold ~3.5σ for revenue, 4.0σ for traffic.</p>
   </body></html>`
 
-  try {
-    const resend = getResendClient()
-    await resend.emails.send({
-      from: FROM_ADDRESS,
-      to: [orgData.ownerEmail, FROM_ADDRESS],
-      subject: `Anomaly alert · ${orgData.name ?? orgId} · ${anomalies[0].date}`,
-      html,
-      text: `${anomalies.length} metric anomalies detected:\n\n${lines.join('\n')}`,
-    })
-    return true
-  } catch (err) {
-    console.error('[anomalies] email failed:', err)
+  const result = await sendCampaignEmail({
+    from: FROM_ADDRESS,
+    to: [orgData.ownerEmail, FROM_ADDRESS],
+    subject: `Anomaly alert · ${orgData.name ?? orgId} · ${anomalies[0].date}`,
+    html,
+    text: `${anomalies.length} metric anomalies detected:\n\n${lines.join('\n')}`,
+  })
+  if (!result.ok) {
+    console.error('[anomalies] email failed:', result.error)
     return false
   }
+  return true
 }
 
 export async function GET(req: NextRequest) {

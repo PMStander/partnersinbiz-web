@@ -57,6 +57,8 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
     direction: 'outbound',
     contactId,
     resendId: '',
+    provider: '',
+    providerMessageId: '',
     from: FROM_ADDRESS,
     to: to.trim(),
     cc,

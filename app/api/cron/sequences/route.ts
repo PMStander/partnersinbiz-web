@@ -516,6 +516,8 @@ export async function GET(req: NextRequest) {
           direction: 'outbound',
           contactId: enrollment.contactId,
           resendId: sendResult.resendId,
+          provider: sendResult.provider ?? '',
+          providerMessageId: sendResult.resendId,
           from: resolved.from,
           to: contact.email,
           cc: [],

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
 import { FieldValue } from 'firebase-admin/firestore'
-import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
+import { getResendClient, sendCampaignEmail, FROM_ADDRESS } from '@/lib/email/resend'
 import { checkFormRateLimit } from '@/lib/forms/ratelimit'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -116,24 +116,22 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (process.env.RESEND_API_KEY) {
-        try {
-          const resend = getResendClient()
-          await resend.emails.send({
-            from: FROM_ADDRESS,
-            to: FROM_ADDRESS,
-            subject: 'New newsletter subscriber',
-            text: [
-              `${email} just subscribed.`,
-              ``,
-              `Source: ${source || referer || 'footer'}`,
-              `IP: ${ip}`,
-              `UA: ${userAgent || 'unknown'}`,
-            ].join('\n'),
-          })
-        } catch (err) {
-          console.error('[newsletter] notify failed:', err)
-        }
+      const notifyText = [
+        `${email} just subscribed.`,
+        ``,
+        `Source: ${source || referer || 'footer'}`,
+        `IP: ${ip}`,
+        `UA: ${userAgent || 'unknown'}`,
+      ].join('\n')
+      const notifyResult = await sendCampaignEmail({
+        from: FROM_ADDRESS,
+        to: FROM_ADDRESS,
+        subject: 'New newsletter subscriber',
+        text: notifyText,
+        html: `<pre style="font-family:monospace;white-space:pre-wrap">${notifyText}</pre>`,
+      })
+      if (!notifyResult.ok) {
+        console.error('[newsletter] notify failed:', notifyResult.error)
       }
     }
 

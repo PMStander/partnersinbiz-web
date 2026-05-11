@@ -353,6 +353,7 @@ export async function sendBroadcastToContact(
 
   // Send (or stub when no key in env).
   let resendId = ''
+  let sendProvider: 'resend' | 'ses' | '' = ''
   let sendOk = true
   let sendError: string | undefined
   if (RESEND_KEY_SET) {
@@ -367,6 +368,7 @@ export async function sendBroadcastToContact(
     })
     sendOk = result.ok
     resendId = result.resendId
+    sendProvider = result.provider
     sendError = result.error
   } else {
     // Dev / preview without Resend — log and pretend success so the rest of
@@ -388,6 +390,8 @@ export async function sendBroadcastToContact(
     direction: 'outbound',
     contactId,
     resendId,
+    provider: sendProvider,
+    providerMessageId: resendId,
     from: resolvedSender.from,
     to: contact.email,
     cc: [],
