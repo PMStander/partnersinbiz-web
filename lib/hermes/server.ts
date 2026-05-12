@@ -191,9 +191,11 @@ export async function callHermesAdminControl(
 }
 
 export async function createHermesRun(link: HermesProfileLink, requestedBy: string, request: HermesRunRequest) {
+  const { prompt, ...rest } = request
+  const hermesPayload = { input: prompt, ...rest }
   const { response, data } = await callHermesJson(link, '/v1/runs', {
     method: 'POST',
-    body: JSON.stringify(request),
+    body: JSON.stringify(hermesPayload),
   })
   if (!response.ok) {
     return { response, data, runDocId: null }
