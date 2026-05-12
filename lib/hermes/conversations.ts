@@ -25,6 +25,8 @@ export interface HermesConversation {
   title: string
   ownerUid: string
   participantUids: string[]
+  projectId?: string
+  scope?: 'org' | 'project'
   lastMessagePreview?: string
   lastMessageRole?: HermesMessageRole
   lastMessageAt?: Timestamp | FieldValue
@@ -47,31 +49,36 @@ export async function createConversation(input: {
   profile: string
   ownerUid: string
   title?: string
+  projectId?: string
 }): Promise<HermesConversation> {
   const ref = adminDb.collection(HERMES_CONVERSATIONS_COLLECTION).doc()
-  const data = {
+  const data: Record<string, unknown> = {
     orgId: input.orgId,
     profile: input.profile,
     title: input.title?.trim() || 'New conversation',
     ownerUid: input.ownerUid,
     participantUids: [input.ownerUid],
+    scope: input.projectId ? 'project' : 'org',
     messageCount: 0,
     archived: false,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }
+  if (input.projectId) data.projectId = input.projectId
   await ref.set(data)
   return { id: ref.id, ...data } as HermesConversation
 }
 
-export async function listConversations(orgId: string, uid: string, limit = 30) {
-  const snap = await adminDb
+export async function listConversations(orgId: string, uid: string, opts: { limit?: number; projectId?: string } = {}) {
+  let q = adminDb
     .collection(HERMES_CONVERSATIONS_COLLECTION)
     .where('orgId', '==', orgId)
-    .where('participantUids', 'array-contains', uid)
-    .orderBy('updatedAt', 'desc')
-    .limit(limit)
-    .get()
+    .where('participantUids', 'array-contains', uid) as FirebaseFirestore.Query
+  if (opts.projectId) {
+    q = q.where('projectId', '==', opts.projectId)
+  }
+  q = q.orderBy('updatedAt', 'desc').limit(opts.limit ?? 30)
+  const snap = await q.get()
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as HermesConversation)
 }
 

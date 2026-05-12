@@ -35,6 +35,8 @@ type Conversation = {
 type Props = {
   orgId: string
   profileEnabled: boolean
+  projectId?: string
+  projectName?: string
 }
 
 const POLL_INTERVAL = 1500
@@ -45,8 +47,9 @@ function timestampSeconds(ts: ChatMessage['createdAt']) {
   return ts.seconds ?? ts._seconds ?? 0
 }
 
-export default function HermesChat({ orgId, profileEnabled }: Props) {
+export default function HermesChat({ orgId, profileEnabled, projectId, projectName }: Props) {
   const apiBase = `/api/v1/admin/hermes/profiles/${orgId}/conversations`
+  const listQuery = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
 
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -67,7 +70,7 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
 
   const loadConversations = useCallback(async () => {
     try {
-      const res = await fetch(apiBase)
+      const res = await fetch(`${apiBase}${listQuery}`)
       if (!res.ok) throw new Error(`load conversations: ${res.status}`)
       const body = await res.json()
       const list: Conversation[] = body.data?.conversations ?? []
@@ -76,7 +79,7 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load conversations')
     }
-  }, [apiBase, activeId])
+  }, [apiBase, activeId, listQuery])
 
   const loadMessages = useCallback(
     async (convId: string) => {
@@ -110,7 +113,12 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
   const newConversation = useCallback(async () => {
     setError(null)
     try {
-      const res = await fetch(apiBase, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      const payload: Record<string, unknown> = {}
+      if (projectId) {
+        payload.projectId = projectId
+        if (projectName) payload.title = projectName
+      }
+      const res = await fetch(apiBase, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (!res.ok) throw new Error(`new conversation: ${res.status}`)
       const body = await res.json()
       const conv: Conversation = body.data?.conversation
@@ -120,7 +128,7 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create conversation')
     }
-  }, [apiBase])
+  }, [apiBase, projectId, projectName])
 
   const subscribeEvents = useCallback(
     (orgIdInner: string, msgId: string, runId: string) => {
@@ -183,7 +191,9 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
       let convId = activeId
       try {
         if (!convId) {
-          const r = await fetch(apiBase, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: input.slice(0, 80) }) })
+          const createPayload: Record<string, unknown> = { title: input.slice(0, 80) }
+          if (projectId) createPayload.projectId = projectId
+          const r = await fetch(apiBase, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(createPayload) })
           const b = await r.json()
           convId = b.data?.conversation?.id
           if (!convId) throw new Error('Failed to create conversation')
@@ -215,7 +225,7 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
         setSending(false)
       }
     },
-    [activeId, apiBase, input, sending, profileEnabled, loadMessages, pollFinalize],
+    [activeId, apiBase, input, sending, profileEnabled, loadMessages, pollFinalize, projectId, subscribeEvents, orgId],
   )
 
   useEffect(() => () => {

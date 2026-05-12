@@ -1,8 +1,38 @@
 import { NextRequest } from 'next/server'
 import { withAuth } from '@/lib/api/auth'
 import { apiError, apiSuccess } from '@/lib/api/response'
+import { adminDb } from '@/lib/firebase/admin'
 import { createHermesRun, requireHermesProfileAccess } from '@/lib/hermes/server'
 import { appendMessage, getConversation, listMessages, touchConversation } from '@/lib/hermes/conversations'
+
+async function buildProjectContext(orgId: string, projectId: string): Promise<string> {
+  try {
+    const projectDoc = await adminDb.collection('projects').doc(projectId).get()
+    if (!projectDoc.exists) return ''
+    const project = projectDoc.data() as Record<string, unknown> | undefined
+    if (!project || project.orgId !== orgId) return ''
+    const tasksSnap = await adminDb.collection('projects').doc(projectId).collection('tasks').orderBy('order', 'asc').limit(50).get()
+    const tasks = tasksSnap.docs.map((d) => {
+      const t = d.data() as Record<string, unknown>
+      return `  - [${String(t.columnId ?? '?')}] ${String(t.title ?? '(untitled)')} (id=${d.id}${t.priority ? `, priority=${t.priority}` : ''})`
+    })
+    const columns = Array.isArray(project.columns) ? (project.columns as Array<Record<string, unknown>>).map((c) => `${c.id}=${c.name}`).join(', ') : ''
+    const lines = [
+      '[Project context — you are operating on a Partners-in-Biz project]',
+      `projectId: ${projectId}`,
+      `name: ${project.name ?? '(unnamed)'}`,
+      project.description ? `description: ${project.description}` : '',
+      project.status ? `status: ${project.status}` : '',
+      columns ? `columns: ${columns}` : '',
+      tasks.length ? `tasks (${tasks.length}):\n${tasks.join('\n')}` : 'tasks: (none)',
+      'Use the project-management skill (calls PiB /api/v1/projects API) to update tasks. Always reference projectId when changing kanban state.',
+      '---',
+    ].filter(Boolean)
+    return lines.join('\n') + '\n\n'
+  } catch {
+    return ''
+  }
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -51,13 +81,20 @@ export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
     createdBy: user.uid,
   })
 
+  const isFirstUserMessage = conv.messageCount === 0
+  const projectContext = isFirstUserMessage && conv.projectId
+    ? await buildProjectContext(orgId, conv.projectId)
+    : ''
+  const hermesPrompt = projectContext + content
+
   const runResult = await createHermesRun(access.link, user.uid, {
-    prompt: content,
+    prompt: hermesPrompt,
     conversation_id: convId,
     metadata: {
       conversationId: convId,
       messageId: assistantMessage.id,
       orgId,
+      projectId: conv.projectId,
       source: 'partnersinbiz-web/chat',
     },
   })

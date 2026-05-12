@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { TaskDetailPanel } from '@/components/kanban/TaskDetailPanel'
 import { TaskComposer } from '@/components/kanban/TaskComposer'
+import HermesChat from '@/components/hermes/Chat'
 import type { Column, Task, TeamMember } from '@/components/kanban/types'
 
 interface ProjectDoc { id: string; title: string; content: string; type: 'brief' | 'requirements' | 'notes' | 'reference'; createdBy: string; updatedBy?: string; createdAt?: unknown; updatedAt?: unknown }
@@ -85,7 +86,7 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [showNewTask, setShowNewTask] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'kanban' | 'docs' | 'settings'>('kanban')
+  const [activeTab, setActiveTab] = useState<'kanban' | 'docs' | 'agent' | 'settings'>('kanban')
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board')
   const [editingBrief, setEditingBrief] = useState(false)
   const [briefValue, setBriefValue] = useState('')
@@ -266,6 +267,17 @@ export default function ProjectDetailPage() {
           }`}
         >
           Docs
+        </button>
+        <button
+          onClick={() => setActiveTab('agent')}
+          className={`px-1 pb-3 text-sm font-label transition-colors flex items-center gap-1.5 ${
+            activeTab === 'agent'
+              ? 'text-on-surface border-b-2 border-[var(--color-accent-v2)]'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">smart_toy</span>
+          Agent
         </button>
         <button
           onClick={() => setActiveTab('settings')}
@@ -484,6 +496,17 @@ export default function ProjectDetailPage() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'agent' && (
+        <div className="flex-1 overflow-auto">
+          <HermesChat
+            orgId={project?.orgId ?? ''}
+            profileEnabled={Boolean(project?.orgId)}
+            projectId={projectId}
+            projectName={project?.name}
+          />
         </div>
       )}
 

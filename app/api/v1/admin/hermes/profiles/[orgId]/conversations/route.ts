@@ -8,11 +8,12 @@ export const dynamic = 'force-dynamic'
 
 type Ctx = { params: Promise<{ orgId: string }> }
 
-export const GET = withAuth('client', async (_req: NextRequest, user, ctx) => {
+export const GET = withAuth('client', async (req: NextRequest, user, ctx) => {
   const { orgId } = await (ctx as Ctx).params
   const access = await requireHermesProfileAccess(user, orgId, 'runs')
   if (access instanceof Response) return access
-  const items = await listConversations(orgId, user.uid)
+  const projectId = req.nextUrl.searchParams.get('projectId') || undefined
+  const items = await listConversations(orgId, user.uid, { projectId })
   return apiSuccess({ conversations: items })
 })
 
@@ -22,12 +23,14 @@ export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
   if (access instanceof Response) return access
   const body = await req.json().catch(() => ({}))
   const title = typeof body.title === 'string' ? body.title : undefined
+  const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined
   if (title && title.length > 200) return apiError('title too long', 400)
   const conv = await createConversation({
     orgId,
     profile: access.link.profile,
     ownerUid: user.uid,
     title,
+    projectId,
   })
   return apiSuccess({ conversation: conv })
 })
