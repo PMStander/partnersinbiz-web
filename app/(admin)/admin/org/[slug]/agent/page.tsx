@@ -301,10 +301,12 @@ export default function AgentPage() {
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error || 'Hermes run failed')
-      const newRunId = runIdFromPayload(body.data ?? body)
+      const dataPayload = (body.data ?? body) as Record<string, unknown>
+      const hermesPayload = (dataPayload.hermes ?? dataPayload) as Record<string, unknown>
+      const newRunId = runIdFromPayload(hermesPayload)
       if (!newRunId) throw new Error('No run ID returned from Hermes')
-      setRunResult(body.data ?? body)
-      setStatus(String((body.data as Record<string, unknown> | undefined)?.status ?? 'submitted'))
+      setRunResult(dataPayload)
+      setStatus(String(hermesPayload.status ?? 'submitted'))
       setRunId(newRunId)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hermes run failed')
