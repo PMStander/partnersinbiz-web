@@ -94,16 +94,17 @@ export function sanitizeHermesProfileWrite(orgId: string, user: ApiUser, body: R
   const existingDashboardSessionToken = typeof body.existingDashboardSessionToken === 'string' ? body.existingDashboardSessionToken : undefined
   const incomingDashboardSessionToken = typeof body.dashboardSessionToken === 'string' ? body.dashboardSessionToken.trim() : undefined
   const dashboardSessionToken = incomingDashboardSessionToken || existingDashboardSessionToken || undefined
+  const dashboardBaseUrl = typeof body.dashboardBaseUrl === 'string' && body.dashboardBaseUrl.trim()
+    ? body.dashboardBaseUrl.trim().replace(/\/+$/, '')
+    : undefined
 
   return {
     orgId,
     profile: typeof body.profile === 'string' ? body.profile.trim() : '',
     baseUrl: typeof body.baseUrl === 'string' ? body.baseUrl.trim().replace(/\/+$/, '') : '',
-    dashboardBaseUrl: typeof body.dashboardBaseUrl === 'string' && body.dashboardBaseUrl.trim()
-      ? body.dashboardBaseUrl.trim().replace(/\/+$/, '')
-      : undefined,
+    ...(dashboardBaseUrl ? { dashboardBaseUrl } : { dashboardBaseUrl: FieldValue.delete() }),
     ...(apiKey ? { apiKey } : {}),
-    ...(dashboardSessionToken ? { dashboardSessionToken } : {}),
+    ...(dashboardSessionToken ? { dashboardSessionToken } : { dashboardSessionToken: FieldValue.delete() }),
     enabled: body.enabled === false ? false : true,
     capabilities: sanitizeHermesCapabilities(body.capabilities),
     permissions: sanitizeHermesPermissions(body.permissions),
