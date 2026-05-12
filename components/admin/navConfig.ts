@@ -50,6 +50,7 @@ export function workspaceNav(slug: string): NavItem[] {
   return [
     { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: 'space_dashboard' },
     { label: 'Projects',  href: `/admin/org/${slug}/projects`,  icon: 'rocket_launch' },
+    { label: 'Agent',     href: `/admin/org/${slug}/agent`,     icon: 'smart_toy' },
     { label: 'Brand',     href: `/admin/org/${slug}/brand`,     icon: 'palette' },
     { label: 'Team',      href: `/admin/org/${slug}/team`,      icon: 'groups' },
     { label: 'Billing',   href: `/admin/org/${slug}/billing`,   icon: 'payments' },
@@ -104,6 +105,7 @@ export function workspaceTools(slug: string): NavItem[] {
     { label: 'Email',           href: '/admin/email',                        icon: 'mail' },
     { label: 'Sequences',       href: '/admin/sequences',                    icon: 'stacked_email' },
     { label: 'Campaigns',       href: `/admin/org/${slug}/campaigns`,        icon: 'flag' },
+    { label: 'Agent Control',    href: `/admin/org/${slug}/agent`,            icon: 'smart_toy' },
     { label: 'Capture Sources', href: `/admin/org/${slug}/capture-sources`,  icon: 'inventory_2' },
     { label: 'Integrations',    href: `/admin/org/${slug}/integrations`,     icon: 'extension' },
     { label: 'Email Domains',   href: `/admin/org/${slug}/email-domains`,    icon: 'dns' },
@@ -149,6 +151,7 @@ export function workspaceToolsTopbar(slug: string): NavItem[] {
       ],
     },
     { label: 'Sequences', href: '/admin/sequences', icon: 'stacked_email' },
+    { label: 'Agent Control', href: `/admin/org/${slug}/agent`, icon: 'smart_toy' },
     { label: 'Campaigns',       href: `/admin/org/${slug}/campaigns`,       icon: 'flag' },
     {
       label: 'Capture Sources', href: `/admin/org/${slug}/capture-sources`, icon: 'inventory_2',

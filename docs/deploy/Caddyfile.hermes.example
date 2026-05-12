@@ -1,0 +1,29 @@
+# Optional Caddy reverse proxy for Hermes profile API servers.
+# Preferred: keep Hermes bound to 127.0.0.1/private network and let PiB call private URLs.
+# Use this only when you need a single HTTPS entrypoint.
+
+hermes-api.example.com {
+  encode zstd gzip
+
+  # Add IP allowlisting here when PiB has stable egress or private tunnel IPs.
+  # @notAllowed not remote_ip 10.0.0.0/8
+  # respond @notAllowed 403
+
+  handle_path /profiles/i-am-ballito/* {
+    reverse_proxy 127.0.0.1:8651 {
+      flush_interval -1
+    }
+  }
+
+  handle_path /profiles/elemental/* {
+    reverse_proxy 127.0.0.1:8652 {
+      flush_interval -1
+    }
+  }
+
+  handle_path /profiles/deidre-ras-biokinetics/* {
+    reverse_proxy 127.0.0.1:8653 {
+      flush_interval -1
+    }
+  }
+}

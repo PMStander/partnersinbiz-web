@@ -1,0 +1,39 @@
+# Install as: /etc/systemd/system/hermes@.service
+# Start one Hermes API server per profile, e.g.:
+#   sudo systemctl enable --now hermes@i-am-ballito.service
+# Each instance reads /etc/hermes/profiles/<profile>.env.
+
+[Unit]
+Description=Hermes profile API server (%i)
+Documentation=https://hermes-agent.nousresearch.com/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hermes
+Group=hermes
+WorkingDirectory=/var/lib/hermes
+Environment=HERMES_HOME=/var/lib/hermes
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/hermes/profiles/%i.env
+ExecStart=/usr/local/bin/hermes -p %i gateway run
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# Reasonable production hardening. Relax ReadWritePaths if a profile needs other mounted workspaces.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/hermes /var/log/hermes /srv/partnersinbiz
+
+# Basic resource guardrails per profile. Tune for larger clients.
+MemoryMax=2G
+CPUQuota=200%
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target
