@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import HermesChat from '@/components/hermes/Chat'
+import SkillsPanel from '@/components/hermes/SkillsPanel'
 
 type Capabilities = {
   runs: boolean
@@ -452,6 +453,8 @@ export default function AgentPage() {
       {message && <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-300">{message}</div>}
 
       <HermesChat orgId={profile?.orgId ?? ''} profileEnabled={Boolean(profile?.enabled && profile?.orgId)} />
+
+      <SkillsPanel orgId={profile?.orgId ?? ''} profileEnabled={Boolean(profile?.enabled && profile?.orgId)} />
 
       <details className="pib-card">
         <summary className="cursor-pointer text-sm font-medium text-on-surface">Profile link &amp; task runner (advanced)</summary>
