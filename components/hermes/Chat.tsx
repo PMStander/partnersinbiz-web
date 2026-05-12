@@ -4,6 +4,13 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 
 type Role = 'user' | 'assistant' | 'system' | 'tool'
 
+type ChatEvent = {
+  event?: string
+  tool?: string
+  preview?: string
+  timestamp?: number
+}
+
 type ChatMessage = {
   id: string
   role: Role
@@ -11,6 +18,7 @@ type ChatMessage = {
   status?: 'pending' | 'streaming' | 'completed' | 'failed'
   runId?: string
   error?: string
+  events?: ChatEvent[]
   createdAt?: { seconds?: number; _seconds?: number } | string
 }
 
@@ -48,7 +56,9 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const [liveEvents, setLiveEvents] = useState<Record<string, ChatEvent[]>>({})
 
   const activeConversation = useMemo(
     () => conversations.find((c) => c.id === activeId) || null,
@@ -112,6 +122,28 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
     }
   }, [apiBase])
 
+  const subscribeEvents = useCallback(
+    (orgIdInner: string, msgId: string, runId: string) => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+      const es = new EventSource(`/api/v1/admin/hermes/profiles/${orgIdInner}/runs/${encodeURIComponent(runId)}/events`)
+      eventSourceRef.current = es
+      es.onmessage = (e) => {
+        try {
+          const ev: ChatEvent = JSON.parse(e.data)
+          setLiveEvents((prev) => ({ ...prev, [msgId]: [...(prev[msgId] || []), ev] }))
+        } catch {}
+      }
+      es.onerror = () => {
+        es.close()
+        if (eventSourceRef.current === es) eventSourceRef.current = null
+      }
+    },
+    [],
+  )
+
   const pollFinalize = useCallback(
     async (convId: string, msgId: string, runId: string, attempts = 0) => {
       if (attempts > 120) {
@@ -128,6 +160,10 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
         if (body.data?.pending) {
           pollRef.current = setTimeout(() => pollFinalize(convId, msgId, runId, attempts + 1), POLL_INTERVAL)
           return
+        }
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close()
+          eventSourceRef.current = null
         }
         await loadMessages(convId)
         await loadConversations()
@@ -170,6 +206,7 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
         const runId = body.data?.runId
         await loadMessages(convId)
         if (newAssistantId && runId) {
+          subscribeEvents(orgId, newAssistantId, runId)
           pollFinalize(convId, newAssistantId, runId)
         }
       } catch (e) {
@@ -181,7 +218,10 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
     [activeId, apiBase, input, sending, profileEnabled, loadMessages, pollFinalize],
   )
 
-  useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current) }, [])
+  useEffect(() => () => {
+    if (pollRef.current) clearTimeout(pollRef.current)
+    if (eventSourceRef.current) eventSourceRef.current.close()
+  }, [])
 
   if (!profileEnabled) {
     return (
@@ -233,22 +273,38 @@ export default function HermesChat({ orgId, profileEnabled }: Props) {
               Send a task or question. Your agent has access to skills, files, terminal (per capability switches).
             </div>
           )}
-          {messages.sort((a, b) => timestampSeconds(a.createdAt) - timestampSeconds(b.createdAt)).map((m) => (
-            <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
-                  m.role === 'user'
-                    ? 'bg-primary text-on-primary'
-                    : m.status === 'failed'
-                    ? 'bg-red-500/15 text-red-200 border border-red-500/40'
-                    : 'bg-[var(--color-card-active,rgba(255,255,255,0.06))] text-on-surface'
-                }`}
-              >
-                {m.status === 'pending' && !m.content && <span className="opacity-70 italic">Thinking…</span>}
-                {m.content || (m.status === 'failed' && m.error)}
+          {messages.sort((a, b) => timestampSeconds(a.createdAt) - timestampSeconds(b.createdAt)).map((m) => {
+            const events = liveEvents[m.id] ?? []
+            return (
+              <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] ${m.role === 'user' ? '' : 'w-full'}`}>
+                  {m.role === 'assistant' && events.length > 0 && m.status !== 'completed' && (
+                    <div className="mb-1 space-y-1 text-xs text-on-surface-variant">
+                      {events.slice(-5).map((ev, i) => (
+                        <div key={i} className="flex items-baseline gap-2 rounded-md bg-[var(--color-card,rgba(255,255,255,0.03))] px-2 py-1">
+                          <span className="font-mono opacity-70">{ev.event ?? 'event'}</span>
+                          {ev.tool && <span className="text-primary">{ev.tool}</span>}
+                          {ev.preview && <span className="truncate opacity-80">{ev.preview}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div
+                    className={`rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                      m.role === 'user'
+                        ? 'bg-primary text-on-primary'
+                        : m.status === 'failed'
+                        ? 'bg-red-500/15 text-red-200 border border-red-500/40'
+                        : 'bg-[var(--color-card-active,rgba(255,255,255,0.06))] text-on-surface'
+                    }`}
+                  >
+                    {m.status === 'pending' && !m.content && <span className="opacity-70 italic">Thinking…</span>}
+                    {m.content || (m.status === 'failed' && m.error)}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           <div ref={messagesEndRef} />
         </div>
         {error && <div className="px-4 py-2 text-xs text-red-300 border-t border-red-500/30 bg-red-500/10">{error}</div>}
