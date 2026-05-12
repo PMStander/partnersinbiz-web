@@ -81,7 +81,7 @@ describe('Hermes profile-scoped jobs CRUD proxy', () => {
     expect(await readJson(res)).toEqual({ jobs: [{ id: 'job-1', name: 'Daily SEO report' }] })
     expect(global.fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8651/api/jobs?status=active',
-      expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ 'X-API-Key': 'secret-key' }) }),
+      expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ 'Authorization': 'Bearer secret-key' }) }),
     )
   })
 
@@ -107,7 +107,7 @@ describe('Hermes profile-scoped jobs CRUD proxy', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ name: 'Daily SEO report', schedule: '0 8 * * *', prompt: 'Write SEO report' }),
-        headers: expect.objectContaining({ 'Content-Type': 'application/json', 'X-API-Key': 'secret-key' }),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json', 'Authorization': 'Bearer secret-key' }),
       }),
     )
   })

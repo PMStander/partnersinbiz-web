@@ -157,7 +157,7 @@ describe('POST /api/v1/admin/hermes/profiles/[orgId]/runs', () => {
       'http://127.0.0.1:8651/v1/runs',
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'Content-Type': 'application/json', 'X-API-Key': 'secret-key' }),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json', 'Authorization': 'Bearer secret-key' }),
       }),
     )
     expect(mockAdd).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-a', profile: 'client-a', hermesRunId: 'hermes-run-1', requestedBy: 'super-1' }))

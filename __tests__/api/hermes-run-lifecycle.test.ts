@@ -83,7 +83,7 @@ describe('GET /api/v1/admin/hermes/profiles/[orgId]/runs/[runId]', () => {
     expect(body).toMatchObject({ run_id: 'run-1', status: 'running' })
     expect(global.fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8651/v1/runs/run-1',
-      expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ 'X-API-Key': 'secret-key' }) })
+      expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ 'Authorization': 'Bearer secret-key' }) })
     )
   })
 
@@ -125,7 +125,7 @@ describe('POST /api/v1/admin/hermes/profiles/[orgId]/runs/[runId]/approval', () 
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ choice: 'once' }),
-        headers: expect.objectContaining({ 'Content-Type': 'application/json', 'X-API-Key': 'secret-key' }),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json', 'Authorization': 'Bearer secret-key' }),
       }),
     )
   })

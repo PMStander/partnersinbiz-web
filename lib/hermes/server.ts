@@ -134,7 +134,7 @@ export async function callHermesJson(link: HermesProfileLink, path: string, init
     ...(init.body ? { 'Content-Type': 'application/json' } : {}),
     ...headersToObject(init.headers),
   }
-  if (link.apiKey) headers['X-API-Key'] = link.apiKey
+  if (link.apiKey) headers['Authorization'] = `Bearer ${link.apiKey}`
 
   const response = await fetch(url, { ...init, headers })
   const text = await response.text()
@@ -218,7 +218,7 @@ export async function createHermesRun(link: HermesProfileLink, requestedBy: stri
 export async function callHermesStream(link: HermesProfileLink, path: string) {
   const url = `${link.baseUrl.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`
   const headers: Record<string, string> = {}
-  if (link.apiKey) headers['X-API-Key'] = link.apiKey
+  if (link.apiKey) headers['Authorization'] = `Bearer ${link.apiKey}`
   const res = await fetch(url, { headers })
   if (!res.ok || !res.body) {
     throw new Error(`Hermes stream ${path} failed: ${res.status}`)

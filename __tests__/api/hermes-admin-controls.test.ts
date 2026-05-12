@@ -80,7 +80,7 @@ describe('Hermes admin controls proxy', () => {
     expect(await readJson(res)).toEqual({ models: ['claude-sonnet-4.6'] })
     expect(global.fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8651/v1/models?provider=anthropic',
-      expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ 'X-API-Key': 'secret-key' }) }),
+      expect.objectContaining({ method: 'GET', headers: expect.objectContaining({ 'Authorization': 'Bearer secret-key' }) }),
     )
   })
 
