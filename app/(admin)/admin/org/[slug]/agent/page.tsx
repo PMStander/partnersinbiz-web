@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
+import HermesChat from '@/components/hermes/Chat'
 
 type Capabilities = {
   runs: boolean
@@ -450,7 +451,11 @@ export default function AgentPage() {
       {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
       {message && <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-300">{message}</div>}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <HermesChat orgId={profile?.orgId ?? ''} profileEnabled={Boolean(profile?.enabled && profile?.orgId)} />
+
+      <details className="pib-card">
+        <summary className="cursor-pointer text-sm font-medium text-on-surface">Profile link &amp; task runner (advanced)</summary>
+        <div className="mt-4 grid gap-6 lg:grid-cols-2">
         <form onSubmit={saveProfile} className="pib-card space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-on-surface">Profile link</h2>
@@ -474,7 +479,8 @@ export default function AgentPage() {
           <button disabled={running || !profile?.enabled} className="pib-btn-primary text-sm font-label">{running ? 'Submitting...' : 'Send task to Hermes'}</button>
           {runResult !== null && <JsonBlock value={runResult} />}
         </form>
-      </div>
+        </div>
+      </details>
 
       {runId && (
         <section className="pib-card space-y-4">

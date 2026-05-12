@@ -265,5 +265,18 @@ service cloud.firestore {
       allow read: if false;
       allow write: if false;
     }
+    // All Hermes collections go through API routes (server SDK). Block direct client access.
+    match /hermes_profile_links/{orgId} {
+      allow read, write: if false;
+    }
+    match /hermes_runs/{id} {
+      allow read, write: if false;
+    }
+    match /hermes_conversations/{convId} {
+      allow read, write: if false;
+      match /messages/{msgId} {
+        allow read, write: if false;
+      }
+    }
   }
 }
