@@ -91,6 +91,36 @@ Body:
   "dueDate": "2026-04-20", "assignedTo": "uid123" }
 ```
 
+##### Agent dispatch fields (optional — for assigning work to AI agents)
+
+Tasks can be assigned to a named agent in the Partners-in-Biz team (Pip, Theo, Maya, Sage, Nora) by adding these fields to the POST or PATCH body:
+
+```json
+{
+  "title": "Build /pricing page",
+  "assigneeAgentId": "pip",
+  "agentInput": { "spec": "Build a /pricing page using the existing design system" },
+  "dependsOn": ["task_abc123"]
+}
+```
+
+- **`assigneeAgentId`** — one of `pip` | `theo` | `maya` | `sage` | `nora` (or omit/null for a human task). Setting this auto-initialises `agentStatus` to `pending`.
+- **`agentStatus`** — `pending` | `picked-up` | `in-progress` | `awaiting-input` | `done` | `blocked`. On reassignment, status resets to `pending` unless explicitly overridden.
+- **`agentInput`** — `{ spec: string, context?: object, constraints?: string[] }`. `spec` is required.
+- **`agentOutput`** — written when the agent completes: `{ summary: string, artifacts?: [{ type, ref, label? }], completedAt }`. `artifacts.type` is `url` | `file` | `commit` | `message-thread` | `doc`.
+- **`dependsOn`** — array of task IDs that must reach `agentStatus='done'` before this one becomes eligible for pickup.
+- **`agentHeartbeatAt: true`** — pass this sentinel on PATCH to bump the heartbeat to "now" (used while an agent is actively working).
+
+### Self-dispatch pattern
+
+When the user asks you to "do X and create a task for it" or "track this work", create the task **assigned to yourself** so it shows on the kanban:
+
+1. `POST /projects/{projectId}/tasks` with `assigneeAgentId: 'pip'` and `agentInput.spec`
+2. Immediately do the work
+3. `PATCH /projects/{projectId}/tasks/{taskId}` with `agentStatus: 'in-progress'` then later `agentStatus: 'done'` and `agentOutput.summary`
+
+This gives the human a real audit trail on the board without you needing to ask permission for each step.
+
 #### `GET/PUT/DELETE /projects/[projectId]/tasks/[taskId]` — auth: admin
 
 #### `GET /projects/[projectId]/tasks/[taskId]/comments` — auth: admin

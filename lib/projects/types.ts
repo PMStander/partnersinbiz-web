@@ -46,6 +46,34 @@ export interface Attachment {
   type: string
 }
 
+export type AgentId = 'pip' | 'theo' | 'maya' | 'sage' | 'nora'
+
+export type AgentStatus =
+  | 'pending'           // waiting for an agent to claim it
+  | 'picked-up'         // claimed; agent is preparing to run
+  | 'in-progress'       // agent is actively working
+  | 'awaiting-input'    // blocked on a question to the human
+  | 'done'              // completed; output written
+  | 'blocked'           // can't proceed; reason in agentOutput
+
+export interface AgentArtifact {
+  type: 'url' | 'file' | 'commit' | 'message-thread' | 'doc'
+  ref: string
+  label?: string
+}
+
+export interface AgentInput {
+  spec: string                     // human-readable task spec
+  context?: Record<string, unknown>
+  constraints?: string[]
+}
+
+export interface AgentOutput {
+  summary: string
+  artifacts?: AgentArtifact[]
+  completedAt?: unknown
+}
+
 export interface Task {
   id?: string
   orgId: string
@@ -60,6 +88,16 @@ export interface Task {
   attachments?: Attachment[]
   dueDate?: unknown | null
   order: number
+
+  // Agent dispatch fields (Step 2 of multi-agent orchestrator)
+  // Tasks without these fields behave exactly as before — pure human work.
+  assigneeAgentId?: AgentId | null
+  agentStatus?: AgentStatus
+  agentInput?: AgentInput
+  agentOutput?: AgentOutput
+  agentHeartbeatAt?: unknown   // last time the claiming agent reported alive; lets us reclaim stale picks
+  dependsOn?: string[]         // task IDs that must reach agentStatus='done' first
+
   createdAt?: unknown
   updatedAt?: unknown
 }

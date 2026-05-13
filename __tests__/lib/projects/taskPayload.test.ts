@@ -100,4 +100,109 @@ describe('project task payload helpers', () => {
 
     expect(tasks.map(task => task.id)).toEqual(['earlier', 'later', 'legacy'])
   })
+
+  describe('agent dispatch fields', () => {
+    it('sets assigneeAgentId + auto-initialises agentStatus=pending on create', () => {
+      const result = buildProjectTaskCreateData(
+        {
+          title: 'Build /pricing page',
+          assigneeAgentId: 'theo',
+          agentInput: { spec: 'Build a /pricing page using the existing design system' },
+          dependsOn: ['task-abc'],
+        },
+        'project-1',
+        'org-1',
+      )
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value).toEqual(expect.objectContaining({
+        assigneeAgentId: 'theo',
+        agentStatus: 'pending',
+        agentInput: { spec: 'Build a /pricing page using the existing design system' },
+        dependsOn: ['task-abc'],
+      }))
+    })
+
+    it('rejects an unknown agent id', () => {
+      const result = buildProjectTaskCreateData(
+        { title: 't', assigneeAgentId: 'rogue' },
+        'project-1',
+        'org-1',
+      )
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.error).toMatch(/Invalid assigneeAgentId/)
+    })
+
+    it('omits agent fields entirely when not provided (back-compat)', () => {
+      const result = buildProjectTaskCreateData(
+        { title: 'Plain human task' },
+        'project-1',
+        'org-1',
+      )
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value.assigneeAgentId).toBeUndefined()
+      expect(result.value.agentStatus).toBeUndefined()
+      expect(result.value.agentInput).toBeUndefined()
+    })
+
+    it('PATCH: reassigning to a new agent resets status to pending', () => {
+      const result = buildProjectTaskUpdateData({ assigneeAgentId: 'maya' })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value).toEqual({ assigneeAgentId: 'maya', agentStatus: 'pending' })
+    })
+
+    it('PATCH: clearing the agent sets status to null', () => {
+      const result = buildProjectTaskUpdateData({ assigneeAgentId: null })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value).toEqual({ assigneeAgentId: null, agentStatus: null })
+    })
+
+    it('PATCH: explicit agentStatus overrides the auto-reset', () => {
+      const result = buildProjectTaskUpdateData({
+        assigneeAgentId: 'theo',
+        agentStatus: 'in-progress',
+      })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value).toEqual({ assigneeAgentId: 'theo', agentStatus: 'in-progress' })
+    })
+
+    it('PATCH: rejects unknown agentStatus', () => {
+      const result = buildProjectTaskUpdateData({ agentStatus: 'cooked' })
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.error).toMatch(/Invalid agentStatus/)
+    })
+
+    it('PATCH: agentOutput must include summary', () => {
+      const result = buildProjectTaskUpdateData({ agentOutput: { artifacts: [] } })
+      expect(result.ok).toBe(false)
+    })
+
+    it('PATCH: validates artifact shape', () => {
+      const ok = buildProjectTaskUpdateData({
+        agentOutput: {
+          summary: 'Built it',
+          artifacts: [{ type: 'url', ref: 'https://example.com', label: 'Live site' }],
+        },
+      })
+      expect(ok.ok).toBe(true)
+
+      const bad = buildProjectTaskUpdateData({
+        agentOutput: { summary: 's', artifacts: [{ type: 'url' }] },
+      })
+      expect(bad.ok).toBe(false)
+    })
+
+    it('PATCH: heartbeat sentinel survives the validator (route swaps it)', () => {
+      const result = buildProjectTaskUpdateData({ agentHeartbeatAt: true })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value.agentHeartbeatAt).toBe('__server_timestamp__')
+    })
+  })
 })

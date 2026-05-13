@@ -26,6 +26,11 @@ export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
   const updates = buildProjectTaskUpdateData(body)
   if (!updates.ok) return apiError(updates.error, updates.status ?? 400)
 
+  // Sentinel swap — the payload builder is pure JSON and can't emit FieldValue.serverTimestamp() itself.
+  if (updates.value.agentHeartbeatAt === '__server_timestamp__') {
+    updates.value.agentHeartbeatAt = FieldValue.serverTimestamp()
+  }
+
   await ref.update({ ...updates.value, updatedAt: FieldValue.serverTimestamp() })
 
   const existing = doc.data() ?? {}
