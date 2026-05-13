@@ -18,8 +18,9 @@ export const dynamic = 'force-dynamic'
 
 export const GET = withAuth(
   'admin',
-  async (_req: NextRequest, _user, context?: { params?: { agentId?: string } }) => {
-    const agentId = context?.params?.agentId as string | undefined
+  async (_req: NextRequest, _user, context?: { params?: Promise<{ agentId?: string }> | { agentId?: string } }) => {
+    const params = context?.params ? await context.params : {}
+    const agentId = (params as { agentId?: string }).agentId as string | undefined
     if (!agentId || !AGENT_IDS.includes(agentId as AgentId)) {
       return apiError(`Invalid agentId; expected one of ${AGENT_IDS.join(' | ')}`, 400)
     }
