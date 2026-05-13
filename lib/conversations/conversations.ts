@@ -1,0 +1,177 @@
+/**
+ * Firestore helpers for the `conversations` collection.
+ *
+ * Collection layout:
+ *   conversations/{convId}            — Conversation doc
+ *   conversations/{convId}/messages/  — ConversationMessage subcollection
+ */
+import { FieldValue } from 'firebase-admin/firestore'
+import { adminDb } from '@/lib/firebase/admin'
+import type { AgentId, Conversation, ConversationMessage, Participant } from './types'
+
+export const CONVERSATIONS_COLLECTION = 'conversations'
+
+// ---------------------------------------------------------------------------
+// Document / collection refs
+// ---------------------------------------------------------------------------
+
+export function convDoc(convId: string) {
+  return adminDb.collection(CONVERSATIONS_COLLECTION).doc(convId)
+}
+
+export function messagesCollection(convId: string) {
+  return convDoc(convId).collection('messages')
+}
+
+// ---------------------------------------------------------------------------
+// Conversation CRUD
+// ---------------------------------------------------------------------------
+
+export async function createConversation(input: {
+  orgId: string
+  startedBy: string
+  participants: Participant[]
+  title?: string
+  scope?: Conversation['scope']
+  scopeRefId?: string
+}): Promise<Conversation> {
+  const ref = adminDb.collection(CONVERSATIONS_COLLECTION).doc()
+
+  const participantUids = input.participants
+    .filter((p): p is Extract<Participant, { kind: 'user' }> => p.kind === 'user')
+    .map((p) => p.uid)
+
+  const participantAgentIds = input.participants
+    .filter((p): p is Extract<Participant, { kind: 'agent' }> => p.kind === 'agent')
+    .map((p) => p.agentId)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: Record<string, any> = {
+    orgId: input.orgId,
+    participants: input.participants,
+    participantUids,
+    participantAgentIds,
+    startedBy: input.startedBy,
+    title: input.title?.trim() || 'New conversation',
+    messageCount: 0,
+    archived: false,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }
+
+  if (input.scope) data.scope = input.scope
+  if (input.scopeRefId) data.scopeRefId = input.scopeRefId
+
+  await ref.set(data)
+  return { id: ref.id, ...data } as Conversation
+}
+
+export async function getConversation(convId: string): Promise<Conversation | null> {
+  const doc = await convDoc(convId).get()
+  if (!doc.exists) return null
+  return { id: doc.id, ...doc.data() } as Conversation
+}
+
+/**
+ * List conversations for a user within an org, ordered by most-recently-updated.
+ * Requires a composite index on: orgId ASC + participantUids ARRAY_CONTAINS + updatedAt DESC.
+ */
+export async function listConversations(
+  orgId: string,
+  uid: string,
+  limit = 30,
+): Promise<Conversation[]> {
+  const snap = await adminDb
+    .collection(CONVERSATIONS_COLLECTION)
+    .where('orgId', '==', orgId)
+    .where('participantUids', 'array-contains', uid)
+    .orderBy('updatedAt', 'desc')
+    .limit(limit)
+    .get()
+
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Conversation)
+}
+
+// ---------------------------------------------------------------------------
+// Message helpers
+// ---------------------------------------------------------------------------
+
+export async function createMessage(
+  convId: string,
+  msg: Omit<ConversationMessage, 'id'>,
+): Promise<ConversationMessage> {
+  const ref = messagesCollection(convId).doc()
+  const data = {
+    ...msg,
+    createdAt: FieldValue.serverTimestamp(),
+  }
+  await ref.set(data)
+  return { id: ref.id, ...data } as ConversationMessage
+}
+
+export async function listMessages(convId: string, limit = 200): Promise<ConversationMessage[]> {
+  const snap = await messagesCollection(convId)
+    .orderBy('createdAt', 'asc')
+    .limit(limit)
+    .get()
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ConversationMessage)
+}
+
+// ---------------------------------------------------------------------------
+// Conversation mutation helpers
+// ---------------------------------------------------------------------------
+
+/** Update conversation metadata (title, archived) and bump updatedAt. */
+export async function patchConversation(
+  convId: string,
+  patch: { title?: string; archived?: boolean },
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updates: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() }
+  if (patch.title !== undefined) updates.title = patch.title.trim()
+  if (patch.archived !== undefined) updates.archived = patch.archived
+  await convDoc(convId).update(updates)
+}
+
+/** Bump lastMessage* denorm fields and increment messageCount after a new message. */
+export async function touchConversation(
+  convId: string,
+  preview: string,
+  role: ConversationMessage['role'],
+): Promise<void> {
+  await convDoc(convId).update({
+    lastMessagePreview: preview.slice(0, 200),
+    lastMessageRole: role,
+    lastMessageAt: FieldValue.serverTimestamp(),
+    messageCount: FieldValue.increment(1),
+    updatedAt: FieldValue.serverTimestamp(),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Chat config helpers
+// ---------------------------------------------------------------------------
+
+export const ORG_CHAT_CONFIG_COLLECTION = 'org_chat_config'
+
+export function orgChatConfigDoc(orgId: string) {
+  return adminDb.collection(ORG_CHAT_CONFIG_COLLECTION).doc(orgId)
+}
+
+export async function getOrgChatConfig(orgId: string) {
+  const doc = await orgChatConfigDoc(orgId).get()
+  if (!doc.exists) return null
+  return doc.data() as Record<string, unknown>
+}
+
+/** Return visible agent ids for a given role, sourced from config or defaults. */
+export function resolveVisibleAgents(
+  config: { visibleAgents?: { admin?: AgentId[]; client?: AgentId[] } } | null,
+  role: 'admin' | 'client',
+): AgentId[] {
+  const defaults: Record<'admin' | 'client', AgentId[]> = {
+    admin: ['pip', 'theo', 'maya', 'sage', 'nora'],
+    client: ['pip'],
+  }
+  return config?.visibleAgents?.[role] ?? defaults[role]
+}

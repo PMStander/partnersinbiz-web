@@ -22,6 +22,7 @@ export const OPERATOR_NAV: NavItem[] = [
   { label: 'Recurring',      href: '/admin/invoicing/recurring', icon: 'autorenew' },
   { label: 'Quotes',         href: '/admin/quotes',              icon: 'request_quote' },
   { label: 'Platform users', href: '/admin/platform-users',      icon: 'shield_person' },
+  { label: 'Agents',         href: '/admin/agents',              icon: 'group_work' },
   { label: 'Settings',       href: '/admin/settings',            icon: 'settings' },
 ]
 
@@ -41,6 +42,7 @@ export const OPERATOR_NAV_TOPBAR: NavItem[] = [
     ],
   },
   { label: 'Platform users', href: '/admin/platform-users', icon: 'shield_person' },
+  { label: 'Agents',         href: '/admin/agents',         icon: 'group_work' },
   { label: 'Settings',       href: '/admin/settings',       icon: 'settings' },
 ]
 

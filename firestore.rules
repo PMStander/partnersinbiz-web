@@ -278,5 +278,39 @@ service cloud.firestore {
         allow read, write: if false;
       }
     }
+
+    // ── Agent Team (2026-05-13) ───────────────────────────────────────────────
+    // Any authenticated user can read agent team docs (names, personas, status).
+    // Only admins can write — all production writes go through Admin SDK / API routes.
+    match /agent_team/{agentId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // ── Org Chat Config (2026-05-13) ─────────────────────────────────────────
+    // Admin writes only (all via Admin SDK). Any authenticated user can read
+    // their org's chat config (e.g. which agents are enabled for them).
+    match /org_chat_config/{orgId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // ── Conversations + Messages (2026-05-13) ─────────────────────────────────
+    // Participants or admin can read and write. Participation is determined by
+    // the participantUids array on the conversation document.
+    match /conversations/{convId} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid in resource.data.participantUids ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+      );
+    }
+    match /conversations/{convId}/messages/{msgId} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participantUids ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+      );
+    }
   }
 }
