@@ -62,6 +62,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const renameCancelledRef = useRef(false)
 
   const activeConversation = useMemo(
     () => conversations.find((c) => c.id === activeId) || null,
@@ -341,9 +342,12 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
                     onChange={(e) => setRenameValue(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') renameConversation(c.id, renameValue)
-                      if (e.key === 'Escape') setRenamingId(null)
+                      if (e.key === 'Escape') { renameCancelledRef.current = true; setRenamingId(null) }
                     }}
-                    onBlur={() => renameConversation(c.id, renameValue)}
+                    onBlur={() => {
+                      if (!renameCancelledRef.current) renameConversation(c.id, renameValue)
+                      renameCancelledRef.current = false
+                    }}
                     className="flex-1 min-w-0 bg-transparent border-b border-primary text-sm text-on-surface outline-none"
                   />
                 </div>
@@ -369,7 +373,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
                   type="button"
                   data-conv-menu
                   onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === c.id ? null : c.id) }}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/conv:flex items-center justify-center w-6 h-6 rounded text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.08))]"
+                  className={`absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/conv:flex items-center justify-center w-6 h-6 rounded text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.08))] ${menuOpenId === c.id ? '!flex' : ''}`}
                   aria-label="Conversation options"
                 >
                   ⋯
@@ -380,7 +384,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
               {menuOpenId === c.id && (
                 <div
                   data-conv-menu
-                  className="absolute right-0 top-7 z-20 min-w-[120px] rounded-lg border border-[var(--color-card-border)] bg-[var(--color-surface,#1c1c1c)] py-1 shadow-lg"
+                  className="absolute right-0 top-full mt-1 z-20 min-w-[120px] rounded-lg border border-[var(--color-card-border)] bg-[var(--color-surface,#1c1c1c)] py-1 shadow-lg"
                 >
                   <button
                     type="button"
