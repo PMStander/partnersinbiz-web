@@ -55,6 +55,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null)
   const [liveEvents, setLiveEvents] = useState<Record<string, ChatEvent[]>>({})
   const liveEventsRef = useRef<Record<string, ChatEvent[]>>({})
   useEffect(() => { liveEventsRef.current = liveEvents }, [liveEvents])
@@ -108,7 +109,9 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
   }, [activeId, loadMessages])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
   }, [messages])
 
   useEffect(() => {
@@ -282,8 +285,9 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
         }
         const content = input
         setInput('')
-        const optimisticUser: ChatMessage = { id: `tmp-user-${Date.now()}`, role: 'user', content, status: 'completed' }
-        const optimisticAssistant: ChatMessage = { id: `tmp-assistant-${Date.now()}`, role: 'assistant', content: '', status: 'pending' }
+        const nowSec = Date.now() / 1000
+        const optimisticUser: ChatMessage = { id: `tmp-user-${Date.now()}`, role: 'user', content, status: 'completed', createdAt: { seconds: nowSec } }
+        const optimisticAssistant: ChatMessage = { id: `tmp-assistant-${Date.now()}`, role: 'assistant', content: '', status: 'pending', createdAt: { seconds: nowSec + 0.001 } }
         setMessages((prev) => [...prev, optimisticUser, optimisticAssistant])
         const res = await fetch(`${apiBase}/${convId}/messages`, {
           method: 'POST',
@@ -416,7 +420,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
           <div className="text-on-surface font-medium">{activeConversation?.title || 'New chat'}</div>
           <div className="text-xs text-on-surface-variant">Hermes</div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[400px]">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[400px]">
           {loading && <div className="text-xs text-on-surface-variant">Loading…</div>}
           {!loading && messages.length === 0 && (
             <div className="text-sm text-on-surface-variant py-8 text-center">
@@ -454,10 +458,11 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
                         <div className="mt-1 space-y-0.5 pl-3 border-l border-[var(--color-card-border)]">
                           {displayEvents.map((ev, i) => {
                             const ts = ev.timestamp ? new Date(ev.timestamp * 1000).toISOString().slice(11, 19) : null
+                            const toolLabel = ev.tool || ev.event
                             return (
                               <div key={i} className="flex items-center gap-2 py-0.5">
                                 {ts && <span className="font-mono opacity-40 shrink-0">{ts}</span>}
-                                {ev.tool && <span className="text-primary font-mono shrink-0">{ev.tool}</span>}
+                                {toolLabel && <span className="text-primary font-mono shrink-0">{toolLabel}</span>}
                                 {ev.preview && <span className="truncate opacity-70">{ev.preview}</span>}
                               </div>
                             )
@@ -517,7 +522,6 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
               </div>
             )
           })}
-          <div ref={messagesEndRef} />
         </div>
         {error && <div className="px-4 py-2 text-xs text-red-300 border-t border-red-500/30 bg-red-500/10">{error}</div>}
         <form onSubmit={send} className="flex gap-2 border-t border-[var(--color-card-border)] p-3">
