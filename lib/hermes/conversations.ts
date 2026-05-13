@@ -1,5 +1,6 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
+import type { ChatEvent } from './types'
 
 export const HERMES_CONVERSATIONS_COLLECTION = 'hermes_conversations'
 
@@ -13,6 +14,7 @@ export interface HermesMessage {
   runId?: string
   status?: 'pending' | 'streaming' | 'completed' | 'failed'
   error?: string
+  events?: ChatEvent[]
   toolName?: string
   createdAt?: Timestamp | FieldValue
   createdBy?: string
