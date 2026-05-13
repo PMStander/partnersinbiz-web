@@ -363,21 +363,48 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
             </div>
           )}
           {messages.sort((a, b) => timestampSeconds(a.createdAt) - timestampSeconds(b.createdAt)).map((m) => {
-            const events = liveEvents[m.id] ?? []
             return (
               <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[80%] ${m.role === 'user' ? '' : 'w-full'}`}>
-                  {m.role === 'assistant' && events.length > 0 && m.status !== 'completed' && (
-                    <div className="mb-1 space-y-1 text-xs text-on-surface-variant">
-                      {events.slice(-5).map((ev, i) => (
-                        <div key={i} className="flex items-baseline gap-2 rounded-md bg-[var(--color-card,rgba(255,255,255,0.03))] px-2 py-1">
-                          <span className="font-mono opacity-70">{ev.event ?? 'event'}</span>
-                          {ev.tool && <span className="text-primary">{ev.tool}</span>}
-                          {ev.preview && <span className="truncate opacity-80">{ev.preview}</span>}
+                  {m.role === 'assistant' && (() => {
+                    const displayEvents = liveEvents[m.id]?.length ? liveEvents[m.id] : (m.events ?? [])
+                    if (!displayEvents.length) return null
+                    const isLive = m.status === 'pending' || m.status === 'streaming' || m.status === 'waiting_approval'
+                    if (isLive) {
+                      return (
+                        <div className="mb-1 space-y-1 text-xs text-on-surface-variant">
+                          {displayEvents.slice(-5).map((ev, i) => (
+                            <div key={i} className="flex items-baseline gap-2 rounded-md bg-[var(--color-card,rgba(255,255,255,0.03))] px-2 py-1">
+                              <span className="font-mono opacity-70">{ev.event ?? 'event'}</span>
+                              {ev.tool && <span className="text-primary">{ev.tool}</span>}
+                              {ev.preview && <span className="truncate opacity-80">{ev.preview}</span>}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      )
+                    }
+                    return (
+                      <details className="mb-2 text-xs text-on-surface-variant group/details">
+                        <summary className="cursor-pointer select-none list-none flex items-center gap-1 px-1 py-0.5 rounded hover:bg-[var(--color-card,rgba(255,255,255,0.03))]">
+                          <span className="group-open/details:hidden">▶</span>
+                          <span className="hidden group-open/details:inline">▼</span>
+                          <span>{displayEvents.length} tool call{displayEvents.length !== 1 ? 's' : ''}</span>
+                        </summary>
+                        <div className="mt-1 space-y-0.5 pl-3 border-l border-[var(--color-card-border)]">
+                          {displayEvents.map((ev, i) => {
+                            const ts = ev.timestamp ? new Date(ev.timestamp * 1000).toISOString().slice(11, 19) : null
+                            return (
+                              <div key={i} className="flex items-center gap-2 py-0.5">
+                                {ts && <span className="font-mono opacity-40 shrink-0">{ts}</span>}
+                                {ev.tool && <span className="text-primary font-mono shrink-0">{ev.tool}</span>}
+                                {ev.preview && <span className="truncate opacity-70">{ev.preview}</span>}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </details>
+                    )
+                  })()}
                   <div
                     className={`rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
                       m.role === 'user'
