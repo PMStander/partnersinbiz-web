@@ -385,7 +385,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
                     }
                     return (
                       <details className="mb-2 text-xs text-on-surface-variant group/details">
-                        <summary className="cursor-pointer select-none list-none flex items-center gap-1 px-1 py-0.5 rounded hover:bg-[var(--color-card,rgba(255,255,255,0.03))]">
+                        <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center gap-1 px-1 py-0.5 rounded hover:bg-[var(--color-card,rgba(255,255,255,0.03))]">
                           <span className="group-open/details:hidden">▶</span>
                           <span className="hidden group-open/details:inline">▼</span>
                           <span>{displayEvents.length} tool call{displayEvents.length !== 1 ? 's' : ''}</span>

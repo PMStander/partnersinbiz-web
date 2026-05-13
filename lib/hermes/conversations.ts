@@ -12,7 +12,7 @@ export interface HermesMessage {
   role: HermesMessageRole
   content: string
   runId?: string
-  status?: 'pending' | 'streaming' | 'completed' | 'failed'
+  status?: 'pending' | 'streaming' | 'completed' | 'failed' | 'waiting_approval'
   error?: string
   events?: ChatEvent[]
   toolName?: string
