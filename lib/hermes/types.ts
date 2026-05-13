@@ -47,3 +47,10 @@ export interface HermesRunRequest {
   max_tokens?: number
   metadata?: Record<string, unknown>
 }
+
+export type ChatEvent = {
+  event?: string
+  tool?: string
+  preview?: string
+  timestamp?: number
+}
