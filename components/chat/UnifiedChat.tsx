@@ -1,0 +1,774 @@
+'use client'
+
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChatEvent } from '@/lib/hermes/types'
+import MessageBubble, { type ConversationMessage } from './MessageBubble'
+import ParticipantBar from './ParticipantBar'
+import ParticipantPicker, { type SelectedParticipant } from './ParticipantPicker'
+import ConversationListItem, { type Conversation } from './ConversationListItem'
+
+type AgentId = 'pip' | 'theo' | 'maya' | 'sage' | 'nora'
+
+interface AgentTeamDoc {
+  agentId: AgentId
+  name: string
+  role: string
+  persona: string
+  iconKey: string
+  colorKey: string
+  enabled: boolean
+  baseUrl: string
+  apiKey: string
+  defaultModel: string
+  lastHealthStatus?: 'ok' | 'degraded' | 'unreachable'
+}
+
+export interface UnifiedChatProps {
+  orgId: string
+  currentUserUid: string
+  currentUserDisplayName: string
+  projectId?: string
+  scope?: 'general' | 'project' | 'task' | 'campaign'
+  scopeRefId?: string
+}
+
+const POLL_INTERVAL = 1500
+
+function tsSeconds(ts: ConversationMessage['createdAt']): number {
+  if (!ts) return 0
+  if (typeof ts === 'string') return Date.parse(ts) / 1000
+  return (ts as { seconds?: number; _seconds?: number }).seconds ??
+    (ts as { seconds?: number; _seconds?: number })._seconds ?? 0
+}
+
+export default function UnifiedChat({
+  orgId,
+  currentUserUid,
+  currentUserDisplayName,
+  projectId,
+  scope,
+  scopeRefId,
+}: UnifiedChatProps) {
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<ConversationMessage[]>([])
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Agent map for looking up colorKey / iconKey for bubbles
+  const [agentMap, setAgentMap] = useState<Record<AgentId, AgentTeamDoc>>({} as Record<AgentId, AgentTeamDoc>)
+
+  // Live events keyed by assistant message id
+  const [liveEvents, setLiveEvents] = useState<Record<string, ChatEvent[]>>({})
+  const liveEventsRef = useRef<Record<string, ChatEvent[]>>({})
+  useEffect(() => { liveEventsRef.current = liveEvents }, [liveEvents])
+
+  // Approval state keyed by message id
+  const [approvalPending, setApprovalPending] = useState<
+    Record<string, { runId: string; toolName?: string }>
+  >({})
+
+  // Conversation context menu
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null)
+
+  // Rename state
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameCancelledRef = useRef(false)
+
+  // New conversation modal
+  const [showNewModal, setShowNewModal] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newParticipants, setNewParticipants] = useState<SelectedParticipant[]>([])
+  const [creatingConv, setCreatingConv] = useState(false)
+
+  // Refs
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null)
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const activeConversation = useMemo(
+    () => conversations.find((c) => c.id === activeId) ?? null,
+    [conversations, activeId],
+  )
+
+  const listQuery = useMemo(() => {
+    const params = new URLSearchParams({ orgId })
+    if (projectId) params.set('projectId', projectId)
+    if (scope) params.set('scope', scope)
+    if (scopeRefId) params.set('scopeRefId', scopeRefId)
+    return params.toString()
+  }, [orgId, projectId, scope, scopeRefId])
+
+  // ── Load agents (for colorKey lookup) ─────────────────────────────────────
+  useEffect(() => {
+    fetch(`/api/v1/orgs/${orgId}/visible-agents`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (!body?.data) return
+        const map = {} as Record<AgentId, AgentTeamDoc>
+        for (const agent of body.data as AgentTeamDoc[]) {
+          map[agent.agentId] = agent
+        }
+        setAgentMap(map)
+      })
+      .catch(() => {})
+  }, [orgId])
+
+  // ── Load conversations ────────────────────────────────────────────────────
+  const loadConversations = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/conversations?${listQuery}`)
+      if (!res.ok) throw new Error(`load conversations: ${res.status}`)
+      const body = await res.json()
+      const list: Conversation[] = body.data?.conversations ?? []
+      setConversations(list)
+      if (!activeId && list.length) setActiveId(list[0].id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load conversations')
+    }
+  }, [listQuery, activeId])
+
+  // ── Load messages ─────────────────────────────────────────────────────────
+  const loadMessages = useCallback(async (convId: string) => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/v1/conversations/${convId}/messages`)
+      if (!res.ok) throw new Error(`load messages: ${res.status}`)
+      const body = await res.json()
+      setMessages(body.data?.messages ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load messages')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // ── Effects ───────────────────────────────────────────────────────────────
+  useEffect(() => { loadConversations() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (activeId) loadMessages(activeId)
+  }, [activeId, loadMessages])
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
+  }, [messages])
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!menuOpenId) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-conv-menu]')) {
+        setMenuOpenId(null)
+        setMenuPosition(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpenId])
+
+  // Cleanup polling on unmount
+  useEffect(() => () => {
+    if (pollRef.current) clearTimeout(pollRef.current)
+  }, [])
+
+  // ── Polling finalize ──────────────────────────────────────────────────────
+  const pollFinalize = useCallback(
+    async (convId: string, msgId: string, runId: string, agentId: AgentId, attempts = 0) => {
+      if (attempts > 120) {
+        setError('Run timed out waiting for completion')
+        return
+      }
+      try {
+        const events = liveEventsRef.current[msgId] ?? []
+        const res = await fetch(`/api/v1/conversations/${convId}/messages/${msgId}/finalize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ runId, agentId, events }),
+        })
+        const body = await res.json()
+        const status: string | undefined = body.data?.status
+
+        if (!status || status === 'running') {
+          pollRef.current = setTimeout(
+            () => pollFinalize(convId, msgId, runId, agentId, attempts + 1),
+            POLL_INTERVAL,
+          )
+          return
+        }
+
+        if (status === 'waiting_approval') {
+          const lastEvent = events[events.length - 1]
+          setMessages((prev) =>
+            prev.map((m) => (m.id === msgId ? { ...m, status: 'waiting_approval', runId } : m)),
+          )
+          setApprovalPending((prev) => ({
+            ...prev,
+            [msgId]: { runId, toolName: lastEvent?.tool },
+          }))
+          return
+        }
+
+        // completed or failed — reload
+        await loadMessages(convId)
+        await loadConversations()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Finalize failed')
+      }
+    },
+    [loadMessages, loadConversations],
+  )
+
+  // ── Resolve approval ──────────────────────────────────────────────────────
+  const resolveApproval = useCallback(
+    async (msgId: string, choice: 'once' | 'always' | 'deny') => {
+      const pending = approvalPending[msgId]
+      if (!pending) return
+      try {
+        const res = await fetch(
+          `/api/v1/admin/hermes/profiles/${orgId}/runs/${encodeURIComponent(pending.runId)}/approval`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ choice }),
+          },
+        )
+        if (!res.ok) throw new Error(`approval failed: ${res.status}`)
+        setApprovalPending((prev) => {
+          const next = { ...prev }
+          delete next[msgId]
+          return next
+        })
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, status: 'pending' } : m)),
+        )
+        // Figure out which agentId to use — find from participants or default pip
+        const agentParticipant = activeConversation?.participants.find(
+          (p) => p.kind === 'agent',
+        )
+        const agentId: AgentId =
+          agentParticipant?.kind === 'agent' ? agentParticipant.agentId : 'pip'
+        if (activeId) pollFinalize(activeId, msgId, pending.runId, agentId)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Approval failed')
+      }
+    },
+    [approvalPending, orgId, activeId, activeConversation, pollFinalize],
+  )
+
+  // ── Rename conversation ───────────────────────────────────────────────────
+  const renameConversation = useCallback(async (convId: string, title: string) => {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    setRenamingId(null)
+    setConversations((prev) =>
+      prev.map((c) => (c.id === convId ? { ...c, title: trimmed } : c)),
+    )
+    await fetch(`/api/v1/conversations/${convId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: trimmed }),
+    }).catch(() => {})
+  }, [])
+
+  // ── Archive conversation ──────────────────────────────────────────────────
+  const archiveConversation = useCallback(
+    async (convId: string) => {
+      setMenuOpenId(null)
+      setMenuPosition(null)
+      setConversations((prev) => prev.filter((c) => c.id !== convId))
+      if (activeId === convId) setActiveId(null)
+      await fetch(`/api/v1/conversations/${convId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: true }),
+      }).catch(() => {})
+    },
+    [activeId],
+  )
+
+  // ── Create new conversation (from modal) ──────────────────────────────────
+  const handleCreateConversation = useCallback(async () => {
+    if (creatingConv) return
+    setCreatingConv(true)
+    setError(null)
+    try {
+      const participants = newParticipants.map((p) =>
+        p.kind === 'agent'
+          ? { kind: 'agent' as const, agentId: p.agentId }
+          : { kind: 'user' as const, uid: p.uid },
+      )
+      const payload: Record<string, unknown> = {
+        orgId,
+        participants,
+      }
+      if (newTitle.trim()) payload.title = newTitle.trim()
+      if (scope) payload.scope = scope
+      if (scopeRefId) payload.scopeRefId = scopeRefId
+      if (projectId) payload.scopeRefId = projectId
+
+      const res = await fetch('/api/v1/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(`create conversation: ${res.status}`)
+      const body = await res.json()
+      const conv: Conversation = body.data?.conversation
+      setConversations((prev) => [conv, ...prev])
+      setActiveId(conv.id)
+      setMessages([])
+      setShowNewModal(false)
+      setNewTitle('')
+      setNewParticipants([])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create conversation')
+    } finally {
+      setCreatingConv(false)
+    }
+  }, [creatingConv, newParticipants, newTitle, orgId, projectId, scope, scopeRefId])
+
+  // ── Send message ──────────────────────────────────────────────────────────
+  const send = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault()
+      if (!input.trim() || sending) return
+      setError(null)
+      setSending(true)
+      let convId = activeId
+
+      try {
+        // Auto-create a bare conversation if none selected
+        if (!convId) {
+          const payload: Record<string, unknown> = {
+            orgId,
+            participants: [],
+            title: input.slice(0, 80),
+          }
+          if (scope) payload.scope = scope
+          if (scopeRefId) payload.scopeRefId = scopeRefId
+          const r = await fetch('/api/v1/conversations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          const b = await r.json()
+          convId = b.data?.conversation?.id as string | undefined ?? null
+          if (!convId) throw new Error('Failed to create conversation')
+          setConversations((prev) => [b.data.conversation, ...prev])
+          setActiveId(convId)
+        }
+
+        const content = input
+        setInput('')
+        const nowSec = Date.now() / 1000
+
+        // Optimistic messages
+        const optimisticUser: ConversationMessage = {
+          id: `tmp-user-${Date.now()}`,
+          conversationId: convId,
+          role: 'user',
+          content,
+          authorKind: 'user',
+          authorId: currentUserUid,
+          authorDisplayName: currentUserDisplayName,
+          status: 'completed',
+          createdAt: { seconds: nowSec },
+        }
+        const optimisticAssistant: ConversationMessage = {
+          id: `tmp-assistant-${Date.now()}`,
+          conversationId: convId,
+          role: 'assistant',
+          content: '',
+          authorKind: 'agent',
+          authorId: 'pending',
+          authorDisplayName: 'Agent',
+          status: 'pending',
+          createdAt: { seconds: nowSec + 0.001 },
+        }
+        setMessages((prev) => [...prev, optimisticUser, optimisticAssistant])
+
+        const res = await fetch(`/api/v1/conversations/${convId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        })
+        const body = await res.json()
+        if (!res.ok) throw new Error(body.error ?? 'Send failed')
+
+        const newAssistantId: string | undefined = body.data?.assistantMessage?.id
+        const runId: string | undefined = body.data?.runId
+        const runDocId: string | undefined = body.data?.runDocId
+
+        // Reload real messages (replaces optimistic)
+        await loadMessages(convId)
+
+        if (newAssistantId && runId) {
+          // Determine the agent from conversation participants or response
+          const agentParticipant = conversations
+            .find((c) => c.id === convId)
+            ?.participants.find((p) => p.kind === 'agent')
+          const agentId: AgentId =
+            agentParticipant?.kind === 'agent' ? agentParticipant.agentId : 'pip'
+          void runDocId // Phase 3: use for Firestore subscription
+          pollFinalize(convId, newAssistantId, runId, agentId)
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Send failed')
+      } finally {
+        setSending(false)
+      }
+    },
+    [
+      activeId,
+      input,
+      sending,
+      orgId,
+      currentUserUid,
+      currentUserDisplayName,
+      scope,
+      scopeRefId,
+      loadMessages,
+      pollFinalize,
+      conversations,
+    ],
+  )
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div className="grid gap-4 lg:grid-cols-[280px_1fr] min-h-[600px]">
+      {/* ── Left: conversation list ─────────────────────────────────────── */}
+      <aside className="pib-card flex flex-col gap-2 p-3">
+        <button
+          type="button"
+          onClick={() => setShowNewModal(true)}
+          className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-on-primary hover:opacity-90 flex items-center justify-center gap-1.5"
+        >
+          <span className="material-symbols-outlined text-[16px]">add</span>
+          New conversation
+        </button>
+
+        <div className="text-xs text-on-surface-variant mt-2 px-1">Conversations</div>
+
+        <div className="flex flex-col gap-0.5 overflow-y-auto flex-1 max-h-[520px]">
+          {conversations.length === 0 && (
+            <div className="text-xs text-on-surface-variant px-2 py-3">
+              No conversations yet. Start one.
+            </div>
+          )}
+          {conversations.filter((c) => !c.archived).map((c) => (
+            <div key={c.id} className="relative group/conv">
+              {renamingId === c.id ? (
+                <div className="flex items-center gap-1 rounded-lg px-2 py-1.5">
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') renameConversation(c.id, renameValue)
+                      if (e.key === 'Escape') {
+                        renameCancelledRef.current = true
+                        setRenamingId(null)
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!renameCancelledRef.current) renameConversation(c.id, renameValue)
+                      renameCancelledRef.current = false
+                    }}
+                    className="flex-1 min-w-0 bg-transparent border-b border-primary text-sm text-on-surface outline-none"
+                  />
+                </div>
+              ) : (
+                <ConversationListItem
+                  conversation={c}
+                  active={c.id === activeId}
+                  onClick={() => setActiveId(c.id)}
+                  currentUserUid={currentUserUid}
+                />
+              )}
+
+              {/* ⋯ hover menu button */}
+              {renamingId !== c.id && (
+                <button
+                  type="button"
+                  data-conv-menu
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (menuOpenId === c.id) {
+                      setMenuOpenId(null)
+                      setMenuPosition(null)
+                    } else {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setMenuPosition({ top: rect.bottom + 4, left: rect.right - 128 })
+                      setMenuOpenId(c.id)
+                    }
+                  }}
+                  className={`absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/conv:flex items-center justify-center w-6 h-6 rounded text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.08))] ${
+                    menuOpenId === c.id ? '!flex' : ''
+                  }`}
+                  aria-label="Conversation options"
+                >
+                  ⋯
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* Context menu — rendered fixed to escape scroll container */}
+      {menuOpenId && menuPosition && (
+        <div
+          data-conv-menu
+          style={{ position: 'fixed', top: menuPosition.top, left: menuPosition.left }}
+          className="z-50 min-w-[128px] rounded-lg border border-[var(--color-card-border)] bg-[var(--color-surface,#1c1c1c)] py-1 shadow-xl"
+        >
+          <button
+            type="button"
+            className="w-full text-left px-3 py-2 text-xs text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))] flex items-center gap-2"
+            onClick={() => {
+              const conv = conversations.find((c) => c.id === menuOpenId)
+              setMenuOpenId(null)
+              setMenuPosition(null)
+              if (conv) {
+                setRenamingId(conv.id)
+                setRenameValue(conv.title || '')
+              }
+            }}
+          >
+            <span className="material-symbols-outlined text-[14px]">edit</span>
+            Rename
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))] flex items-center gap-2"
+            onClick={() => archiveConversation(menuOpenId)}
+          >
+            <span className="material-symbols-outlined text-[14px]">archive</span>
+            Archive
+          </button>
+        </div>
+      )}
+
+      {/* ── Right: active conversation ──────────────────────────────────── */}
+      <section className="pib-card flex flex-col">
+        {/* Header */}
+        <div className="border-b border-[var(--color-card-border)] px-4 py-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-on-surface font-medium text-sm">
+              {activeConversation?.title || 'New conversation'}
+            </div>
+          </div>
+          {activeConversation?.participants && activeConversation.participants.length > 0 && (
+            <ParticipantBar participants={activeConversation.participants} />
+          )}
+        </div>
+
+        {/* Messages */}
+        <div
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[400px]"
+        >
+          {loading && <div className="text-xs text-on-surface-variant">Loading…</div>}
+          {!loading && messages.length === 0 && (
+            <div className="text-sm text-on-surface-variant py-8 text-center">
+              {activeConversation
+                ? 'No messages yet. Send one below.'
+                : 'Select or create a conversation to get started.'}
+            </div>
+          )}
+
+          {messages
+            .slice()
+            .sort((a, b) => tsSeconds(a.createdAt) - tsSeconds(b.createdAt))
+            .map((m) => {
+              // Look up agent info for this message author
+              const agentDoc =
+                m.authorKind === 'agent'
+                  ? (agentMap[m.authorId as AgentId] ?? null)
+                  : null
+
+              const isPending =
+                m.status === 'pending' ||
+                m.status === 'streaming' ||
+                m.status === 'waiting_approval'
+
+              return (
+                <div key={m.id}>
+                  <MessageBubble
+                    message={m}
+                    currentUserUid={currentUserUid}
+                    agentColorKey={agentDoc?.colorKey}
+                    agentIconKey={agentDoc?.iconKey}
+                    liveEvents={isPending ? (liveEvents[m.id] ?? []) : []}
+                  />
+
+                  {/* Approval card */}
+                  {m.role === 'assistant' &&
+                    m.status === 'waiting_approval' &&
+                    approvalPending[m.id] && (
+                      <div className="mt-2 ml-10 rounded-xl border border-[#f59e0b44] bg-[#1a1500] px-4 py-3 text-sm">
+                        <div className="mb-1 font-medium text-[#f59e0b]">
+                          Waiting for approval
+                        </div>
+                        <div className="mb-3 text-[#d4c4a0]">
+                          I want to call{' '}
+                          <span className="font-mono text-[#93c5fd]">
+                            {approvalPending[m.id]!.toolName ?? 'a tool'}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => resolveApproval(m.id, 'once')}
+                            className="rounded-md bg-[#166534] px-3 py-1.5 text-xs font-medium text-[#86efac] hover:opacity-90"
+                          >
+                            Allow once
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => resolveApproval(m.id, 'always')}
+                            className="rounded-md bg-[#1e3a5f] px-3 py-1.5 text-xs font-medium text-[#93c5fd] hover:opacity-90"
+                          >
+                            Allow always
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => resolveApproval(m.id, 'deny')}
+                            className="rounded-md bg-[#3b0000] px-3 py-1.5 text-xs font-medium text-[#fca5a5] hover:opacity-90"
+                          >
+                            Deny
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                </div>
+              )
+            })}
+        </div>
+
+        {/* Error bar */}
+        {error && (
+          <div className="px-4 py-2 text-xs text-red-300 border-t border-red-500/30 bg-red-500/10">
+            {error}
+          </div>
+        )}
+
+        {/* Input */}
+        <form
+          onSubmit={send}
+          className="flex gap-2 border-t border-[var(--color-card-border)] p-3"
+        >
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                send(e as unknown as FormEvent)
+              }
+            }}
+            placeholder={
+              activeConversation
+                ? 'Send a message — Enter to send, Shift+Enter for new line'
+                : 'Create or select a conversation first'
+            }
+            disabled={sending}
+            rows={2}
+            className="flex-1 resize-none rounded-lg border border-[var(--color-card-border)] bg-[var(--color-card)] px-3 py-2 text-sm disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={sending || !input.trim()}
+            className="self-end rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50 hover:opacity-90"
+          >
+            {sending ? 'Sending…' : 'Send'}
+          </button>
+        </form>
+      </section>
+
+      {/* ── New conversation modal ──────────────────────────────────────── */}
+      {showNewModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowNewModal(false)
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl border border-[var(--color-card-border)] bg-[var(--color-surface,#1c1c1c)] shadow-2xl">
+            {/* Modal header */}
+            <div className="flex items-center justify-between border-b border-[var(--color-card-border)] px-5 py-4">
+              <h2 className="text-sm font-medium text-on-surface">New conversation</h2>
+              <button
+                type="button"
+                onClick={() => setShowNewModal(false)}
+                className="text-on-surface-variant hover:text-on-surface transition-colors"
+                aria-label="Close"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <div className="p-5 space-y-4">
+              {/* Optional title */}
+              <div>
+                <label className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant block mb-1.5">
+                  Title (optional)
+                </label>
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="e.g. Q3 campaign planning"
+                  className="w-full rounded-lg border border-[var(--color-card-border)] bg-[var(--color-card)] px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant outline-none focus:border-primary/60"
+                />
+              </div>
+
+              {/* Participant picker */}
+              <div>
+                <label className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant block mb-1.5">
+                  Participants (max 5)
+                </label>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <ParticipantPicker
+                    orgId={orgId}
+                    onSelect={setNewParticipants}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Modal footer */}
+            <div className="flex items-center justify-end gap-2 border-t border-[var(--color-card-border)] px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setShowNewModal(false)}
+                className="rounded-lg px-4 py-2 text-sm text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateConversation}
+                disabled={creatingConv || newParticipants.length === 0}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50 hover:opacity-90"
+              >
+                {creatingConv ? 'Creating…' : 'Start conversation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

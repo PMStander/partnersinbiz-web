@@ -53,6 +53,7 @@ export function workspaceNav(slug: string): NavItem[] {
     { label: 'Dashboard', href: `/admin/org/${slug}/dashboard`, icon: 'space_dashboard' },
     { label: 'Projects',  href: `/admin/org/${slug}/projects`,  icon: 'rocket_launch' },
     { label: 'Agent',     href: `/admin/org/${slug}/agent`,     icon: 'smart_toy' },
+    { label: 'Messages',  href: `/admin/org/${slug}/messages`,  icon: 'forum' },
     { label: 'Agent Board', href: `/admin/org/${slug}/agent/board`, icon: 'view_kanban' },
     { label: 'Brand',     href: `/admin/org/${slug}/brand`,     icon: 'palette' },
     { label: 'Team',      href: `/admin/org/${slug}/team`,      icon: 'groups' },
