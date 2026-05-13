@@ -197,7 +197,13 @@ export async function pingAgentHealth(
 
   const baseUrl = raw.baseUrl.replace(/\/+$/, '')
   const healthUrl = `${baseUrl}/v1/health`
-  const plainKey = decryptAgentApiKey(raw.apiKey)
+
+  let plainKey: string
+  try {
+    plainKey = decryptAgentApiKey(raw.apiKey)
+  } catch {
+    return { status: 'unreachable' }
+  }
 
   const t0 = Date.now()
   let status: 'ok' | 'degraded' | 'unreachable' = 'unreachable'
