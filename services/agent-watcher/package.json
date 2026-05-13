@@ -1,0 +1,24 @@
+{
+  "name": "@partnersinbiz/agent-watcher",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Daemon that watches Firestore for agent-assigned tasks and dispatches them to Hermes.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "clean": "rm -rf dist"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.10.0"
+  }
+}

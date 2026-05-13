@@ -1,0 +1,41 @@
+[Unit]
+Description=Partners in Biz agent-watcher (Firestore → Hermes dispatch daemon)
+Documentation=https://github.com/partnersinbiz/partnersinbiz-web/blob/main/services/agent-watcher/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hermes
+Group=hermes
+WorkingDirectory=/var/lib/hermes/agent-watcher
+EnvironmentFile=/etc/hermes/watcher.env
+ExecStart=/usr/bin/node /var/lib/hermes/agent-watcher/dist/index.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=45
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hermes-watcher
+
+# Resource limits
+MemoryMax=1G
+TasksMax=512
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+ReadWritePaths=/var/lib/hermes/agent-watcher
+PrivateDevices=true
+
+[Install]
+WantedBy=multi-user.target
