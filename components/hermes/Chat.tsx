@@ -331,21 +331,78 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
           {conversations.length === 0 && (
             <div className="text-xs text-on-surface-variant px-2 py-3">No chats yet. Start one.</div>
           )}
-          {conversations.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setActiveId(c.id)}
-              className={`text-left rounded-lg px-3 py-2 text-sm transition-colors ${
-                c.id === activeId
-                  ? 'bg-[var(--color-card-active,rgba(255,255,255,0.08))] text-on-surface'
-                  : 'text-on-surface-variant hover:bg-[var(--color-card-hover,rgba(255,255,255,0.04))]'
-              }`}
-            >
-              <div className="line-clamp-1">{c.title || 'Untitled'}</div>
-              {c.lastMessagePreview && (
-                <div className="line-clamp-1 text-xs text-on-surface-variant mt-0.5">{c.lastMessagePreview}</div>
+          {conversations.filter((c) => !c.archived).map((c) => (
+            <div key={c.id} className="relative group/conv">
+              {renamingId === c.id ? (
+                <div className="flex items-center gap-1 rounded-lg px-2 py-1.5">
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') renameConversation(c.id, renameValue)
+                      if (e.key === 'Escape') setRenamingId(null)
+                    }}
+                    onBlur={() => renameConversation(c.id, renameValue)}
+                    className="flex-1 min-w-0 bg-transparent border-b border-primary text-sm text-on-surface outline-none"
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setActiveId(c.id)}
+                  className={`w-full text-left rounded-lg px-3 py-2 text-sm transition-colors pr-8 ${
+                    c.id === activeId
+                      ? 'bg-[var(--color-card-active,rgba(255,255,255,0.08))] text-on-surface'
+                      : 'text-on-surface-variant hover:bg-[var(--color-card-hover,rgba(255,255,255,0.04))]'
+                  }`}
+                >
+                  <div className="line-clamp-1">{c.title || 'Untitled'}</div>
+                  {c.lastMessagePreview && (
+                    <div className="line-clamp-1 text-xs text-on-surface-variant mt-0.5">{c.lastMessagePreview}</div>
+                  )}
+                </button>
               )}
-            </button>
+
+              {/* ⋯ hover button */}
+              {renamingId !== c.id && (
+                <button
+                  type="button"
+                  data-conv-menu
+                  onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === c.id ? null : c.id) }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/conv:flex items-center justify-center w-6 h-6 rounded text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.08))]"
+                  aria-label="Conversation options"
+                >
+                  ⋯
+                </button>
+              )}
+
+              {/* dropdown */}
+              {menuOpenId === c.id && (
+                <div
+                  data-conv-menu
+                  className="absolute right-0 top-7 z-20 min-w-[120px] rounded-lg border border-[var(--color-card-border)] bg-[var(--color-surface,#1c1c1c)] py-1 shadow-lg"
+                >
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 text-xs text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))]"
+                    onClick={() => {
+                      setMenuOpenId(null)
+                      setRenamingId(c.id)
+                      setRenameValue(c.title || '')
+                    }}
+                  >
+                    ✏️ Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))]"
+                    onClick={() => archiveConversation(c.id)}
+                  >
+                    📦 Archive
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </aside>
