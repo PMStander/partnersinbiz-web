@@ -1,21 +1,15 @@
 'use client'
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChatEvent } from '@/lib/hermes/types'
 
 type Role = 'user' | 'assistant' | 'system' | 'tool'
-
-type ChatEvent = {
-  event?: string
-  tool?: string
-  preview?: string
-  timestamp?: number
-}
 
 type ChatMessage = {
   id: string
   role: Role
   content: string
-  status?: 'pending' | 'streaming' | 'completed' | 'failed'
+  status?: 'pending' | 'streaming' | 'completed' | 'failed' | 'waiting_approval'
   runId?: string
   error?: string
   events?: ChatEvent[]
@@ -62,6 +56,10 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
   const eventSourceRef = useRef<EventSource | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const [liveEvents, setLiveEvents] = useState<Record<string, ChatEvent[]>>({})
+  const [approvalPending, setApprovalPending] = useState<Record<string, { runId: string; toolName?: string }>>({})
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const activeConversation = useMemo(
     () => conversations.find((c) => c.id === activeId) || null,
@@ -109,6 +107,16 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    if (!menuOpenId) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-conv-menu]')) setMenuOpenId(null)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpenId])
 
   const newConversation = useCallback(async () => {
     setError(null)
@@ -180,6 +188,59 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
       }
     },
     [apiBase, loadMessages, loadConversations],
+  )
+
+  const resolveApproval = useCallback(
+    async (msgId: string, choice: 'once' | 'always' | 'deny') => {
+      const pending = approvalPending[msgId]
+      if (!pending) return
+      try {
+        const res = await fetch(
+          `/api/v1/admin/hermes/profiles/${orgId}/runs/${encodeURIComponent(pending.runId)}/approval`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ choice }) },
+        )
+        if (!res.ok) throw new Error(`approval failed: ${res.status}`)
+        setApprovalPending((prev) => { const next = { ...prev }; delete next[msgId]; return next })
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, status: 'pending' } : m)),
+        )
+        if (activeId) pollFinalize(activeId, msgId, pending.runId)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Approval failed')
+      }
+    },
+    [approvalPending, orgId, activeId, pollFinalize],
+  )
+
+  const renameConversation = useCallback(
+    async (convId: string, title: string) => {
+      const trimmed = title.trim()
+      if (!trimmed) return
+      setRenamingId(null)
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title: trimmed } : c)),
+      )
+      await fetch(`/api/v1/admin/hermes/profiles/${orgId}/conversations/${convId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: trimmed }),
+      }).catch(() => {/* optimistic — ignore errors silently */})
+    },
+    [orgId],
+  )
+
+  const archiveConversation = useCallback(
+    async (convId: string) => {
+      setMenuOpenId(null)
+      setConversations((prev) => prev.filter((c) => c.id !== convId))
+      if (activeId === convId) setActiveId(null)
+      await fetch(`/api/v1/admin/hermes/profiles/${orgId}/conversations/${convId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: true }),
+      }).catch(() => {/* optimistic */})
+    },
+    [orgId, activeId],
   )
 
   const send = useCallback(
