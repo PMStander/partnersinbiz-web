@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { Attachment, ChecklistItem, Column, Task, TeamMember } from './types'
+import type { AgentId, AgentMember, Attachment, ChecklistItem, Column, Task, TeamMember } from './types'
 
 interface TaskComposerProps {
   open: boolean
@@ -9,6 +9,7 @@ interface TaskComposerProps {
   projectId: string
   orgId?: string
   members: TeamMember[]
+  agents?: AgentMember[]
   onClose: () => void
   onCreated: (task: Task) => void
 }
@@ -45,6 +46,10 @@ function memberLabel(member: TeamMember): string {
   return member.displayName || member.email || member.userId
 }
 
+function agentLabel(agent?: AgentMember): string {
+  return agent?.name || agent?.agentId || 'Agent'
+}
+
 export async function uploadTaskFile(file: File, projectId: string, orgId?: string): Promise<Attachment> {
   const form = new FormData()
   form.append('folder', `projects/${projectId}/tasks`)
@@ -69,7 +74,7 @@ export async function uploadTaskFile(file: File, projectId: string, orgId?: stri
   }
 }
 
-export function TaskComposer({ open, column, projectId, orgId, members, onClose, onCreated }: TaskComposerProps) {
+export function TaskComposer({ open, column, projectId, orgId, members, agents = [], onClose, onCreated }: TaskComposerProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<(typeof PRIORITIES)[number]>('medium')
@@ -78,6 +83,7 @@ export function TaskComposer({ open, column, projectId, orgId, members, onClose,
   const [startDate, setStartDate] = useState('')
   const [estimateHours, setEstimateHours] = useState('')
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
+  const [assigneeAgentId, setAssigneeAgentId] = useState<AgentId | ''>('')
   const [mentionIds, setMentionIds] = useState<string[]>([])
   const [checklistText, setChecklistText] = useState('')
   const [files, setFiles] = useState<File[]>([])
@@ -111,6 +117,7 @@ export function TaskComposer({ open, column, projectId, orgId, members, onClose,
     setStartDate('')
     setEstimateHours('')
     setAssigneeIds([])
+    setAssigneeAgentId('')
     setMentionIds([])
     setChecklistText('')
     setFiles([])
@@ -138,6 +145,17 @@ export function TaskComposer({ open, column, projectId, orgId, members, onClose,
         labels: cleanList(labels),
         assigneeId: assigneeIds[0] ?? null,
         assigneeIds,
+        assigneeAgentId: assigneeAgentId || null,
+        agentInput: assigneeAgentId
+          ? {
+              spec: [
+                title.trim(),
+                description.trim(),
+                checklist.length ? `Checklist:\n${checklist.map((item) => `- ${item.text}`).join('\n')}` : '',
+              ].filter(Boolean).join('\n\n'),
+              context: { projectId, orgId: orgId ?? null, columnId: column.id },
+            }
+          : null,
         mentionIds,
         dueDate: dueDate || null,
         startDate: startDate || null,
@@ -376,6 +394,44 @@ export function TaskComposer({ open, column, projectId, orgId, members, onClose,
                   ))}
                 </div>
               )}
+            </div>
+
+            <div>
+              <p className="mb-2 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Agent</p>
+              <div className="space-y-1 rounded-md border border-[var(--color-card-border)] bg-[var(--color-card)] p-2">
+                <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-[var(--color-surface-container)]">
+                  <input
+                    type="radio"
+                    checked={!assigneeAgentId}
+                    onChange={() => setAssigneeAgentId('')}
+                    className="accent-[var(--color-accent-v2)]"
+                  />
+                  <span className="text-sm text-on-surface">No agent</span>
+                </label>
+                {agents.length === 0 ? (
+                  <p className="px-2 py-2 text-xs text-on-surface-variant">No agents available.</p>
+                ) : (
+                  agents.map((agent) => (
+                    <label key={agent.agentId} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-[var(--color-surface-container)]">
+                      <input
+                        type="radio"
+                        checked={assigneeAgentId === agent.agentId}
+                        onChange={() => setAssigneeAgentId(agent.agentId)}
+                        className="accent-[var(--color-accent-v2)]"
+                      />
+                      <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
+                        {agent.iconKey ?? 'smart_toy'}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-on-surface">{agentLabel(agent)}</span>
+                      {agent.lastHealthStatus && (
+                        <span className={`h-1.5 w-1.5 rounded-full ${
+                          agent.lastHealthStatus === 'ok' ? 'bg-emerald-400' : agent.lastHealthStatus === 'degraded' ? 'bg-amber-400' : 'bg-red-400'
+                        }`} />
+                      )}
+                    </label>
+                  ))
+                )}
+              </div>
             </div>
           </aside>
         </div>

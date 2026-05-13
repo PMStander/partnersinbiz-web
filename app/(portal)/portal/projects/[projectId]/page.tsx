@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { TaskDetailPanel } from '@/components/kanban/TaskDetailPanel'
 import { TaskComposer } from '@/components/kanban/TaskComposer'
-import type { Column, Task, TeamMember } from '@/components/kanban/types'
+import type { AgentMember, Column, Task, TeamMember } from '@/components/kanban/types'
 
 interface ProjectDoc { id: string; title: string; content: string; type: 'brief' | 'requirements' | 'notes' | 'reference'; createdBy: string; updatedBy?: string; createdAt?: unknown; updatedAt?: unknown }
 interface Project { id: string; orgId?: string; name: string; description?: string; brief?: string; status?: string; columns: Column[] }
@@ -73,6 +73,10 @@ function memberLabel(member?: TeamMember): string {
   return member?.displayName || member?.email || 'Unassigned'
 }
 
+function agentLabel(agent?: AgentMember, agentId?: string | null): string {
+  return agent?.name || agentId || ''
+}
+
 export default function ProjectDetailPage() {
   const params = useParams()
   const projectId = params.projectId as string
@@ -81,6 +85,7 @@ export default function ProjectDetailPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [docs, setDocs] = useState<ProjectDoc[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
+  const [agents, setAgents] = useState<AgentMember[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [showNewTask, setShowNewTask] = useState<string | null>(null)
@@ -119,6 +124,10 @@ export default function ProjectDetailPage() {
       .then(r => r.json())
       .then(body => setMembers(body.data ?? []))
       .catch(() => setMembers([]))
+    fetch(`/api/v1/orgs/${project.orgId}/visible-agents`)
+      .then(r => r.json())
+      .then(body => setAgents(body.data ?? []))
+      .catch(() => setAgents([]))
   }, [project?.orgId])
 
   const handleTaskMove = useCallback(async (taskId: string, newColumnId: string, newOrder: number) => {
@@ -358,9 +367,10 @@ export default function ProjectDetailPage() {
                         </td>
                         <td className="px-4 py-3 text-on-surface-variant">{columns.find(c => c.id === task.columnId)?.name ?? task.columnId}</td>
                         <td className="px-4 py-3 text-on-surface-variant">
-                          {assigneeIds.length
-                            ? assigneeIds.map(id => memberLabel(members.find(member => member.userId === id))).join(', ')
-                            : 'Unassigned'}
+                          {[
+                            ...assigneeIds.map(id => memberLabel(members.find(member => member.userId === id))),
+                            task.assigneeAgentId ? agentLabel(agents.find(agent => agent.agentId === task.assigneeAgentId), task.assigneeAgentId) : '',
+                          ].filter(Boolean).join(', ') || 'Unassigned'}
                         </td>
                         <td className="px-4 py-3 text-on-surface-variant">{formatDate(task.dueDate)}</td>
                         <td className="px-4 py-3 text-on-surface-variant">{formatEstimate(task.estimateMinutes)}</td>
@@ -377,6 +387,7 @@ export default function ProjectDetailPage() {
                 columns={columns}
                 tasks={tasks}
                 members={members}
+                agents={agents}
                 onTaskMove={handleTaskMove}
                 onTaskClick={setSelectedTask}
                 onAddTask={(columnId) => setShowNewTask(columnId)}
@@ -546,6 +557,7 @@ export default function ProjectDetailPage() {
           projectId={projectId}
           orgId={project?.orgId}
           members={members}
+          agents={agents}
           onClose={() => setSelectedTask(null)}
           onUpdate={handleTaskUpdate}
           onDelete={handleTaskDelete}
@@ -557,6 +569,7 @@ export default function ProjectDetailPage() {
         projectId={projectId}
         orgId={project?.orgId}
         members={members}
+        agents={agents}
         onClose={() => setShowNewTask(null)}
         onCreated={handleTaskCreated}
       />

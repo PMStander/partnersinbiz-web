@@ -24,8 +24,8 @@ interface AgentTeamDoc {
 
 interface OrgContact {
   uid: string
-  displayName: string
-  email: string
+  displayName?: string
+  email?: string
   role: string
 }
 
@@ -37,13 +37,17 @@ const AGENT_COLOR: Record<string, { dot: string; label: string; icon: string }> 
   rose:    { dot: 'bg-rose-400',   label: 'text-rose-300',    icon: 'text-rose-300' },
 }
 
-function initials(name: string): string {
+function contactLabel(contact: OrgContact): string {
+  return contact.displayName?.trim() || contact.email?.trim() || contact.uid
+}
+
+function initials(name?: string): string {
   return name
-    .split(/[\s.@]+/)
+    ?.split(/[\s.@]+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((s) => s[0]?.toUpperCase() ?? '')
-    .join('')
+    .join('') || '?'
 }
 
 interface ParticipantPickerProps {
@@ -62,18 +66,25 @@ export default function ParticipantPicker({ orgId, onSelect, className = '' }: P
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
+    let cancelled = false
     Promise.all([
       fetch(`/api/v1/orgs/${orgId}/visible-agents`).then((r) => r.json()),
       fetch(`/api/v1/orgs/${orgId}/contacts`).then((r) => r.json()),
     ])
       .then(([agentBody, contactBody]) => {
+        if (cancelled) return
         setAgents(agentBody.data ?? [])
         setContacts(contactBody.data ?? [])
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load participants'))
-      .finally(() => setLoading(false))
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load participants')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [orgId])
 
   // Notify parent whenever selection changes
@@ -95,7 +106,7 @@ export default function ParticipantPicker({ orgId, onSelect, className = '' }: P
       const exists = prev.some((s) => s.kind === 'user' && s.uid === contact.uid)
       if (exists) return prev.filter((s) => !(s.kind === 'user' && s.uid === contact.uid))
       if (prev.length >= MAX_SELECTIONS) return prev
-      return [...prev, { kind: 'user', uid: contact.uid, displayName: contact.displayName }]
+      return [...prev, { kind: 'user', uid: contact.uid, displayName: contactLabel(contact) }]
     })
   }
 
@@ -216,7 +227,8 @@ export default function ParticipantPicker({ orgId, onSelect, className = '' }: P
             {contacts.map((contact) => {
               const isChecked = selected.some((s) => s.kind === 'user' && s.uid === contact.uid)
               const disabled = !isChecked && selected.length >= MAX_SELECTIONS
-              const inits = initials(contact.displayName || contact.email)
+              const label = contactLabel(contact)
+              const inits = initials(label)
               return (
                 <label
                   key={contact.uid}
@@ -237,8 +249,8 @@ export default function ParticipantPicker({ orgId, onSelect, className = '' }: P
                     {inits || '?'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-on-surface">{contact.displayName || contact.email}</p>
-                    <p className="text-[11px] text-on-surface-variant truncate">{contact.email}</p>
+                    <p className="text-sm font-medium text-on-surface">{label}</p>
+                    {contact.email && <p className="text-[11px] text-on-surface-variant truncate">{contact.email}</p>}
                   </div>
                   {isChecked && (
                     <span className="material-symbols-outlined text-primary text-[18px]">check_circle</span>

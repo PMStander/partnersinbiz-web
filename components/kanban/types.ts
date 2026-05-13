@@ -23,6 +23,26 @@ export interface TeamMember {
   photoURL?: string
 }
 
+export type AgentId = 'pip' | 'theo' | 'maya' | 'sage' | 'nora'
+
+export type AgentStatus =
+  | 'pending'
+  | 'picked-up'
+  | 'in-progress'
+  | 'awaiting-input'
+  | 'done'
+  | 'blocked'
+
+export interface AgentMember {
+  agentId: AgentId
+  name: string
+  role?: string
+  iconKey?: string
+  colorKey?: string
+  enabled?: boolean
+  lastHealthStatus?: 'ok' | 'degraded' | 'unreachable'
+}
+
 export interface Task {
   id: string
   title: string
@@ -32,6 +52,20 @@ export interface Task {
   labels?: string[]
   assigneeId?: string | null
   assigneeIds?: string[]
+  assigneeAgentId?: AgentId | null
+  agentStatus?: AgentStatus | null
+  agentInput?: {
+    spec?: string
+    context?: Record<string, unknown>
+    constraints?: string[]
+  } | null
+  agentOutput?: {
+    summary?: string
+    artifacts?: Array<{ type: string; ref: string; label?: string }>
+    completedAt?: unknown
+  } | null
+  agentHeartbeatAt?: unknown
+  dependsOn?: string[]
   mentionIds?: string[]
   attachments?: Attachment[]
   checklist?: ChecklistItem[]

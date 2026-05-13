@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { uploadTaskFile } from './TaskComposer'
-import type { Attachment, ChecklistItem, Task, TeamMember } from './types'
+import type { AgentId, AgentMember, Attachment, ChecklistItem, Task, TeamMember } from './types'
 
 interface Comment {
   id?: string
@@ -21,6 +21,7 @@ interface TaskDetailPanelProps {
   projectId: string
   orgId?: string
   members?: TeamMember[]
+  agents?: AgentMember[]
   onClose: () => void
   onUpdate: (taskId: string, updates: Partial<Task>) => Promise<void>
   onDelete: (taskId: string) => Promise<void>
@@ -59,18 +60,23 @@ function memberLabel(member?: TeamMember): string {
   return member?.displayName || member?.email || 'Unknown'
 }
 
+function agentLabel(agent?: AgentMember, agentId?: string | null): string {
+  return agent?.name || agentId || 'Agent'
+}
+
 function formatSize(size?: number): string {
   if (!size) return ''
   if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`
   return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
-export function TaskDetailPanel({ task, columnName, projectId, orgId, members = [], onClose, onUpdate, onDelete }: TaskDetailPanelProps) {
+export function TaskDetailPanel({ task, columnName, projectId, orgId, members = [], agents = [], onClose, onUpdate, onDelete }: TaskDetailPanelProps) {
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
   const [labelsText, setLabelsText] = useState(task?.labels?.join(', ') ?? '')
   const [assigneeIds, setAssigneeIds] = useState<string[]>(task?.assigneeIds ?? (task?.assigneeId ? [task.assigneeId] : []))
+  const [assigneeAgentId, setAssigneeAgentId] = useState<AgentId | ''>((task?.assigneeAgentId as AgentId | null) ?? '')
   const [mentionIds, setMentionIds] = useState<string[]>(task?.mentionIds ?? [])
   const [dueDate, setDueDate] = useState(dateInputValue(task?.dueDate))
   const [startDate, setStartDate] = useState(dateInputValue(task?.startDate))
@@ -96,6 +102,7 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
     setDescription(task?.description ?? '')
     setLabelsText(task?.labels?.join(', ') ?? '')
     setAssigneeIds(task?.assigneeIds ?? (task?.assigneeId ? [task.assigneeId] : []))
+    setAssigneeAgentId((task?.assigneeAgentId as AgentId | null) ?? '')
     setMentionIds(task?.mentionIds ?? [])
     setDueDate(dateInputValue(task?.dueDate))
     setStartDate(dateInputValue(task?.startDate))
@@ -133,6 +140,17 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
       labels: cleanList(labelsText),
       assigneeId: assigneeIds[0] ?? null,
       assigneeIds,
+      assigneeAgentId: assigneeAgentId || null,
+      agentInput: assigneeAgentId
+        ? {
+            spec: [
+              title.trim(),
+              description.trim(),
+              checklist.length ? `Checklist:\n${checklist.map((item) => `- ${item.text}`).join('\n')}` : '',
+            ].filter(Boolean).join('\n\n'),
+            context: { projectId, orgId: orgId ?? null, columnId: task.columnId },
+          }
+        : null,
       mentionIds,
       dueDate: dueDate || null,
       startDate: startDate || null,
@@ -523,6 +541,58 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
                 ))
               )}
             </div>
+          </div>
+
+          <div>
+            <p className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant mb-2">Agent</p>
+            <div className="space-y-1 rounded-[var(--radius-btn)] border border-[var(--color-card-border)] bg-[var(--color-card)] p-2">
+              <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 hover:bg-[var(--color-surface-container)]">
+                <input
+                  type="radio"
+                  checked={!assigneeAgentId}
+                  onChange={() => {
+                    setAssigneeAgentId('')
+                    setEditing(true)
+                  }}
+                  className="accent-[var(--color-accent-v2)]"
+                />
+                <span className="text-xs text-on-surface">No agent</span>
+              </label>
+              {agents.length === 0 ? (
+                <p className="text-xs text-on-surface-variant">No agents available.</p>
+              ) : (
+                agents.map(agent => (
+                  <label key={agent.agentId} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 hover:bg-[var(--color-surface-container)]">
+                    <input
+                      type="radio"
+                      checked={assigneeAgentId === agent.agentId}
+                      onChange={() => {
+                        setAssigneeAgentId(agent.agentId)
+                        setEditing(true)
+                      }}
+                      className="accent-[var(--color-accent-v2)]"
+                    />
+                    <span className="material-symbols-outlined text-[15px] text-on-surface-variant">{agent.iconKey ?? 'smart_toy'}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-on-surface">{agentLabel(agent, agent.agentId)}</span>
+                    {agent.lastHealthStatus && (
+                      <span className={`h-1.5 w-1.5 rounded-full ${
+                        agent.lastHealthStatus === 'ok' ? 'bg-emerald-400' : agent.lastHealthStatus === 'degraded' ? 'bg-amber-400' : 'bg-red-400'
+                      }`} />
+                    )}
+                  </label>
+                ))
+              )}
+            </div>
+            {task.agentStatus && (
+              <div className="mt-2 rounded border border-[var(--color-card-border)] bg-[var(--color-surface-container)] px-2 py-1.5 text-xs text-on-surface-variant">
+                <span className="font-label uppercase tracking-wide">Agent status:</span> {task.agentStatus}
+              </div>
+            )}
+            {task.agentOutput?.summary && (
+              <div className="mt-2 rounded border border-[var(--color-card-border)] bg-[var(--color-surface-container)] p-2 text-xs text-on-surface-variant">
+                {task.agentOutput.summary}
+              </div>
+            )}
           </div>
 
           <div className="border-t border-[var(--color-outline-variant)] pt-4">

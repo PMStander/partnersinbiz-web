@@ -21,12 +21,13 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { Column, Task, TeamMember } from './types'
+import type { AgentMember, Column, Task, TeamMember } from './types'
 
 interface KanbanBoardProps {
   columns: Column[]
   tasks: Task[]
   members?: TeamMember[]
+  agents?: AgentMember[]
   onTaskMove: (taskId: string, newColumnId: string, newOrder: number) => Promise<void>
   onTaskClick: (task: Task) => void
   onAddTask: (columnId: string) => void
@@ -93,16 +94,26 @@ function memberInitials(member?: TeamMember): string {
     .join('') || '?'
 }
 
+const AGENT_DEFAULT_COLOR: Record<string, string> = {
+  pip: 'bg-violet-400',
+  theo: 'bg-sky-400',
+  maya: 'bg-amber-400',
+  sage: 'bg-emerald-400',
+  nora: 'bg-rose-400',
+}
+
 // ── Task Card ─────────────────────────────────────────────────────────────
 
 function TaskCard({
   task,
   members,
+  agents,
   onClick,
   isDragging = false,
 }: {
   task: Task
   members?: TeamMember[]
+  agents?: AgentMember[]
   onClick: () => void
   isDragging?: boolean
 }) {
@@ -111,6 +122,7 @@ function TaskCard({
   const dueLabel = formatDueDate(task.dueDate)
   const kind = attachmentKind(task)
   const assigneeIds = task.assigneeIds?.length ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : []
+  const assignedAgent = task.assigneeAgentId ? agents?.find((agent) => agent.agentId === task.assigneeAgentId) : undefined
   const checklistDone = task.checklist?.filter((item) => item.done).length ?? 0
   const checklistTotal = task.checklist?.length ?? 0
 
@@ -189,6 +201,14 @@ function TaskCard({
             )
           })}
           {assigneeIds.length > 3 && <span>+{assigneeIds.length - 3}</span>}
+          {task.assigneeAgentId && (
+            <span
+              title={assignedAgent?.name || task.assigneeAgentId}
+              className={`grid h-5 w-5 place-items-center rounded-full border border-[var(--color-card-border)] text-[13px] text-white ${AGENT_DEFAULT_COLOR[task.assigneeAgentId] ?? 'bg-white/40'}`}
+            >
+              <span className="material-symbols-outlined text-[13px]">{assignedAgent?.iconKey ?? 'smart_toy'}</span>
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -197,7 +217,7 @@ function TaskCard({
 
 // ── Sortable Task Card ────────────────────────────────────────────────────
 
-function SortableTaskCard({ task, members, onClick }: { task: Task; members?: TeamMember[]; onClick: () => void }) {
+function SortableTaskCard({ task, members, agents, onClick }: { task: Task; members?: TeamMember[]; agents?: AgentMember[]; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
 
   return (
@@ -207,7 +227,7 @@ function SortableTaskCard({ task, members, onClick }: { task: Task; members?: Te
       {...attributes}
       {...listeners}
     >
-      <TaskCard task={task} members={members} onClick={onClick} isDragging={isDragging} />
+      <TaskCard task={task} members={members} agents={agents} onClick={onClick} isDragging={isDragging} />
     </div>
   )
 }
@@ -218,12 +238,14 @@ function KanbanColumn({
   column,
   tasks,
   members,
+  agents,
   onTaskClick,
   onAddTask,
 }: {
   column: Column
   tasks: Task[]
   members?: TeamMember[]
+  agents?: AgentMember[]
   onTaskClick: (task: Task) => void
   onAddTask: () => void
 }) {
@@ -263,7 +285,7 @@ function KanbanColumn({
           style={isOver ? { background: 'color-mix(in oklab, var(--color-accent-v2) 8%, transparent)' } : undefined}
         >
           {tasks.map(task => (
-            <SortableTaskCard key={task.id} task={task} members={members} onClick={() => onTaskClick(task)} />
+            <SortableTaskCard key={task.id} task={task} members={members} agents={agents} onClick={() => onTaskClick(task)} />
           ))}
           {tasks.length === 0 && (
             <div
@@ -281,7 +303,7 @@ function KanbanColumn({
 
 // ── Main Board ────────────────────────────────────────────────────────────
 
-export function KanbanBoard({ columns, tasks: initialTasks, members, onTaskMove, onTaskClick, onAddTask }: KanbanBoardProps) {
+export function KanbanBoard({ columns, tasks: initialTasks, members, agents, onTaskMove, onTaskClick, onAddTask }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks)
   const [activeTask, setActiveTask] = useState<Task | null>(null)
 
@@ -373,6 +395,7 @@ export function KanbanBoard({ columns, tasks: initialTasks, members, onTaskMove,
             column={column}
             tasks={getTasksForColumn(column.id)}
             members={members}
+            agents={agents}
             onTaskClick={onTaskClick}
             onAddTask={() => onAddTask(column.id)}
           />
@@ -380,7 +403,7 @@ export function KanbanBoard({ columns, tasks: initialTasks, members, onTaskMove,
       </div>
 
       <DragOverlay>
-        {activeTask ? <TaskCard task={activeTask} members={members} onClick={() => {}} /> : null}
+        {activeTask ? <TaskCard task={activeTask} members={members} agents={agents} onClick={() => {}} /> : null}
       </DragOverlay>
     </DndContext>
   )
