@@ -56,6 +56,8 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
   const eventSourceRef = useRef<EventSource | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const [liveEvents, setLiveEvents] = useState<Record<string, ChatEvent[]>>({})
+  const liveEventsRef = useRef<Record<string, ChatEvent[]>>({})
+  useEffect(() => { liveEventsRef.current = liveEvents }, [liveEvents])
   const [approvalPending, setApprovalPending] = useState<Record<string, { runId: string; toolName?: string }>>({})
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -167,7 +169,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
         return
       }
       try {
-        const events = liveEvents[msgId] ?? []
+        const events = liveEventsRef.current[msgId] ?? []
         const res = await fetch(`${apiBase}/${convId}/messages/${msgId}/finalize`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -179,6 +181,10 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
           return
         }
         if (body.data?.waitingForApproval) {
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close()
+            eventSourceRef.current = null
+          }
           const lastEvent = events[events.length - 1]
           setMessages((prev) =>
             prev.map((m) => (m.id === msgId ? { ...m, status: 'waiting_approval', runId } : m)),
@@ -199,7 +205,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
         setError(e instanceof Error ? e.message : 'Finalize failed')
       }
     },
-    [apiBase, loadMessages, loadConversations, liveEvents, setApprovalPending],
+    [apiBase, loadMessages, loadConversations],
   )
 
   const resolveApproval = useCallback(
