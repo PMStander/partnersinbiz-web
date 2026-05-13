@@ -5,6 +5,37 @@ import { adminDb } from '@/lib/firebase/admin'
 import { createHermesRun, requireHermesProfileAccess } from '@/lib/hermes/server'
 import { appendMessage, getConversation, listMessages, touchConversation } from '@/lib/hermes/conversations'
 
+async function buildOrgContext(orgId: string): Promise<string> {
+  try {
+    const orgDoc = await adminDb.collection('organizations').doc(orgId).get()
+    if (!orgDoc.exists) return ''
+    const org = orgDoc.data() as Record<string, unknown> | undefined
+    if (!org) return ''
+    const brand = (org.brandProfile ?? {}) as Record<string, unknown>
+    const doWords = Array.isArray(brand.doWords) ? (brand.doWords as string[]).filter(Boolean).join(', ') : ''
+    const dontWords = Array.isArray(brand.dontWords) ? (brand.dontWords as string[]).filter(Boolean).join(', ') : ''
+    const lines = [
+      '[Client context — you are working on behalf of a Partners-in-Biz client organisation]',
+      `orgId: ${orgId}`,
+      org.name ? `name: ${org.name}` : '',
+      org.slug ? `slug: ${org.slug}` : '',
+      org.industry ? `industry: ${org.industry}` : '',
+      org.website ? `website: ${org.website}` : '',
+      org.description ? `description: ${org.description}` : '',
+      brand.tagline ? `tagline: ${brand.tagline}` : '',
+      brand.toneOfVoice ? `voice: ${brand.toneOfVoice}` : '',
+      brand.targetAudience ? `audience: ${brand.targetAudience}` : '',
+      doWords ? `do-words: ${doWords}` : '',
+      dontWords ? `dont-words: ${dontWords}` : '',
+      'When writing copy, taking actions, or making decisions on this client\'s behalf: stay in their voice, scope every platform API call to this orgId, and never leak data or copy from other clients. If a skill needs an orgId, this is the one to pass.',
+      '---',
+    ].filter(Boolean)
+    return lines.join('\n') + '\n\n'
+  } catch {
+    return ''
+  }
+}
+
 async function buildProjectContext(orgId: string, projectId: string): Promise<string> {
   try {
     const projectDoc = await adminDb.collection('projects').doc(projectId).get()
@@ -82,10 +113,13 @@ export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
   })
 
   const isFirstUserMessage = conv.messageCount === 0
+  const orgContext = isFirstUserMessage
+    ? await buildOrgContext(orgId)
+    : ''
   const projectContext = isFirstUserMessage && conv.projectId
     ? await buildProjectContext(orgId, conv.projectId)
     : ''
-  const hermesPrompt = projectContext + content
+  const hermesPrompt = orgContext + projectContext + content
 
   const runResult = await createHermesRun(access.link, user.uid, {
     prompt: hermesPrompt,
