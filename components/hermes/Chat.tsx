@@ -417,6 +417,37 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
                     {m.status === 'pending' && !m.content && <span className="opacity-70 italic">Thinking…</span>}
                     {m.content || (m.status === 'failed' && m.error)}
                   </div>
+                  {m.role === 'assistant' && m.status === 'waiting_approval' && approvalPending[m.id] && (
+                    <div className="mt-2 rounded-xl border border-[#f59e0b44] bg-[#1a1500] px-4 py-3 text-sm">
+                      <div className="mb-1 font-medium text-[#f59e0b]">⏸ Waiting for approval</div>
+                      <div className="mb-3 text-[#d4c4a0]">
+                        I want to call{' '}
+                        <span className="font-mono text-[#93c5fd]">
+                          {approvalPending[m.id]!.toolName ?? 'a tool'}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => resolveApproval(m.id, 'once')}
+                          className="rounded-md bg-[#166534] px-3 py-1.5 text-xs font-medium text-[#86efac] hover:opacity-90"
+                        >
+                          Allow once
+                        </button>
+                        <button
+                          onClick={() => resolveApproval(m.id, 'always')}
+                          className="rounded-md bg-[#1e3a5f] px-3 py-1.5 text-xs font-medium text-[#93c5fd] hover:opacity-90"
+                        >
+                          Allow always
+                        </button>
+                        <button
+                          onClick={() => resolveApproval(m.id, 'deny')}
+                          className="rounded-md bg-[#3b0000] px-3 py-1.5 text-xs font-medium text-[#fca5a5] hover:opacity-90"
+                        >
+                          Deny
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )
