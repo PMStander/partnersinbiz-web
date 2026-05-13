@@ -61,6 +61,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
   useEffect(() => { liveEventsRef.current = liveEvents }, [liveEvents])
   const [approvalPending, setApprovalPending] = useState<Record<string, { runId: string; toolName?: string }>>({})
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameCancelledRef = useRef(false)
@@ -118,7 +119,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
     if (!menuOpenId) return
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (!target.closest('[data-conv-menu]')) setMenuOpenId(null)
+      if (!target.closest('[data-conv-menu]')) { setMenuOpenId(null); setMenuPosition(null) }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -376,44 +377,56 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
                 <button
                   type="button"
                   data-conv-menu
-                  onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === c.id ? null : c.id) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (menuOpenId === c.id) {
+                      setMenuOpenId(null)
+                      setMenuPosition(null)
+                    } else {
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setMenuPosition({ top: rect.bottom + 4, left: rect.right - 128 })
+                      setMenuOpenId(c.id)
+                    }
+                  }}
                   className={`absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/conv:flex items-center justify-center w-6 h-6 rounded text-on-surface-variant hover:text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.08))] ${menuOpenId === c.id ? '!flex' : ''}`}
                   aria-label="Conversation options"
                 >
                   ⋯
                 </button>
               )}
-
-              {/* dropdown */}
-              {menuOpenId === c.id && (
-                <div
-                  data-conv-menu
-                  className="absolute right-0 top-full mt-1 z-20 min-w-[120px] rounded-lg border border-[var(--color-card-border)] bg-[var(--color-surface,#1c1c1c)] py-1 shadow-lg"
-                >
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-xs text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))]"
-                    onClick={() => {
-                      setMenuOpenId(null)
-                      setRenamingId(c.id)
-                      setRenameValue(c.title || '')
-                    }}
-                  >
-                    ✏️ Rename
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))]"
-                    onClick={() => archiveConversation(c.id)}
-                  >
-                    📦 Archive
-                  </button>
-                </div>
-              )}
             </div>
           ))}
         </div>
       </aside>
+
+      {/* conversation dropdown — rendered fixed so it escapes the sidebar scroll container */}
+      {menuOpenId && menuPosition && (
+        <div
+          data-conv-menu
+          style={{ position: 'fixed', top: menuPosition.top, left: menuPosition.left }}
+          className="z-50 min-w-[128px] rounded-lg border border-[var(--color-card-border)] bg-[var(--color-surface,#1c1c1c)] py-1 shadow-xl"
+        >
+          <button
+            type="button"
+            className="w-full text-left px-3 py-2 text-xs text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))]"
+            onClick={() => {
+              const conv = conversations.find((c) => c.id === menuOpenId)
+              setMenuOpenId(null)
+              setMenuPosition(null)
+              if (conv) { setRenamingId(conv.id); setRenameValue(conv.title || '') }
+            }}
+          >
+            ✏️ Rename
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))]"
+            onClick={() => { archiveConversation(menuOpenId); setMenuPosition(null) }}
+          >
+            📦 Archive
+          </button>
+        </div>
+      )}
 
       <section className="pib-card flex flex-col">
         <div className="flex items-center justify-between border-b border-[var(--color-card-border)] px-4 py-2 text-sm">
