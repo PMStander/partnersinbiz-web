@@ -167,14 +167,26 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
         return
       }
       try {
+        const events = liveEvents[msgId] ?? []
         const res = await fetch(`${apiBase}/${convId}/messages/${msgId}/finalize`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ runId }),
+          body: JSON.stringify({ runId, events }),
         })
         const body = await res.json()
         if (body.data?.pending) {
           pollRef.current = setTimeout(() => pollFinalize(convId, msgId, runId, attempts + 1), POLL_INTERVAL)
+          return
+        }
+        if (body.data?.waitingForApproval) {
+          const lastEvent = events[events.length - 1]
+          setMessages((prev) =>
+            prev.map((m) => (m.id === msgId ? { ...m, status: 'waiting_approval', runId } : m)),
+          )
+          setApprovalPending((prev) => ({
+            ...prev,
+            [msgId]: { runId, toolName: lastEvent?.tool },
+          }))
           return
         }
         if (eventSourceRef.current) {
@@ -187,7 +199,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
         setError(e instanceof Error ? e.message : 'Finalize failed')
       }
     },
-    [apiBase, loadMessages, loadConversations],
+    [apiBase, loadMessages, loadConversations, liveEvents, setApprovalPending],
   )
 
   const resolveApproval = useCallback(
