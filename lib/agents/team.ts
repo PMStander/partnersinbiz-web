@@ -83,8 +83,15 @@ function maskApiKey(plain: string): string {
 const COLLECTION = 'agent_team'
 
 function toPublicDoc(stored: AgentTeamStoredDoc & { id?: string }): AgentTeamDoc {
-  const plain = decryptAgentApiKey(stored.apiKey)
-  return { ...stored, apiKey: maskApiKey(plain) }
+  let masked = '●●●●●●●●●●●● (re-enter key)'
+  try {
+    const plain = decryptAgentApiKey(stored.apiKey)
+    masked = maskApiKey(plain)
+  } catch {
+    // Decryption fails when the doc was seeded with a different master key
+    // (e.g. local key vs production key). Caller must update the key via PUT.
+  }
+  return { ...stored, apiKey: masked }
 }
 
 async function getRaw(agentId: AgentId): Promise<AgentTeamStoredDoc | null> {
