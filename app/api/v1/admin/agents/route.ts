@@ -14,5 +14,5 @@ export const dynamic = 'force-dynamic'
 
 export const GET = withAuth('admin', async (_req: NextRequest) => {
   const agents = await listAgents()
-  return apiSuccess({ agents })
+  return apiSuccess(agents)
 })
