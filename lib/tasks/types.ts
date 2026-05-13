@@ -9,6 +9,34 @@ export interface TaskAssignee {
   id: string
 }
 
+export type AgentId = 'pip' | 'theo' | 'maya' | 'sage' | 'nora'
+
+export type AgentStatus =
+  | 'pending'
+  | 'picked-up'
+  | 'in-progress'
+  | 'awaiting-input'
+  | 'done'
+  | 'blocked'
+
+export interface AgentArtifact {
+  type: 'url' | 'file' | 'commit' | 'message-thread' | 'doc'
+  ref: string
+  label?: string
+}
+
+export interface AgentInput {
+  spec: string
+  context?: Record<string, unknown>
+  constraints?: string[]
+}
+
+export interface AgentOutput {
+  summary: string
+  artifacts?: AgentArtifact[]
+  completedAt?: unknown
+}
+
 export interface Task {
   id: string
   orgId: string
@@ -28,6 +56,14 @@ export interface Task {
   updatedAt: unknown
   completedAt: unknown | null
   deleted: boolean
+
+  // Agent dispatch fields (mirror project-nested tasks for the multi-agent orchestrator)
+  assigneeAgentId?: AgentId | null
+  agentStatus?: AgentStatus
+  agentInput?: AgentInput
+  agentOutput?: AgentOutput
+  agentHeartbeatAt?: unknown
+  dependsOn?: string[]
 }
 
 export interface TaskInput {
@@ -41,6 +77,11 @@ export interface TaskInput {
   contactId?: string
   dealId?: string
   tags?: string[]
+  assigneeAgentId?: AgentId | null
+  agentStatus?: AgentStatus
+  agentInput?: AgentInput
+  agentOutput?: AgentOutput
+  dependsOn?: string[]
 }
 
 export const VALID_TASK_STATUSES: TaskStatus[] = [
@@ -58,3 +99,14 @@ export const VALID_TASK_PRIORITIES: TaskPriority[] = [
 ]
 
 export const VALID_ASSIGNEE_TYPES: TaskAssignee['type'][] = ['user', 'agent']
+
+export const VALID_AGENT_IDS: AgentId[] = ['pip', 'theo', 'maya', 'sage', 'nora']
+
+export const VALID_AGENT_STATUSES: AgentStatus[] = [
+  'pending',
+  'picked-up',
+  'in-progress',
+  'awaiting-input',
+  'done',
+  'blocked',
+]

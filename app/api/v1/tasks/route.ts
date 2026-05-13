@@ -14,11 +14,15 @@ import {
   VALID_TASK_STATUSES,
   VALID_TASK_PRIORITIES,
   VALID_ASSIGNEE_TYPES,
+  VALID_AGENT_IDS,
+  VALID_AGENT_STATUSES,
   type Task,
   type TaskInput,
   type TaskStatus,
   type TaskPriority,
   type TaskAssignee,
+  type AgentId,
+  type AgentStatus,
 } from '@/lib/tasks/types'
 
 export const dynamic = 'force-dynamic'
@@ -114,6 +118,52 @@ export const POST = withAuth(
       return apiError("Invalid assignedTo.type; expected 'user' or 'agent'")
     }
 
+    // Agent dispatch field validation (treat body as untyped record for these new fields)
+    const raw = body as unknown as Record<string, unknown>
+    let assigneeAgentId: AgentId | null = null
+    const rawAgent = raw.assigneeAgentId
+    if (rawAgent !== undefined && rawAgent !== null && rawAgent !== '') {
+      if (typeof rawAgent !== 'string' || !VALID_AGENT_IDS.includes(rawAgent as AgentId)) {
+        return apiError(`Invalid assigneeAgentId; expected one of ${VALID_AGENT_IDS.join(' | ')}`)
+      }
+      assigneeAgentId = rawAgent as AgentId
+    }
+    let agentStatusValue: AgentStatus | null = assigneeAgentId ? 'pending' : null
+    const rawStatus = raw.agentStatus
+    if (rawStatus !== undefined && rawStatus !== null) {
+      if (typeof rawStatus !== 'string' || !VALID_AGENT_STATUSES.includes(rawStatus as AgentStatus)) {
+        return apiError(`Invalid agentStatus; expected one of ${VALID_AGENT_STATUSES.join(' | ')}`)
+      }
+      agentStatusValue = rawStatus as AgentStatus
+    }
+    let agentInputValue: { spec: string; context?: Record<string, unknown>; constraints?: string[] } | null = null
+    const rawInput = raw.agentInput
+    if (rawInput !== undefined && rawInput !== null) {
+      if (typeof rawInput !== 'object' || Array.isArray(rawInput)) return apiError('agentInput must be an object')
+      const ai = rawInput as Record<string, unknown>
+      const spec = typeof ai.spec === 'string' ? ai.spec.trim() : ''
+      if (!spec) return apiError('agentInput.spec is required when agentInput is set')
+      agentInputValue = { spec }
+      if (ai.context && typeof ai.context === 'object' && !Array.isArray(ai.context)) {
+        agentInputValue.context = ai.context as Record<string, unknown>
+      }
+      if (Array.isArray(ai.constraints)) {
+        agentInputValue.constraints = ai.constraints
+          .filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+          .map((c: string) => c.trim())
+      }
+    }
+    let dependsOnValue: string[] = []
+    const rawDeps = raw.dependsOn
+    if (rawDeps !== undefined && rawDeps !== null) {
+      if (!Array.isArray(rawDeps)) return apiError('dependsOn must be an array of task IDs')
+      dependsOnValue = Array.from(new Set(
+        rawDeps
+          .filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+          .map((id: string) => id.trim())
+      ))
+    }
+
     const status = body.status ?? 'todo'
     const priority = body.priority ?? 'normal'
     const title = body.title.trim()
@@ -121,7 +171,7 @@ export const POST = withAuth(
     const dueDate = body.dueDate ?? null
     const assignedTo = body.assignedTo ?? null
 
-    const docRef = await adminDb.collection('tasks').add({
+    const docData: Record<string, unknown> = {
       orgId: body.orgId.trim(),
       title,
       description,
@@ -138,7 +188,13 @@ export const POST = withAuth(
       updatedAt: FieldValue.serverTimestamp(),
       completedAt: null,
       deleted: false,
-    })
+    }
+    if (assigneeAgentId) docData.assigneeAgentId = assigneeAgentId
+    if (agentStatusValue) docData.agentStatus = agentStatusValue
+    if (agentInputValue) docData.agentInput = agentInputValue
+    if (dependsOnValue.length > 0) docData.dependsOn = dependsOnValue
+
+    const docRef = await adminDb.collection('tasks').add(docData)
 
     // Notify assignee if provided.
     if (assignedTo) {

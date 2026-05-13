@@ -14,10 +14,14 @@ import {
   VALID_TASK_STATUSES,
   VALID_TASK_PRIORITIES,
   VALID_ASSIGNEE_TYPES,
+  VALID_AGENT_IDS,
+  VALID_AGENT_STATUSES,
   type Task,
   type TaskAssignee,
   type TaskPriority,
   type TaskStatus,
+  type AgentId,
+  type AgentStatus,
 } from '@/lib/tasks/types'
 
 export const dynamic = 'force-dynamic'
@@ -44,6 +48,12 @@ const UPDATABLE_FIELDS = [
   'contactId',
   'dealId',
   'tags',
+  // Agent dispatch fields
+  'assigneeAgentId',
+  'agentStatus',
+  'agentInput',
+  'agentOutput',
+  'dependsOn',
 ] as const
 
 export const PUT = withAuth('admin', async (req, user, context) => {
@@ -78,9 +88,46 @@ export const PUT = withAuth('admin', async (req, user, context) => {
     }
   }
 
+  // Agent dispatch validation
+  if (body.assigneeAgentId !== undefined && body.assigneeAgentId !== null && body.assigneeAgentId !== '') {
+    if (typeof body.assigneeAgentId !== 'string' || !VALID_AGENT_IDS.includes(body.assigneeAgentId as AgentId)) {
+      return apiError(`Invalid assigneeAgentId; expected one of ${VALID_AGENT_IDS.join(' | ')}`)
+    }
+  }
+  if (body.agentStatus !== undefined && body.agentStatus !== null) {
+    if (typeof body.agentStatus !== 'string' || !VALID_AGENT_STATUSES.includes(body.agentStatus as AgentStatus)) {
+      return apiError(`Invalid agentStatus; expected one of ${VALID_AGENT_STATUSES.join(' | ')}`)
+    }
+  }
+  if (body.agentInput !== undefined && body.agentInput !== null) {
+    const ai = body.agentInput as Record<string, unknown>
+    if (typeof ai !== 'object' || Array.isArray(ai) || typeof ai.spec !== 'string' || !ai.spec.trim()) {
+      return apiError('agentInput must be { spec: string, context?, constraints? }')
+    }
+  }
+  if (body.agentOutput !== undefined && body.agentOutput !== null) {
+    const ao = body.agentOutput as Record<string, unknown>
+    if (typeof ao !== 'object' || Array.isArray(ao) || typeof ao.summary !== 'string' || !ao.summary.trim()) {
+      return apiError('agentOutput must be { summary: string, artifacts?, completedAt? }')
+    }
+  }
+  if (body.dependsOn !== undefined && !Array.isArray(body.dependsOn)) {
+    return apiError('dependsOn must be an array of task IDs')
+  }
+
   const updates: Record<string, unknown> = {}
   for (const key of UPDATABLE_FIELDS) {
     if (body[key] !== undefined) updates[key] = body[key]
+  }
+
+  // Re-assigning to a new agent auto-resets agentStatus unless caller set it explicitly.
+  if (body.assigneeAgentId !== undefined && body.agentStatus === undefined) {
+    updates.agentStatus = body.assigneeAgentId ? 'pending' : null
+  }
+
+  // Heartbeat sentinel — caller passes agentHeartbeatAt:true to bump server timestamp.
+  if (body.agentHeartbeatAt === true) {
+    updates.agentHeartbeatAt = FieldValue.serverTimestamp()
   }
 
   // Status transition side effects.
