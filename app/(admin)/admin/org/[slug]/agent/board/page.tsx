@@ -1,30 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-
-type AgentId = 'pip' | 'theo' | 'maya' | 'sage' | 'nora'
+import type { AgentId, AgentTaskCard } from '@/lib/agent-board/types'
+import { TaskDetailModal } from '@/components/agent-board/TaskDetailModal'
+import { EmptyState } from '@/components/agent-board/EmptyState'
 
 const ALL_AGENTS: AgentId[] = ['pip', 'theo', 'maya', 'sage', 'nora']
-
-type AgentTaskCard = {
-  id: string
-  source: 'project' | 'standalone'
-  orgId: string
-  title: string
-  projectId: string | null
-  projectName: string | null
-  assigneeAgentId: AgentId | null
-  agentStatus: string | null
-  agentInputSpec: string | null
-  agentOutputSummary: string | null
-  priority: string | null
-  tags: string[]
-  updatedAt: string | null
-  createdAt: string | null
-  href: string
-}
 
 type BoardResponse = {
   orgId: string
@@ -87,8 +70,9 @@ export default function AgentBoardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [agentFilter, setAgentFilter] = useState<AgentId | 'all'>('all')
+  const [selected, setSelected] = useState<AgentTaskCard | null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -105,13 +89,30 @@ export default function AgentBoardPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [slug, agentFilter])
 
   useEffect(() => {
     if (!slug) return
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, agentFilter])
+  }, [slug, load])
+
+  useEffect(() => {
+    if (!slug) return
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void load()
+      }
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    const id = setInterval(tick, 15000)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [slug, load])
 
   const columns = useMemo(() => {
     if (!data) return []
@@ -166,6 +167,7 @@ export default function AgentBoardPage() {
           >
             {loading ? 'Loading…' : 'Refresh'}
           </button>
+          <span className="text-[10px] text-on-surface-variant/60">auto-refresh 15s</span>
         </div>
       </header>
 
@@ -209,12 +211,9 @@ export default function AgentBoardPage() {
               {col.cards.length === 0 && (
                 <div className="text-center text-xs text-on-surface-variant/60 py-6">No cards</div>
               )}
-              {col.cards.map((card) => (
-                <article
-                  key={card.id}
-                  className="rounded-md border border-white/10 bg-surface-container-low p-3 hover:bg-surface-container transition cursor-pointer"
-                >
-                  <Link href={card.href} className="block focus:outline-none">
+              {col.cards.map((card) => {
+                const cardInner = (
+                  <>
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-sm font-medium text-on-surface leading-snug">{card.title}</h3>
                       {card.assigneeAgentId && (
@@ -256,19 +255,38 @@ export default function AgentBoardPage() {
                       ))}
                       <span className="ml-auto opacity-60">{formatRel(card.updatedAt)}</span>
                     </div>
-                  </Link>
-                </article>
-              ))}
+                  </>
+                )
+
+                return (
+                  <article
+                    key={card.id}
+                    className="rounded-md border border-white/10 bg-surface-container-low p-3 hover:bg-surface-container transition cursor-pointer"
+                  >
+                    {card.source === 'project' ? (
+                      <Link href={card.href} className="block focus:outline-none">
+                        {cardInner}
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelected(card)}
+                        className="text-left w-full focus:outline-none focus:ring-2 focus:ring-amber-400/40 rounded-md"
+                      >
+                        {cardInner}
+                      </button>
+                    )}
+                  </article>
+                )
+              })}
             </div>
           </section>
         ))}
       </div>
 
-      {!loading && data && data.total === 0 && (
-        <div className="text-center py-12 text-sm text-on-surface-variant/70">
-          No agent-touched tasks yet. Try asking Pip in the chat to create a task for itself.
-        </div>
-      )}
+      {!loading && data && data.total === 0 && <EmptyState slug={slug} />}
+
+      <TaskDetailModal task={selected} onClose={() => setSelected(null)} slug={slug} />
     </div>
   )
 }
