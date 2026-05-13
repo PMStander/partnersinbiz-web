@@ -415,6 +415,7 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
                     }`}
                   >
                     {m.status === 'pending' && !m.content && <span className="opacity-70 italic">Thinking…</span>}
+                    {m.status === 'waiting_approval' && !m.content && <span className="opacity-70 italic">Paused — awaiting tool approval…</span>}
                     {m.content || (m.status === 'failed' && m.error)}
                   </div>
                   {m.role === 'assistant' && m.status === 'waiting_approval' && approvalPending[m.id] && (
@@ -428,18 +429,21 @@ export default function HermesChat({ orgId, profileEnabled, projectId, projectNa
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
+                          type="button"
                           onClick={() => resolveApproval(m.id, 'once')}
                           className="rounded-md bg-[#166534] px-3 py-1.5 text-xs font-medium text-[#86efac] hover:opacity-90"
                         >
                           Allow once
                         </button>
                         <button
+                          type="button"
                           onClick={() => resolveApproval(m.id, 'always')}
                           className="rounded-md bg-[#1e3a5f] px-3 py-1.5 text-xs font-medium text-[#93c5fd] hover:opacity-90"
                         >
                           Allow always
                         </button>
                         <button
+                          type="button"
                           onClick={() => resolveApproval(m.id, 'deny')}
                           className="rounded-md bg-[#3b0000] px-3 py-1.5 text-xs font-medium text-[#fca5a5] hover:opacity-90"
                         >
