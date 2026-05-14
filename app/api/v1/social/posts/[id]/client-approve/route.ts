@@ -40,7 +40,13 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
   const transitionError = validateTransition(currentStatus, 'client_approve')
   if (transitionError) return apiError(transitionError, 400)
 
-  const orgSettings = await getOrgApprovalSettings(orgId)
+  const [orgSettings, userDoc] = await Promise.all([
+    getOrgApprovalSettings(orgId),
+    adminDb.collection('users').doc(user.uid).get(),
+  ])
+  const displayName: string = userDoc.exists
+    ? (userDoc.data()?.displayName || user.uid)
+    : user.uid
   const deliveryMode = (post.deliveryMode as DeliveryMode | undefined) ?? orgSettings.defaultDeliveryMode
 
   const newStatus = resolveAfterFinalApproval({
@@ -52,9 +58,11 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
   const updateData: Record<string, any> = {
     status: newStatus,
     'approval.clientApprovedBy': user.uid,
+    'approval.clientApprovedByName': displayName,
     'approval.clientApprovedAt': FieldValue.serverTimestamp(),
     // Keep legacy approval fields populated for back-compat.
     approvedBy: user.uid,
+    approvedByName: displayName,
     approvedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }
@@ -117,10 +125,10 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
     userId: null,
     agentId: null,
     type: 'social_post_client_approved',
-    title: `Social post approved by client`,
+    title: `Social post approved by ${displayName}`,
     body: newStatus === 'scheduled'
-      ? `Post approved and scheduled for publishing.`
-      : `Post approved — ready to publish.`,
+      ? `${displayName} approved and scheduled the post for publishing.`
+      : `${displayName} approved the post — ready to publish.`,
     link: `/admin/social`,
     data: { postId: id, orgId, newStatus },
     priority: 'high',
@@ -134,8 +142,8 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
   getOrgManagerEmails(orgId).then(emails =>
     Promise.all(emails.map(email => sendEmail({
       to: email,
-      subject: `✅ Social post approved by client (${orgId})`,
-      html: `<p>A client has approved a social post for org <strong>${orgId}</strong>.</p><p>New status: <strong>${newStatus}</strong></p><p><a href="https://partnersinbiz.online/admin/social">View in admin</a></p>`,
+      subject: `✅ Social post approved by ${displayName} (${orgId})`,
+      html: `<p><strong>${displayName}</strong> has approved a social post for org <strong>${orgId}</strong>.</p><p>New status: <strong>${newStatus}</strong></p><p><a href="https://partnersinbiz.online/admin/social">View in admin</a></p>`,
     })))
   ).catch(() => {})
 
@@ -144,7 +152,7 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
     .then((link) => {
       if (!link) return
       return createHermesRun(link, user.uid, {
-        prompt: `A client has approved social post ${id} for org ${orgId}. New status: ${newStatus}. ${newStatus === 'scheduled' ? 'It is now queued for scheduled publishing — no action needed.' : 'Please confirm the post is ready and publish it when appropriate.'}`,
+        prompt: `${displayName} has approved social post ${id} for org ${orgId}. New status: ${newStatus}. ${newStatus === 'scheduled' ? 'It is now queued for scheduled publishing — no action needed.' : 'Please confirm the post is ready and publish it when appropriate.'}`,
       })
     })
     .catch(() => {})
