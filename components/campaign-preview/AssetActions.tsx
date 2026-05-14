@@ -38,136 +38,109 @@ export function AssetActions({
     }
   }
 
-  const baseBtn: React.CSSProperties = {
-    flex: 1,
-    padding: '10px 14px',
-    borderRadius: 8,
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: 14,
-    fontWeight: 600,
-    fontFamily: 'inherit',
-    transition: 'opacity 0.15s ease',
-  }
-
   return (
-    <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', gap: 8 }}>
+    <div className="w-full">
+      {/* Primary actions row — always side by side at any card width */}
+      <div className="flex gap-2">
         <button
           onClick={handleApprove}
           disabled={busy || submitting || isApproved}
-          style={{
-            ...baseBtn,
-            background: '#10B981',
-            color: '#fff',
-            opacity: busy || submitting || isApproved ? 0.55 : 1,
-          }}
+          className={[
+            'flex-1 px-3 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-all',
+            isApproved
+              ? 'bg-emerald-600/20 text-emerald-400 cursor-default'
+              : 'bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white',
+            (busy || submitting) && !isApproved ? 'opacity-50 cursor-not-allowed' : '',
+          ].join(' ')}
         >
           {isApproved ? '✓ Approved' : 'Approve'}
         </button>
+
         <button
           onClick={() => setModalOpen(true)}
           disabled={busy || submitting}
-          style={{
-            ...baseBtn,
-            background: '#F59E0B',
-            color: '#1F1F1F',
-            opacity: busy || submitting ? 0.55 : 1,
-          }}
+          className={[
+            'flex-1 px-3 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-all',
+            'border border-amber-500/60 text-amber-400 hover:bg-amber-500/10 active:scale-[0.98]',
+            busy || submitting ? 'opacity-50 cursor-not-allowed' : '',
+          ].join(' ')}
         >
           Request Changes
         </button>
-        <button
-          onClick={onEdit}
-          disabled={busy || submitting}
-          style={{
-            ...baseBtn,
-            background: 'rgba(255,255,255,0.06)',
-            color: 'var(--color-pib-text, #EDEDED)',
-            border: '1px solid rgba(255,255,255,0.16)',
-            opacity: busy || submitting ? 0.55 : 1,
-          }}
-        >
-          Edit
-        </button>
       </div>
 
+      {/* Tertiary action — full width, clearly secondary */}
+      <button
+        onClick={onEdit}
+        disabled={busy || submitting}
+        className={[
+          'w-full mt-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all',
+          'border border-white/8 text-[var(--color-pib-text-muted,#8B8B92)]',
+          'hover:border-white/16 hover:text-[var(--color-pib-text,#EDEDED)] active:scale-[0.98]',
+          busy || submitting ? 'opacity-50 cursor-not-allowed' : '',
+        ].join(' ')}
+      >
+        Edit
+      </button>
+
+      {/* Request Changes modal */}
       {modalOpen && (
         <div
           role="dialog"
           aria-modal="true"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: 16,
-          }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
           onClick={() => !submitting && setModalOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl p-6 space-y-4"
             style={{
               background: '#141416',
+              border: '1px solid rgba(255,255,255,0.12)',
               color: '#EDEDED',
-              border: '1px solid rgba(255,255,255,0.16)',
-              borderRadius: 12,
-              padding: 20,
-              width: '100%',
-              maxWidth: 480,
               fontFamily: 'inherit',
             }}
           >
-            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Request changes</div>
-            <div style={{ fontSize: 13, color: '#8B8B92', marginBottom: 12 }}>
-              What needs to be changed? The team will see this feedback.
+            <div>
+              <p className="text-base font-semibold">Request changes</p>
+              <p className="text-sm mt-1" style={{ color: '#8B8B92' }}>
+                What needs to change? The team will see this feedback.
+              </p>
             </div>
+
             <textarea
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               autoFocus
               placeholder="e.g. Tighten the hook in the first sentence, swap the hero image…"
               rows={5}
+              className="w-full rounded-lg text-sm resize-y focus:outline-none focus:ring-1 focus:ring-amber-500/60 p-3"
               style={{
-                width: '100%',
                 background: '#0A0A0B',
                 color: '#EDEDED',
-                border: '1px solid rgba(255,255,255,0.16)',
-                borderRadius: 8,
-                padding: 10,
-                fontSize: 14,
+                border: '1px solid rgba(255,255,255,0.12)',
                 fontFamily: 'inherit',
-                resize: 'vertical',
                 boxSizing: 'border-box',
               }}
             />
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+
+            <div className="flex gap-2 justify-end pt-1">
               <button
                 onClick={() => setModalOpen(false)}
                 disabled={submitting}
-                style={{
-                  ...baseBtn,
-                  flex: 'unset',
-                  background: 'transparent',
-                  color: '#EDEDED',
-                  border: '1px solid rgba(255,255,255,0.16)',
-                }}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-white/10 text-[#EDEDED] hover:border-white/20 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmitFeedback}
                 disabled={submitting || !feedback.trim()}
-                style={{
-                  ...baseBtn,
-                  flex: 'unset',
-                  background: '#F59E0B',
-                  color: '#1F1F1F',
-                  opacity: submitting || !feedback.trim() ? 0.55 : 1,
-                }}
+                className={[
+                  'px-4 py-2 rounded-lg text-sm font-semibold transition-all',
+                  'bg-amber-500 text-[#1F1F1F] hover:bg-amber-400 active:scale-[0.98]',
+                  submitting || !feedback.trim() ? 'opacity-50 cursor-not-allowed' : '',
+                ].join(' ')}
               >
                 {submitting ? 'Sending…' : 'Send feedback'}
               </button>
