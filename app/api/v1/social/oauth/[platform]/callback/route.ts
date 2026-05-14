@@ -98,6 +98,8 @@ export async function GET(req: NextRequest) {
         clientCreds.clientSecret,
       )
       providerCreds.accessToken = longLived.accessToken
+      tokenResponse.accessToken = longLived.accessToken
+      tokenResponse.expiresIn = longLived.expiresIn
     }
 
     // Threads: exchange short-lived token (1h) for long-lived token (60 days)
@@ -107,6 +109,8 @@ export async function GET(req: NextRequest) {
         clientCreds.clientSecret,
       )
       providerCreds.accessToken = longLived.accessToken
+      tokenResponse.accessToken = longLived.accessToken
+      tokenResponse.expiresIn = longLived.expiresIn
     }
 
     // Facebook and LinkedIn: collect all accounts/pages, write pending doc, redirect with picker nonce
@@ -555,8 +559,16 @@ async function exchangeInstagramLongLivedToken(
   shortLivedToken: string,
   clientSecret: string,
 ): Promise<{ accessToken: string; expiresIn: number }> {
-  const url = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${clientSecret}&access_token=${shortLivedToken}`
-  const res = await fetch(url)
+  const body = new URLSearchParams({
+    grant_type: 'ig_exchange_token',
+    client_secret: clientSecret,
+    access_token: shortLivedToken,
+  })
+  const res = await fetch('https://graph.instagram.com/access_token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  })
   if (!res.ok) throw new Error(`Instagram long-lived token exchange failed: ${await res.text()}`)
   const data = await res.json() as { access_token: string; token_type: string; expires_in: number }
   return { accessToken: data.access_token, expiresIn: data.expires_in }

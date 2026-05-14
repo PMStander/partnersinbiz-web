@@ -166,7 +166,7 @@ function PlatformCard({
   disconnectingId: string | null
 }) {
   const label = PLATFORM_LABELS[platform] ?? platform
-  const oauthUrl = `/api/v1/social/oauth/${platform}?redirectUrl=/admin/social/accounts${orgId ? `&orgId=${orgId}` : ''}`
+  const oauthUrl = `/api/v1/social/oauth/${platform}?redirectUrl=/admin/social/accounts&orgId=${encodeURIComponent(orgId)}`
 
   return (
     <div className="rounded-xl bg-surface-container overflow-hidden">
@@ -221,7 +221,7 @@ function PickerModal({
     setDefaultIndex(null)
     setLoading(true)
     setError('')
-    const qs = orgId ? `?orgId=${orgId}` : ''
+    const qs = `?orgId=${encodeURIComponent(orgId)}`
     fetch(`/api/v1/social/oauth/pending/${nonce}${qs}`)
       .then(r => r.json())
       .then(body => {
@@ -256,7 +256,7 @@ function PickerModal({
   async function handleConfirm() {
     if (selected.size === 0) return
     setSaving(true)
-    const qs = orgId ? `?orgId=${orgId}` : ''
+    const qs = `?orgId=${encodeURIComponent(orgId)}`
     try {
       const selections = Array.from(selected).map(i => ({
         index: i,
@@ -309,7 +309,13 @@ function PickerModal({
                   role="button"
                   tabIndex={0}
                   onClick={() => isSelected ? setAsDefault(i) : toggleSelect(i)}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); isSelected ? setAsDefault(i) : toggleSelect(i) } }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      if (isSelected) setAsDefault(i)
+                      else toggleSelect(i)
+                    }
+                  }}
                   className={`flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer transition-colors border ${
                     isSelected
                       ? isDefault
@@ -383,7 +389,7 @@ function BlueskyForm({ onSuccess, orgId }: { onSuccess: () => void; orgId: strin
     setSubmitting(true)
     setError(null)
     try {
-      const qs = orgId ? `?orgId=${orgId}` : ''
+      const qs = `?orgId=${encodeURIComponent(orgId)}`
       const res = await fetch(`/api/v1/social/accounts${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -461,10 +467,15 @@ export default function AccountsPage() {
   const pickerPlatform = searchParams.get('platform') ?? ''
 
   const fetchAccounts = useCallback(async () => {
+    if (!orgId) {
+      setAccounts([])
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
-      const qs = orgId ? `?orgId=${orgId}` : ''
-      const res = await fetch(`/api/v1/social/accounts${qs}`)
+      const res = await fetch(`/api/v1/social/accounts?orgId=${encodeURIComponent(orgId)}`)
       const body = await res.json()
       setAccounts(body.data ?? [])
     } catch {
@@ -481,7 +492,7 @@ export default function AccountsPage() {
     setActionError(null)
     setDisconnectingId(id)
     try {
-      const qs = orgId ? `?orgId=${orgId}` : ''
+      const qs = `?orgId=${encodeURIComponent(orgId)}`
       const res = await fetch(`/api/v1/social/accounts/${id}${qs}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(`Failed (${res.status})`)
       await fetchAccounts()
@@ -495,7 +506,7 @@ export default function AccountsPage() {
   async function handleSetDefault(id: string) {
     setActionError(null)
     try {
-      const qs = orgId ? `?orgId=${orgId}` : ''
+      const qs = `?orgId=${encodeURIComponent(orgId)}`
       const res = await fetch(`/api/v1/social/accounts/${id}/set-default${qs}`, { method: 'PUT' })
       if (!res.ok) throw new Error(`Failed (${res.status})`)
       await fetchAccounts()
@@ -529,11 +540,11 @@ export default function AccountsPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8">
-      {pickerNonce && (
+      {pickerNonce && orgId && (
         <PickerModal
           nonce={pickerNonce}
           platform={pickerPlatform}
-          orgId={orgId ?? ''}
+          orgId={orgId}
           onConfirm={handlePickerConfirm}
           onSkip={dismissPicker}
         />
@@ -548,6 +559,13 @@ export default function AccountsPage() {
       {actionError && (
         <p className="text-sm text-red-400 bg-red-900/20 border border-red-800/30 rounded-lg px-4 py-2">{actionError}</p>
       )}
+
+      {!orgId ? (
+        <div className="rounded-xl bg-surface-container p-8 text-center">
+          <p className="text-sm text-on-surface-variant">Select a client context before connecting social accounts.</p>
+        </div>
+      ) : (
+        <>
 
       <div>
         <h2 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-3">
@@ -590,7 +608,7 @@ export default function AccountsPage() {
               {unconnectedOAuth.map(p => (
                 <a
                   key={p}
-                  href={`/api/v1/social/oauth/${p}?redirectUrl=/admin/social/accounts${orgId ? `&orgId=${orgId}` : ''}`}
+                  href={`/api/v1/social/oauth/${p}?redirectUrl=/admin/social/accounts&orgId=${encodeURIComponent(orgId)}`}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-black font-label text-sm font-medium hover:bg-white/90 transition-colors"
                 >
                   <span className={`${PLATFORM_ICONS[p]?.color ?? 'bg-gray-600'} text-white w-6 h-6 flex items-center justify-center rounded`}>
@@ -603,6 +621,8 @@ export default function AccountsPage() {
           )}
           {showBlueskyForm && <BlueskyForm onSuccess={fetchAccounts} orgId={orgId ?? ''} />}
         </div>
+      )}
+        </>
       )}
     </div>
   )
