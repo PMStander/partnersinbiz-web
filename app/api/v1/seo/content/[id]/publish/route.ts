@@ -6,6 +6,7 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import { FieldValue } from 'firebase-admin/firestore'
 import { slugFromTargetUrl } from '@/lib/content/posts-firestore'
+import { logActivity } from '@/lib/activity/log'
 import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
@@ -51,6 +52,16 @@ export const POST = withAuth(
       publishedAt: FieldValue.serverTimestamp(),
       ...lastActorFrom(user),
     })
+    logActivity({
+      orgId: data.orgId,
+      type: 'seo_content_published',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Published SEO content',
+      entityId: id,
+      entityType: 'seo_content',
+    }).catch(() => {})
     return apiSuccess({ id, published: true, slug })
   }),
 )

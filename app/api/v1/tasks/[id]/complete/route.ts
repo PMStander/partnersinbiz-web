@@ -10,6 +10,7 @@ import { lastActorFrom } from '@/lib/api/actor'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { Task } from '@/lib/tasks/types'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,18 @@ export const POST = withAuth('admin', async (_req, user, context) => {
     } catch (err) {
       console.error('[webhook-dispatch-error] task.completed', err)
     }
+
+    logActivity({
+      orgId: existing.orgId,
+      type: 'task_completed',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Completed task',
+      entityId: id,
+      entityType: 'task',
+      entityTitle: existing.title,
+    }).catch(() => {})
   }
   return apiSuccess({ id, status: 'done' })
 })

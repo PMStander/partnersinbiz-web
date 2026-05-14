@@ -3,6 +3,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
+import { logActivity } from '@/lib/activity/log'
 import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
@@ -24,6 +25,16 @@ export const PATCH = withAuth(
     const update: Record<string, unknown> = { ...lastActorFrom(user) }
     for (const k of ALLOWED) if (k in body) update[k] = body[k]
     await ref.update(update)
+    logActivity({
+      orgId: data.orgId,
+      type: 'seo_content_updated',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Updated SEO content',
+      entityId: id,
+      entityType: 'seo_content',
+    }).catch(() => {})
     return apiSuccess({ id, updated: Object.keys(update) })
   },
 )

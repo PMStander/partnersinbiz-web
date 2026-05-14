@@ -8,9 +8,7 @@ import { useOrg } from '@/lib/contexts/OrgContext'
 import { OrgSwitcher } from './OrgSwitcher'
 import {
   OPERATOR_NAV_TOPBAR,
-  OPERATOR_TOOLS_TOPBAR,
   workspaceNav,
-  workspaceToolsTopbar,
   type NavItem,
 } from './navConfig'
 
@@ -21,11 +19,16 @@ interface AdminTopbarNavProps {
 
 // ── Dropdown nav item ───────────────────────────────────────────────────────
 
+function isItemActive(item: NavItem, pathname: string) {
+  if (pathname === item.href || pathname.startsWith(item.href + '/')) return true
+  if (item.children?.some((child) => pathname === child.href || pathname.startsWith(child.href + '/'))) return true
+  return item.activePatterns?.some((pattern) => pathname === pattern || pathname.startsWith(pattern + '/')) ?? false
+}
+
 function TopbarDropdown({ item, pathname }: { item: NavItem; pathname: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const isActive = pathname === item.href || pathname.startsWith(item.href + '/') ||
-    item.children?.some((c) => pathname === c.href || pathname.startsWith(c.href + '/'))
+  const isActive = isItemActive(item, pathname)
 
   useEffect(() => {
     if (!open) return
@@ -37,7 +40,10 @@ function TopbarDropdown({ item, pathname }: { item: NavItem; pathname: string })
   }, [open])
 
   // close on nav
-  useEffect(() => { setOpen(false) }, [pathname])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpen(false)
+  }, [pathname])
 
   return (
     <div ref={ref} className="relative">
@@ -87,7 +93,7 @@ function TopbarDropdown({ item, pathname }: { item: NavItem; pathname: string })
 // ── Direct nav link ─────────────────────────────────────────────────────────
 
 function TopbarNavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+  const isActive = isItemActive(item, pathname)
   return (
     <Link
       href={item.href}
@@ -121,11 +127,13 @@ export function AdminTopbarNav({ userEmail, onToggleLayout }: AdminTopbarNavProp
   const selectedOrg = orgs.find((o) => o.id === selectedOrgId)
   const isWorkspaceMode = !!selectedOrgId && !!selectedOrg
   const navItems = isWorkspaceMode ? workspaceNav(selectedOrg.slug) : OPERATOR_NAV_TOPBAR
-  const toolItems = isWorkspaceMode ? workspaceToolsTopbar(selectedOrg.slug) : OPERATOR_TOOLS_TOPBAR
 
   const initials = userEmail.split(/[.\s@]/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('')
 
-  useEffect(() => { setMobileOpen(false) }, [pathname])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMobileOpen(false)
+  }, [pathname])
 
   return (
     <>
@@ -151,10 +159,6 @@ export function AdminTopbarNav({ userEmail, onToggleLayout }: AdminTopbarNavProp
           {/* Nav + tools — scrollable */}
           <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-none flex-1 min-w-0">
             {navItems.map((item) => (
-              <NavItemRenderer key={item.href} item={item} pathname={pathname} />
-            ))}
-            <div className="w-px h-5 bg-[var(--color-pib-line)] shrink-0 mx-1" />
-            {toolItems.map((item) => (
               <NavItemRenderer key={item.href} item={item} pathname={pathname} />
             ))}
           </nav>
@@ -207,11 +211,6 @@ export function AdminTopbarNav({ userEmail, onToggleLayout }: AdminTopbarNavProp
               <MobileNavItem key={item.href} item={item} pathname={pathname} />
             ))}
             <div className="h-px bg-[var(--color-pib-line)] my-2" />
-            <p className="px-3 pb-1 text-[9px] uppercase tracking-widest text-[var(--color-pib-text-muted)] font-medium">Tools</p>
-            {toolItems.map((item) => (
-              <MobileNavItem key={item.href} item={item} pathname={pathname} />
-            ))}
-            <div className="h-px bg-[var(--color-pib-line)] my-2" />
             <button
               onClick={onToggleLayout}
               className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] rounded-lg hover:bg-white/[0.04]"
@@ -230,8 +229,7 @@ export function AdminTopbarNav({ userEmail, onToggleLayout }: AdminTopbarNavProp
 
 function MobileNavItem({ item, pathname }: { item: NavItem; pathname: string }) {
   const [open, setOpen] = useState(false)
-  const isActive = pathname === item.href || pathname.startsWith(item.href + '/') ||
-    item.children?.some((c) => pathname === c.href || pathname.startsWith(c.href + '/'))
+  const isActive = isItemActive(item, pathname)
 
   if (!item.children?.length) {
     return (

@@ -10,6 +10,7 @@ import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { Deal, DealInput, DealStage, Currency } from '@/lib/crm/types'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import { logActivity } from '@/lib/activity/log'
 
 const VALID_STAGES: DealStage[] = ['discovery', 'proposal', 'negotiation', 'won', 'lost']
 const VALID_CURRENCIES: Currency[] = ['USD', 'EUR', 'ZAR']
@@ -81,6 +82,18 @@ export const POST = withAuth('client', async (req, user) => {
   } catch (err) {
     console.error('[webhook-dispatch-error] deal.created', err)
   }
+
+  logActivity({
+    orgId,
+    type: 'crm_deal_created',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: `Created deal: "${body.title.trim()}"`,
+    entityId: docRef.id,
+    entityType: 'deal',
+    entityTitle: body.title.trim(),
+  }).catch(() => {})
 
   return apiSuccess({ id: docRef.id }, 201)
 })

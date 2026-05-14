@@ -10,6 +10,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { lastActorFrom } from '@/lib/api/actor'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { logActivity } from '@/lib/activity/log'
 import {
   VALID_TASK_STATUSES,
   VALID_TASK_PRIORITIES,
@@ -147,6 +148,20 @@ export const PUT = withAuth('admin', async (req, user, context) => {
     ...lastActorFrom(user),
   })
 
+  if (existing.orgId) {
+    logActivity({
+      orgId: existing.orgId,
+      type: 'task_updated',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Updated task',
+      entityId: id,
+      entityType: 'task',
+      entityTitle: (updates.title as string | undefined) ?? existing.title,
+    }).catch(() => {})
+  }
+
   // Notify the new assignee if it changed to a non-null value.
   if (assigneeChanged && body.assignedTo) {
     const a = body.assignedTo as TaskAssignee
@@ -189,6 +204,20 @@ export const DELETE = withAuth('admin', async (req, user, context) => {
       deleted: true,
       ...lastActorFrom(user),
     })
+  }
+
+  const deletedOrgId = doc.data()?.orgId as string | undefined
+  if (deletedOrgId) {
+    logActivity({
+      orgId: deletedOrgId,
+      type: 'task_deleted',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Deleted task',
+      entityId: id,
+      entityType: 'task',
+    }).catch(() => {})
   }
 
   return apiSuccess({ id, deleted: true })

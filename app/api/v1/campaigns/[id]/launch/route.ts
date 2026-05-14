@@ -16,6 +16,7 @@ import type { Contact } from '@/lib/crm/types'
 import { resolveSegmentContacts } from '@/lib/crm/segments'
 import type { ApiUser } from '@/lib/api/types'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import { logActivity } from '@/lib/activity/log'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -125,6 +126,18 @@ export const POST = withAuth('client', async (_req: NextRequest, user: ApiUser, 
   } catch (err) {
     console.error('[webhook-dispatch-error] campaign.launched', err)
   }
+
+  logActivity({
+    orgId: campaign.orgId,
+    type: 'campaign_launched',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Launched campaign',
+    entityId: campaign.id,
+    entityType: 'campaign',
+    entityTitle: campaign.name ?? undefined,
+  }).catch(() => {})
 
   return apiSuccess({ enrolled: enrolledCount, audienceSize: contactIds.length })
 })

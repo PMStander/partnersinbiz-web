@@ -14,6 +14,7 @@ import { ACTIVE_PLATFORMS } from '@/lib/social/providers'
 import { validatePostContent } from '@/lib/social/validation'
 import { logAudit } from '@/lib/social/audit'
 import { notifyApprovalNeeded } from '@/lib/notifications/notify'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -246,6 +247,17 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId) => {
   } catch (err) {
     console.error('[Social] Failed to check approval requirement:', err)
   }
+
+  logActivity({
+    orgId,
+    type: 'social_post_created',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: `Created ${doc.platform} post`,
+    entityId: docRef.id,
+    entityType: 'social_post',
+  }).catch(() => {})
 
   return apiSuccess({ id: docRef.id }, 201)
 }))

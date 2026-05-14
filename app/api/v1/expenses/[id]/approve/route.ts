@@ -14,6 +14,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { lastActorFrom } from '@/lib/api/actor'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { logActivity } from '@/lib/activity/log'
 import type { Expense, ExpenseStatus } from '@/lib/expenses/types'
 
 export const dynamic = 'force-dynamic'
@@ -61,6 +62,16 @@ export const POST = withAuth('admin', async (req, user, context) => {
   }
 
   await ref.update(updates)
+  logActivity({
+    orgId: existing.orgId,
+    type: 'expense_approved',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: body.action === 'approve' ? 'Approved expense' : 'Rejected expense',
+    entityId: id,
+    entityType: 'expense',
+  }).catch(() => {})
 
   // Notify the original submitter.
   const amountLabel = `${existing.currency} ${existing.amount.toFixed(2)}`

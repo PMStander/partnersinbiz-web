@@ -12,6 +12,7 @@ import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import type { ApiUser } from '@/lib/api/types'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,19 @@ export const POST = withAuth(
     if (body?.force === true) update.deleted = true
 
     await ref.update(update)
+
+    logActivity({
+      orgId: data.orgId,
+      type: 'campaign_archived',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Archived campaign',
+      entityId: id,
+      entityType: 'campaign',
+      entityTitle: data.name ?? undefined,
+    }).catch(() => {})
+
     return apiSuccess({ id, status: 'archived', deleted: update.deleted === true })
   }),
 )

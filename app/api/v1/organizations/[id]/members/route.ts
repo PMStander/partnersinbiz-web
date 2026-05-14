@@ -7,6 +7,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminDb, adminAuth } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { logActivity } from '@/lib/activity/log'
 import type { Organization, OrgMember } from '@/lib/organizations/types'
 
 export const dynamic = 'force-dynamic'
@@ -134,6 +135,17 @@ export const POST = withAuth('admin', async (req, user, ctx) => {
       console.error('[members.add] failed to mirror orgId on user doc', err)
     }
   }
+
+  logActivity({
+    orgId: id,
+    type: 'org_member_added',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Added member to organization',
+    entityId: userId,
+    entityType: 'organization',
+  }).catch(() => {})
 
   // Return the new member with details
   return apiSuccess(

@@ -13,6 +13,7 @@ import { withAuth } from '@/lib/api/auth'
 import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { logAudit } from '@/lib/social/audit'
+import { logActivity } from '@/lib/activity/log'
 import {
   emptyApprovalState,
   getOrgApprovalSettings,
@@ -90,6 +91,17 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
     },
     ip: req.headers.get('x-forwarded-for'),
   })
+
+  logActivity({
+    orgId,
+    type: 'social_post_submitted',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Submitted social post for review',
+    entityId: id,
+    entityType: 'social_post',
+  }).catch(() => {})
 
   return apiSuccess({ id, status: newStatus })
 }))

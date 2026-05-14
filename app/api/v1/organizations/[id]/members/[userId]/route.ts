@@ -7,6 +7,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { logActivity } from '@/lib/activity/log'
 import type { Organization, OrgRole } from '@/lib/organizations/types'
 
 export const dynamic = 'force-dynamic'
@@ -95,6 +96,16 @@ export const DELETE = withAuth('admin', async (req, user, ctx) => {
     members: updatedMembers,
     updatedAt: FieldValue.serverTimestamp(),
   })
+  logActivity({
+    orgId: id,
+    type: 'org_member_removed',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Removed member from organization',
+    entityId: targetUserId,
+    entityType: 'organization',
+  }).catch(() => {})
 
   return apiSuccess({ removed: true, userId: targetUserId })
 })

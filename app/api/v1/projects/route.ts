@@ -9,6 +9,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { ApiUser } from '@/lib/api/types'
+import { logActivity } from '@/lib/activity/log'
 
 const VALID_STATUSES = [
   'discovery',
@@ -120,8 +121,9 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) =
 
   const clientId = body.clientId?.trim() || orgId
 
+  const name = body.name.trim()
   const docRef = await adminDb.collection('projects').add({
-    name: body.name.trim(),
+    name,
     orgId,
     clientId,
     clientOrgId: body.clientOrgId?.trim() || clientId || null,
@@ -134,6 +136,18 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser) =
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   })
+
+  logActivity({
+    orgId,
+    type: 'project_created',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: `Created project: "${name}"`,
+    entityId: docRef.id,
+    entityType: 'project',
+    entityTitle: name,
+  }).catch(() => {})
 
   return apiSuccess({ id: docRef.id }, 201)
 })
@@ -153,5 +167,17 @@ export const DELETE = withAuth('admin', async (req: NextRequest, user: ApiUser) 
   }
 
   await docRef.delete()
+
+  logActivity({
+    orgId: typeof orgId === 'string' ? orgId : String(orgId ?? ''),
+    type: 'project_deleted',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Deleted project',
+    entityId: id,
+    entityType: 'project',
+  }).catch(() => {})
+
   return apiSuccess({ id })
 })

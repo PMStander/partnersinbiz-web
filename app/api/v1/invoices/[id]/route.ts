@@ -49,6 +49,21 @@ export const PATCH = withAuth('admin', async (req, user, ctx) => {
 
   await ref.update(updates)
 
+  const invoiceOrgId = doc.data()?.orgId
+  if (invoiceOrgId) {
+    logActivity({
+      orgId: invoiceOrgId,
+      type: 'invoice_updated',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Updated invoice',
+      entityId: id,
+      entityType: 'invoice',
+      entityTitle: doc.data()?.invoiceNumber ?? undefined,
+    }).catch(() => {})
+  }
+
   // Best-effort revenue attribution when an invoice flips to paid via PATCH.
   if (flippedToPaid) {
     const data = doc.data() ?? {}

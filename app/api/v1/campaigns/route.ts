@@ -25,6 +25,7 @@ import { actorFrom } from '@/lib/api/actor'
 import { EMPTY_STATS, type Campaign as EmailCampaign, type CampaignStatus as EmailCampaignStatus } from '@/lib/campaigns/types'
 import type { CampaignClientType } from '@/lib/types/campaign'
 import type { ApiUser } from '@/lib/api/types'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -114,6 +115,18 @@ async function createContentEngineCampaign(
     updatedByType: user.role === 'ai' ? 'agent' : 'user',
   })
 
+  logActivity({
+    orgId,
+    type: 'campaign_created',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: `Created campaign: "${body.name.trim()}"`,
+    entityId: ref.id,
+    entityType: 'campaign',
+    entityTitle: body.name.trim(),
+  }).catch(() => {})
+
   return apiSuccess({ id: ref.id, shareToken, status: 'draft', orgId }, 201)
 }
 
@@ -165,6 +178,18 @@ async function createEmailCampaign(
 
   // Suppress unused-import warning when the typed value is consumed only at runtime.
   void ({} as Partial<EmailCampaign>)
+
+  logActivity({
+    orgId,
+    type: 'campaign_created',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: `Created campaign: "${name}"`,
+    entityId: docRef.id,
+    entityType: 'campaign',
+    entityTitle: name,
+  }).catch(() => {})
 
   return apiSuccess({ id: docRef.id }, 201)
 }

@@ -10,6 +10,7 @@ import { withAuth } from '@/lib/api/auth'
 import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { logAudit } from '@/lib/social/audit'
+import { logActivity } from '@/lib/activity/log'
 import {
   getOrgApprovalSettings,
   resolveAfterFinalApproval,
@@ -90,6 +91,17 @@ export const POST = withAuth('admin', withTenant(async (req, user, orgId, contex
     details: { from: currentStatus, to: newStatus },
     ip: req.headers.get('x-forwarded-for'),
   })
+
+  logActivity({
+    orgId,
+    type: 'social_post_qa_approved',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'QA approved social post',
+    entityId: id,
+    entityType: 'social_post',
+  }).catch(() => {})
 
   return apiSuccess({ id, status: newStatus })
 }))

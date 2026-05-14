@@ -13,19 +13,46 @@ interface NavItem {
   label: string
   icon: string
   group: 'work' | 'data' | 'comms'
+  activePatterns?: string[]
 }
 
 const NAV_LINKS: NavItem[] = [
-  { href: '/portal/dashboard',  label: 'Dashboard', icon: 'space_dashboard', group: 'work' },
-  { href: '/portal/projects',   label: 'Projects',  icon: 'rocket_launch',   group: 'work' },
-  { href: '/portal/campaigns',  label: 'Campaigns', icon: 'campaign',        group: 'work' },
-  { href: '/portal/social',     label: 'Social',    icon: 'share',           group: 'work' },
-  { href: '/portal/seo',        label: 'SEO',       icon: 'trending_up',     group: 'work' },
-  { href: '/portal/reports',    label: 'Reports',   icon: 'analytics',       group: 'data' },
-  { href: '/portal/branding',   label: 'Branding',  icon: 'palette',         group: 'comms' },
-  { href: '/portal/messages',   label: 'Messages',  icon: 'forum',           group: 'comms' },
-  { href: '/portal/payments',   label: 'Payments',  icon: 'payments',        group: 'comms' },
-  { href: '/portal/settings',   label: 'Settings',  icon: 'settings',        group: 'comms' },
+  { href: '/portal/dashboard', label: 'Overview',  icon: 'space_dashboard', group: 'work' },
+  { href: '/portal/projects',  label: 'Projects',  icon: 'rocket_launch',   group: 'work' },
+  {
+    href: '/portal/marketing',
+    label: 'Marketing',
+    icon: 'campaign',
+    group: 'work',
+    activePatterns: [
+      '/portal/branding',
+      '/portal/campaigns',
+      '/portal/content-campaigns',
+      '/portal/social',
+      '/portal/seo',
+      '/portal/capture-sources',
+      '/portal/contacts',
+      '/portal/segments',
+      '/portal/email-domains',
+      '/portal/integrations',
+    ],
+  },
+  {
+    href: '/portal/messages',
+    label: 'Messages',
+    icon: 'forum',
+    group: 'work',
+    activePatterns: ['/portal/conversations', '/portal/enquiries'],
+  },
+  {
+    href: '/portal/reports',
+    label: 'Reports',
+    icon: 'analytics',
+    group: 'data',
+    activePatterns: ['/portal/email-analytics', '/portal/properties', '/portal/data'],
+  },
+  { href: '/portal/payments', label: 'Billing', icon: 'payments', group: 'comms' },
+  { href: '/portal/settings', label: 'Account', icon: 'settings', group: 'comms' },
 ]
 
 const GROUP_LABELS: Record<NavItem['group'], string> = {
@@ -36,12 +63,13 @@ const GROUP_LABELS: Record<NavItem['group'], string> = {
 
 type LayoutMode = 'sidebar' | 'topbar'
 
-function active(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(href + '/')
+function active(pathname: string, item: NavItem) {
+  if (pathname === item.href || pathname.startsWith(item.href + '/')) return true
+  return item.activePatterns?.some((pattern) => pathname === pattern || pathname.startsWith(pattern + '/')) ?? false
 }
 
 function NavLink({ item, pathname, collapsed }: { item: NavItem; pathname: string; collapsed?: boolean }) {
-  const on = active(pathname, item.href)
+  const on = active(pathname, item)
   return (
     <Link
       href={item.href}
@@ -77,6 +105,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   // Restore persisted preferences
   useEffect(() => {
     const c = localStorage.getItem('portal_sidebar_collapsed')
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (c === 'true') setCollapsed(true)
     const m = localStorage.getItem('portal_layout_mode') as LayoutMode | null
     if (m === 'sidebar' || m === 'topbar') setLayoutMode(m)
@@ -108,7 +137,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }, [router])
 
   // Close mobile drawer on navigation
-  useEffect(() => { setDrawerOpen(false) }, [pathname])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDrawerOpen(false)
+  }, [pathname])
 
   function toggleCollapsed() {
     setCollapsed(prev => {
@@ -167,7 +199,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             {/* Nav — scrollable */}
             <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-none flex-1 min-w-0">
               {NAV_LINKS.map(item => {
-                const on = active(pathname, item.href)
+                const on = active(pathname, item)
                 return (
                   <Link
                     key={item.href}
@@ -198,7 +230,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 <span className="material-symbols-outlined text-[18px]">dock_to_right</span>
               </button>
               <a
-                href="mailto:hello@partnersinbiz.co.za"
+                href="mailto:hello@partnersinbiz.online"
                 className="hidden sm:inline-flex items-center gap-1 text-xs text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors"
               >
                 <span className="material-symbols-outlined text-[18px]">support_agent</span>
@@ -234,7 +266,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
             <div className="relative z-10 mt-14 bg-[var(--color-pib-bg)] border-b border-[var(--color-pib-line)] p-4 flex flex-col gap-1 max-h-[80vh] overflow-y-auto">
               {NAV_LINKS.map(item => {
-                const on = active(pathname, item.href)
+                const on = active(pathname, item)
                 return (
                   <Link
                     key={item.href}
@@ -389,7 +421,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           <span className="eyebrow !text-[10px]">Client portal</span>
           <span className="hidden sm:inline w-1 h-1 rounded-full bg-[var(--color-pib-line-strong)]" />
           <span className="hidden sm:inline text-xs text-[var(--color-pib-text-muted)]">
-            {NAV_LINKS.find(n => active(pathname, n.href))?.label ?? 'Dashboard'}
+            {NAV_LINKS.find(n => active(pathname, n))?.label ?? 'Overview'}
           </span>
           <div className="ml-auto flex items-center gap-3">
             {/* Switch to topbar layout */}
@@ -401,7 +433,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               <span className="material-symbols-outlined text-[18px]">top_panel_open</span>
             </button>
             <a
-              href="mailto:hello@partnersinbiz.co.za"
+              href="mailto:hello@partnersinbiz.online"
               className="hidden sm:inline-flex items-center gap-1.5 text-xs text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors"
             >
               <span className="material-symbols-outlined text-[18px]">support_agent</span>

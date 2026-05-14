@@ -10,6 +10,7 @@ import { withAuth } from '@/lib/api/auth'
 import { withIdempotency } from '@/lib/api/idempotency'
 import { actorFrom } from '@/lib/api/actor'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { logActivity } from '@/lib/activity/log'
 import {
   VALID_EXPENSE_STATUSES,
   type Expense,
@@ -134,6 +135,16 @@ export const POST = withAuth(
     }
 
     const ref = await adminDb.collection('expenses').add(doc)
+    logActivity({
+      orgId: doc.orgId,
+      type: 'expense_created',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Created expense',
+      entityId: ref.id,
+      entityType: 'expense',
+    }).catch(() => {})
     return apiSuccess({ id: ref.id }, 201)
   }),
 )

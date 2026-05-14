@@ -6,6 +6,7 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import { FieldValue } from 'firebase-admin/firestore'
 import { generateBlogDraft } from '@/lib/seo/tools/ai-generators'
+import { logActivity } from '@/lib/activity/log'
 import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
@@ -57,6 +58,16 @@ export const POST = withAuth(
       draftPostId: draftRef.id,
       ...lastActorFrom(user),
     })
+    logActivity({
+      orgId: data.orgId,
+      type: 'seo_content_drafted',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Saved SEO content as draft',
+      entityId: id,
+      entityType: 'seo_content',
+    }).catch(() => {})
 
     return apiSuccess({
       id,

@@ -21,6 +21,7 @@ import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import type { ApiUser } from '@/lib/api/types'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,6 +105,18 @@ export const POST = withAuth(
       }
       if (writes > 0) await batch.commit()
     }
+
+    logActivity({
+      orgId: campaign.orgId,
+      type: 'campaign_approve_all',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Approved all posts in campaign',
+      entityId: id,
+      entityType: 'campaign',
+      entityTitle: campaign.name ?? undefined,
+    }).catch(() => {})
 
     return apiSuccess({
       campaignId: id,

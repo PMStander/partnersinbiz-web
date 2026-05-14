@@ -11,6 +11,7 @@ import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { validatePostContent } from '@/lib/social/validation'
 import { logAudit } from '@/lib/social/audit'
+import { logActivity } from '@/lib/activity/log'
 import type { SocialPostCategory } from '@/lib/social/types'
 import type { SocialPlatformType, PostStatus } from '@/lib/social/providers'
 
@@ -148,6 +149,17 @@ export const PUT = withAuth('admin', withTenant(async (req, user, orgId, context
     details: { updatedFields: Object.keys(updates).filter(k => k !== 'updatedAt') },
     ip: req.headers.get('x-forwarded-for'),
   })
+
+  logActivity({
+    orgId,
+    type: 'social_post_updated',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Updated social post',
+    entityId: id,
+    entityType: 'social_post',
+  }).catch(() => {})
 
   return apiSuccess({ id })
 }))

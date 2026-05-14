@@ -10,6 +10,7 @@ import { withAuth } from '@/lib/api/auth'
 import { withIdempotency } from '@/lib/api/idempotency'
 import { actorFrom } from '@/lib/api/actor'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { logActivity } from '@/lib/activity/log'
 import {
   VALID_TASK_STATUSES,
   VALID_TASK_PRIORITIES,
@@ -195,6 +196,18 @@ export const POST = withAuth(
     if (dependsOnValue.length > 0) docData.dependsOn = dependsOnValue
 
     const docRef = await adminDb.collection('tasks').add(docData)
+
+    logActivity({
+      orgId: body.orgId.trim(),
+      type: 'task_created',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: `Created task: "${title}"`,
+      entityId: docRef.id,
+      entityType: 'task',
+      entityTitle: title,
+    }).catch(() => {})
 
     // Notify assignee if provided.
     if (assignedTo) {

@@ -12,6 +12,7 @@ import { withAuth } from '@/lib/api/auth'
 import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { logAudit } from '@/lib/social/audit'
+import { logActivity } from '@/lib/activity/log'
 import { buildRejectionRecord, validateTransition } from '@/lib/social/approval'
 import { regeneratePost } from '@/lib/social/regenerate'
 import type { PostStatus } from '@/lib/social/providers'
@@ -90,6 +91,17 @@ export const POST = withAuth('admin', withTenant(async (req, user, orgId, contex
     details: { reason, rejectionCount: newRejectionCount },
     ip: req.headers.get('x-forwarded-for'),
   })
+
+  logActivity({
+    orgId,
+    type: 'social_post_qa_rejected',
+    actorId: user.uid,
+    actorName: displayName,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'QA rejected social post',
+    entityId: id,
+    entityType: 'social_post',
+  }).catch(() => {})
 
   // Fire-and-forget regeneration — don't block the response.
   regeneratePost({

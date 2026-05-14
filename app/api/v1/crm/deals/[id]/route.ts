@@ -9,10 +9,11 @@ import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 import { tryAttributeDealWon } from '@/lib/email-analytics/attribution-hooks'
+import { logActivity } from '@/lib/activity/log'
 
 type Params = { params: Promise<{ id: string }> }
 
-export const PUT = withAuth('admin', async (req, _user, context) => {
+export const PUT = withAuth('admin', async (req, user, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('deals').doc(id).get()
   if (!doc.exists) return apiError('Deal not found', 404)
@@ -69,13 +70,74 @@ export const PUT = withAuth('admin', async (req, _user, context) => {
     console.warn('[webhook-dispatch-skip] deal stage change — no orgId on deal', id)
   }
 
+  if (orgId) {
+    const dealTitle = (typeof body?.title === 'string' && body.title) ||
+      (typeof before.title === 'string' && before.title) || undefined
+    const newStage = typeof body.stage === 'string' ? body.stage : undefined
+    const actorRole = user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client'
+
+    if (newStage === 'won') {
+      logActivity({
+        orgId,
+        type: 'crm_deal_won',
+        actorId: user.uid,
+        actorName: user.uid,
+        actorRole,
+        description: `Deal won: "${dealTitle ?? id}"`,
+        entityId: id,
+        entityType: 'deal',
+        entityTitle: dealTitle,
+      }).catch(() => {})
+    } else if (newStage === 'lost') {
+      logActivity({
+        orgId,
+        type: 'crm_deal_lost',
+        actorId: user.uid,
+        actorName: user.uid,
+        actorRole,
+        description: `Deal lost: "${dealTitle ?? id}"`,
+        entityId: id,
+        entityType: 'deal',
+        entityTitle: dealTitle,
+      }).catch(() => {})
+    } else {
+      logActivity({
+        orgId,
+        type: 'crm_deal_updated',
+        actorId: user.uid,
+        actorName: user.uid,
+        actorRole,
+        description: 'Updated deal',
+        entityId: id,
+        entityType: 'deal',
+        entityTitle: dealTitle,
+      }).catch(() => {})
+    }
+  }
+
   return apiSuccess({ id })
 })
 
-export const DELETE = withAuth('admin', async (_req, _user, context) => {
+export const DELETE = withAuth('admin', async (_req, user, context) => {
   const { id } = await (context as Params).params
   const doc = await adminDb.collection('deals').doc(id).get()
   if (!doc.exists) return apiError('Deal not found', 404)
+  const existing = doc.data() ?? {}
   await adminDb.collection('deals').doc(id).update({ deleted: true, updatedAt: FieldValue.serverTimestamp() })
+
+  const orgId = typeof existing.orgId === 'string' ? existing.orgId : undefined
+  if (orgId) {
+    logActivity({
+      orgId,
+      type: 'crm_deal_deleted',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Deleted deal',
+      entityId: id,
+      entityType: 'deal',
+    }).catch(() => {})
+  }
+
   return apiSuccess({ id })
 })

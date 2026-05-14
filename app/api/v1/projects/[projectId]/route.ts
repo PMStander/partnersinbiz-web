@@ -8,6 +8,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { getProjectForUser } from '@/lib/projects/access'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,6 +62,22 @@ export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
     updates.brief = body.brief
   }
 
+  const orgId = access.doc.data()?.orgId as string | undefined
   await adminDb.collection('projects').doc(projectId).update(updates)
+
+  if (orgId) {
+    logActivity({
+      orgId,
+      type: 'project_updated',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Updated project',
+      entityId: projectId,
+      entityType: 'project',
+      entityTitle: (updates.name as string | undefined) ?? undefined,
+    }).catch(() => {})
+  }
+
   return apiSuccess({ id: projectId, ...updates })
 })

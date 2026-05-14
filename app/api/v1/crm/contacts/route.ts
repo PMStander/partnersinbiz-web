@@ -19,6 +19,7 @@ import type {
   ContactSource,
 } from '@/lib/crm/types'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import { logActivity } from '@/lib/activity/log'
 
 const VALID_STAGES: ContactStage[] = [
   'new', 'contacted', 'replied', 'demo', 'proposal', 'won', 'lost',
@@ -153,6 +154,18 @@ export const POST = withAuth('client', async (req, user) => {
   } catch (err) {
     console.error('[webhook-dispatch-error] contact.created', err)
   }
+
+  logActivity({
+    orgId,
+    type: 'crm_contact_created',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: `Created contact: "${body.name.trim()}"`,
+    entityId: docRef.id,
+    entityType: 'contact',
+    entityTitle: body.name.trim(),
+  }).catch(() => {})
 
   return apiSuccess({ id: docRef.id }, 201)
 })

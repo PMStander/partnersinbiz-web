@@ -8,6 +8,7 @@ import {
   buildProjectTaskUpdateData,
   notificationPriority,
 } from '@/lib/projects/taskPayload'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,21 @@ export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
   }
 
   await ref.update({ ...updates.value, updatedAt: FieldValue.serverTimestamp() })
+
+  const projectOrgId = access.doc.data()?.orgId as string | undefined
+  if (projectOrgId) {
+    logActivity({
+      orgId: projectOrgId,
+      type: 'task_updated',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Updated task',
+      entityId: taskId,
+      entityType: 'task',
+      entityTitle: (updates.value.title as string | undefined) ?? undefined,
+    }).catch(() => {})
+  }
 
   const existing = doc.data() ?? {}
   const previousAssignees = new Set(Array.isArray(existing.assigneeIds) ? existing.assigneeIds : existing.assigneeId ? [existing.assigneeId] : [])
@@ -75,5 +91,20 @@ export const DELETE = withAuth('client', async (req: NextRequest, user, ctx) => 
   const access = await getProjectForUser(projectId, user)
   if (!access.ok) return apiError(access.error, access.status)
   await adminDb.collection('projects').doc(projectId).collection('tasks').doc(taskId).delete()
+
+  const deleteOrgId = access.doc.data()?.orgId as string | undefined
+  if (deleteOrgId) {
+    logActivity({
+      orgId: deleteOrgId,
+      type: 'task_deleted',
+      actorId: user.uid,
+      actorName: user.uid,
+      actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+      description: 'Deleted task',
+      entityId: taskId,
+      entityType: 'task',
+    }).catch(() => {})
+  }
+
   return apiSuccess({ deleted: true })
 })

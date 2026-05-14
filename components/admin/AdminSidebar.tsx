@@ -3,17 +3,22 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { OrgSwitcher } from './OrgSwitcher'
 import GlobalSearch from './GlobalSearch'
-import { CollapsibleSection } from './CollapsibleSection'
 import { useOrg } from '@/lib/contexts/OrgContext'
-import { OPERATOR_NAV, OPERATOR_TOOLS, workspaceNav, workspaceTools, type NavItem } from './navConfig'
+import { OPERATOR_NAV, workspaceNav, type NavItem } from './navConfig'
 
 // ── Sidebar nav item ───────────────────────────────────────────────────────
 
+function isItemActive(item: NavItem, pathname: string) {
+  if (pathname === item.href || pathname.startsWith(item.href + '/')) return true
+  if (item.children?.some((child) => pathname === child.href || pathname.startsWith(child.href + '/'))) return true
+  return item.activePatterns?.some((pattern) => pathname === pattern || pathname.startsWith(pattern + '/')) ?? false
+}
+
 function NavLink({ item, pathname, collapsed }: { item: NavItem; pathname: string; collapsed?: boolean }) {
-  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+  const isActive = isItemActive(item, pathname)
   return (
     <Link
       href={item.href}
@@ -36,90 +41,6 @@ function NavLink({ item, pathname, collapsed }: { item: NavItem; pathname: strin
       </span>
       {!collapsed && <span className="font-medium">{item.label}</span>}
     </Link>
-  )
-}
-
-function SectionLink({ item, pathname }: { item: { label: string; href: string }; pathname: string }) {
-  const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-  return (
-    <Link
-      href={item.href}
-      className={[
-        'flex items-center px-3 py-1.5 text-sm rounded-lg transition-colors duration-150',
-        isActive
-          ? 'bg-[var(--color-pib-accent-soft)] text-[var(--color-pib-accent-hover)]'
-          : 'text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] hover:bg-white/[0.03]',
-      ].join(' ')}
-    >
-      {item.label}
-    </Link>
-  )
-}
-
-// ── SEO section (workspace mode) ───────────────────────────────────────────
-// Fetches the active sprint for the selected org and renders deep links into
-// the cockpit. If no sprint exists, links to /admin/org/[slug]/seo (the
-// "Create sprint" CTA page).
-
-function SeoWorkspaceSection({ slug, orgId, pathname }: { slug: string; orgId: string; pathname: string }) {
-  const [sprintId, setSprintId] = useState<string | null>(null)
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoaded(false)
-    setSprintId(null)
-    fetch('/api/v1/seo/sprints')
-      .then((r) => r.json())
-      .then((body) => {
-        if (cancelled) return
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const match = (body.data ?? []).find((s: any) => s.orgId === orgId)
-        setSprintId(match?.id ?? null)
-        setLoaded(true)
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [orgId])
-
-  if (!loaded) {
-    return (
-      <CollapsibleSection storageKey={`seo_${slug}`} label="SEO Sprint" icon="trending_up">
-        <p className="px-3 py-2 text-xs text-[var(--color-pib-text-muted)]">Loading…</p>
-      </CollapsibleSection>
-    )
-  }
-
-  if (!sprintId) {
-    return (
-      <CollapsibleSection storageKey={`seo_${slug}`} label="SEO Sprint" icon="trending_up">
-        <SectionLink item={{ label: '+ Create SEO sprint', href: `/admin/org/${slug}/seo` }} pathname={pathname} />
-      </CollapsibleSection>
-    )
-  }
-
-  const items = [
-    { label: 'Today',         href: `/admin/seo/sprints/${sprintId}` },
-    { label: 'Tasks',         href: `/admin/seo/sprints/${sprintId}/tasks` },
-    { label: 'Keywords',      href: `/admin/seo/sprints/${sprintId}/keywords` },
-    { label: 'Backlinks',     href: `/admin/seo/sprints/${sprintId}/backlinks` },
-    { label: 'Content',       href: `/admin/seo/sprints/${sprintId}/content` },
-    { label: 'Audits',        href: `/admin/seo/sprints/${sprintId}/audits` },
-    { label: 'Optimisations', href: `/admin/seo/sprints/${sprintId}/optimizations` },
-    { label: 'Health',        href: `/admin/seo/sprints/${sprintId}/health` },
-    { label: 'Settings',      href: `/admin/seo/sprints/${sprintId}/settings` },
-  ]
-
-  return (
-    <CollapsibleSection storageKey={`seo_${slug}`} label="SEO Sprint" icon="trending_up">
-      {items.map((item) => (
-        <SectionLink key={item.href} item={item} pathname={pathname} />
-      ))}
-    </CollapsibleSection>
   )
 }
 
@@ -231,133 +152,6 @@ export function AdminSidebar({ open = false, onClose, collapsed = false, onToggl
             <NavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
           ))}
         </nav>
-
-        {/* Workspace mode: collapsed icon-only tools */}
-        {isWorkspaceMode && collapsed && (
-          <div className="border-t border-[var(--color-pib-line)] px-2 py-3 space-y-1">
-            {workspaceTools(selectedOrg.slug).map((item) => (
-              <NavLink key={item.href} item={item} pathname={pathname} collapsed />
-            ))}
-          </div>
-        )}
-
-        {/* Workspace mode: collapsible tool stacks per client */}
-        {isWorkspaceMode && !collapsed && (
-          <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-3">
-            <CollapsibleSection
-              storageKey={`social_${selectedOrg.slug}`}
-              label="Social Media"
-              icon="campaign"
-            >
-              <SectionLink item={{ label: 'Overview', href: `/admin/org/${selectedOrg.slug}/social` }} pathname={pathname} />
-              <SectionLink item={{ label: 'Compose',  href: '/admin/social/compose' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Calendar', href: '/admin/social/calendar' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Queue',    href: '/admin/social/queue' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Inbox',    href: '/admin/social/inbox' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Accounts', href: '/admin/social/accounts' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Design',   href: '/admin/social/design' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Links',    href: '/admin/social/links' }} pathname={pathname} />
-            </CollapsibleSection>
-
-            <SeoWorkspaceSection
-              slug={selectedOrg.slug}
-              orgId={selectedOrgId}
-              pathname={pathname}
-            />
-
-            <CollapsibleSection
-              storageKey={`email_${selectedOrg.slug}`}
-              label="Email"
-              icon="mail"
-            >
-              <SectionLink item={{ label: 'Overview',   href: '/admin/email' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Compose',   href: '/admin/email/compose' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Scheduled', href: '/admin/email?folder=scheduled' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Drafts',    href: '/admin/email?folder=drafts' }} pathname={pathname} />
-              <SectionLink item={{ label: 'Failed',    href: '/admin/email?folder=failed' }} pathname={pathname} />
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              storageKey={`sequences_${selectedOrg.slug}`}
-              label="Sequences"
-              icon="stacked_email"
-            >
-              <SectionLink item={{ label: 'All Sequences', href: '/admin/sequences' }} pathname={pathname} />
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              storageKey={`campaigns_${selectedOrg.slug}`}
-              label="Campaigns"
-              icon="campaign"
-            >
-              <SectionLink
-                item={{ label: 'All Campaigns', href: `/admin/org/${selectedOrg.slug}/campaigns` }}
-                pathname={pathname}
-              />
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              storageKey={`capture_sources_${selectedOrg.slug}`}
-              label="Capture Sources"
-              icon="inventory_2"
-            >
-              <SectionLink
-                item={{ label: 'All sources', href: `/admin/org/${selectedOrg.slug}/capture-sources` }}
-                pathname={pathname}
-              />
-              <SectionLink
-                item={{ label: 'Import CSV', href: `/admin/org/${selectedOrg.slug}/capture-sources/import` }}
-                pathname={pathname}
-              />
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              storageKey={`integrations_${selectedOrg.slug}`}
-              label="Integrations"
-              icon="extension"
-            >
-              <SectionLink
-                item={{ label: 'All integrations', href: `/admin/org/${selectedOrg.slug}/integrations` }}
-                pathname={pathname}
-              />
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              storageKey={`email_domains_${selectedOrg.slug}`}
-              label="Email Domains"
-              icon="dns"
-            >
-              <SectionLink
-                item={{ label: 'Verified Domains', href: `/admin/org/${selectedOrg.slug}/email-domains` }}
-                pathname={pathname}
-              />
-            </CollapsibleSection>
-          </div>
-        )}
-
-        {/* Operator mode: collapsed icon-only tools */}
-        {!isWorkspaceMode && collapsed && (
-          <div className="border-t border-[var(--color-pib-line)] px-2 py-3 space-y-1">
-            {OPERATOR_TOOLS.map((item) => (
-              <NavLink key={item.href} item={item} pathname={pathname} collapsed />
-            ))}
-          </div>
-        )}
-
-        {/* Operator mode: flat global tools list */}
-        {!isWorkspaceMode && !collapsed && (
-          <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-1">
-            <p className="eyebrow !text-[9px] px-2 pb-1.5">Tools</p>
-            {[
-              { label: 'Social',    href: '/admin/social' },
-              { label: 'SEO',       href: '/admin/seo' },
-              { label: 'Email',     href: '/admin/email' },
-              { label: 'Sequences', href: '/admin/sequences' },
-            ].map((item) => (
-              <SectionLink key={item.href} item={item} pathname={pathname} />
-            ))}
-          </div>
-        )}
 
         {!isWorkspaceMode && !collapsed && favoriteOrgs.length > 0 && (
           <div className="border-t border-[var(--color-pib-line)] px-3 py-3 space-y-1">

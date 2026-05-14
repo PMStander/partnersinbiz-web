@@ -5,6 +5,7 @@ import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { generateInvoiceNumber } from '@/lib/invoices/invoice-number'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -183,6 +184,18 @@ export const POST = withAuth('admin', async (req, user) => {
   }
 
   const ref = await adminDb.collection('invoices').add(stripUndefined(doc))
+
+  logActivity({
+    orgId: body.orgId,
+    type: 'invoice_created',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Created invoice',
+    entityId: ref.id,
+    entityType: 'invoice',
+    entityTitle: invoiceNumber,
+  }).catch(() => {})
 
   try {
     await dispatchWebhook(body.orgId, 'invoice.created', {

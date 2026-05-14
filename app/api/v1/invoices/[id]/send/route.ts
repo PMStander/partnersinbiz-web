@@ -18,6 +18,7 @@ import { lastActorFrom } from '@/lib/api/actor'
 import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
 import { invoiceSentEmail } from '@/lib/email/templates'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +49,18 @@ export const POST = withAuth('admin', async (req, user, ctx) => {
     ...lastActorFrom(user),
   }
   await ref.update(updates)
+
+  logActivity({
+    orgId: invoice.orgId,
+    type: 'invoice_sent',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Sent invoice to client',
+    entityId: id,
+    entityType: 'invoice',
+    entityTitle: invoice.invoiceNumber ?? undefined,
+  }).catch(() => {})
 
   // Email the client — swallow failures, DB update already succeeded.
   const clientEmail: string | undefined = invoice.clientDetails?.email

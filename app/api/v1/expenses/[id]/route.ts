@@ -10,6 +10,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { lastActorFrom } from '@/lib/api/actor'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { logActivity } from '@/lib/activity/log'
 import {
   EDITABLE_EXPENSE_STATUSES,
   type Expense,
@@ -94,6 +95,16 @@ export const PUT = withAuth('admin', async (req, user, context) => {
     ...updates,
     ...lastActorFrom(user),
   })
+  logActivity({
+    orgId: existing.orgId,
+    type: 'expense_updated',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Updated expense',
+    entityId: id,
+    entityType: 'expense',
+  }).catch(() => {})
 
   return apiSuccess({ id, ...updates })
 })
@@ -136,6 +147,16 @@ export const DELETE = withAuth('admin', async (req, user, context) => {
       ...lastActorFrom(user),
     })
   }
+  logActivity({
+    orgId: existing.orgId,
+    type: 'expense_deleted',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Deleted expense',
+    entityId: id,
+    entityType: 'expense',
+  }).catch(() => {})
 
   return apiSuccess({ id, deleted: true })
 })

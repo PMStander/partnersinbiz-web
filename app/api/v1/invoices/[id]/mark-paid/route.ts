@@ -23,6 +23,7 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { actorFrom, lastActorFrom } from '@/lib/api/actor'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 import { tryAttributeInvoicePaid } from '@/lib/email-analytics/attribution-hooks'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,6 +73,18 @@ export const PATCH = withAuth('admin', async (req, user, ctx) => {
   if (typeof body.proofFileId === 'string') updates.paymentProofFileId = body.proofFileId
 
   await ref.update(updates)
+
+  logActivity({
+    orgId: orgId ?? '',
+    type: 'invoice_marked_paid',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Marked invoice as paid',
+    entityId: id,
+    entityType: 'invoice',
+    entityTitle: invoiceNumber,
+  }).catch(() => {})
 
   // Activity log entry
   await adminDb.collection('activities').add({

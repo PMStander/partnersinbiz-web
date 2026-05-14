@@ -14,6 +14,7 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import type { Campaign } from '@/lib/campaigns/types'
 import type { ApiUser } from '@/lib/api/types'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -112,6 +113,19 @@ export const PATCH = withAuth('client', async (req: NextRequest, user: ApiUser, 
     return apiError('No allowed fields to update', 400)
   }
   await ref.update(update)
+
+  logActivity({
+    orgId: current.orgId,
+    type: 'campaign_updated',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Updated campaign',
+    entityId: id,
+    entityType: 'campaign',
+    entityTitle: current.name ?? undefined,
+  }).catch(() => {})
+
   return apiSuccess({ id, updated: Object.keys(update) })
 })
 
@@ -122,5 +136,18 @@ export const DELETE = withAuth('client', async (_req: NextRequest, user: ApiUser
   const scope = resolveOrgScope(user, (snap.data()?.orgId as string | undefined) ?? null)
   if (!scope.ok) return apiError(scope.error, scope.status)
   await snap.ref.update({ deleted: true, updatedAt: FieldValue.serverTimestamp() })
+
+  logActivity({
+    orgId: (snap.data()?.orgId as string | undefined) ?? '',
+    type: 'campaign_deleted',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    description: 'Deleted campaign',
+    entityId: id,
+    entityType: 'campaign',
+    entityTitle: snap.data()?.name ?? undefined,
+  }).catch(() => {})
+
   return apiSuccess({ id })
 })
