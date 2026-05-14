@@ -13,6 +13,8 @@ import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import { logActivity } from '@/lib/activity/log'
+import { sendEmail } from '@/lib/email/send'
+import { getHermesProfileLink, createHermesRun } from '@/lib/hermes/server'
 import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
@@ -123,6 +125,70 @@ export const POST = withAuth(
         ...lastActorFrom(user),
       })
       statusFlipped = true
+    }
+
+    // --- Side-effects (fire-and-forget, never block the response) ---
+
+    // 1. Notification
+    const anchorPreviewShort =
+      anchor?.type === 'text'
+        ? ` re: "${(anchor.text ?? '').slice(0, 60)}…"`
+        : anchor?.type === 'image'
+          ? ' re: image'
+          : ''
+    const notifLink = `/admin/org/${data.orgSlug ?? data.orgId}/social/${data.campaignId ?? data.sprintId ?? ''}/blog/${id}`
+    adminDb
+      .collection('notifications')
+      .add({
+        orgId: data.orgId,
+        userId: null,
+        agentId: null,
+        type: statusFlipped ? 'seo_content_changes_requested' : 'seo_content_commented',
+        title: statusFlipped
+          ? `Changes requested on "${data.title ?? id}"`
+          : `New comment on "${data.title ?? id}"`,
+        body: `${displayName}${anchorPreviewShort}: "${text.trim().slice(0, 120)}"`,
+        link: notifLink,
+        data: { contentId: id, orgId: data.orgId, commentId: commentRef.id },
+        priority: statusFlipped ? 'high' : 'normal',
+        status: 'unread',
+        snoozedUntil: null,
+        readAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+      })
+      .catch(() => {})
+
+    // 2. Email (changes-requested only — keep noise low)
+    if (statusFlipped) {
+      const emailAnchorPreview =
+        anchor?.type === 'text'
+          ? ` re: "${(anchor.text ?? '').slice(0, 60)}…"`
+          : anchor?.type === 'image'
+            ? ' re: image'
+            : ''
+      sendEmail({
+        to: 'peet.stander@partnersinbiz.online',
+        subject: `⚠️ Changes requested on "${data.title ?? id}" by ${displayName}`,
+        html: `<p>${displayName} requested changes on <strong>${data.title ?? id}</strong>:</p><blockquote>${text.trim()}</blockquote>${emailAnchorPreview ? `<p><em>On: ${emailAnchorPreview}</em></p>` : ''}<p><a href="https://partnersinbiz.online/admin/org/${data.orgId}/social">View in admin</a></p>`,
+      }).catch(() => {})
+    }
+
+    // 3. Hermes dispatch (changes-requested only)
+    if (statusFlipped) {
+      getHermesProfileLink(data.orgId)
+        .then((link) => {
+          if (!link) return
+          const anchorHint =
+            anchor?.type === 'text'
+              ? ` Specifically about this passage: "${(anchor.text ?? '').slice(0, 120)}"`
+              : anchor?.type === 'image'
+                ? ' (on an image in the post)'
+                : ''
+          return createHermesRun(link, user.uid, {
+            prompt: `Client ${displayName} requested changes on blog post "${data.title ?? id}".${anchorHint} Their comment: "${text.trim().slice(0, 300)}". Please review the comment, revise the draft accordingly, and update the post status back to 'review' when done. Content ID: ${id}`,
+          })
+        })
+        .catch(() => {})
     }
 
     // Activity log (fire and forget). Include anchor preview so agents know

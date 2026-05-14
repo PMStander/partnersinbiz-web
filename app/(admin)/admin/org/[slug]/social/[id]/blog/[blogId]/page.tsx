@@ -62,6 +62,7 @@ function Detail({
   const [comments, setComments] = useState<InlineComment[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<null | 'approve' | 'comment' | 'save'>(null)
+  const [publishDate, setPublishDate] = useState('')
   const [composerAnchor, setComposerAnchor] = useState<AnchorTarget | null>(null)
   const [editing, setEditing] = useState(false)
 
@@ -201,7 +202,7 @@ function Detail({
       const r = await fetch(`/api/v1/seo/content/${blogId}/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(publishDate ? { publishDate } : {}),
       })
       if (!r.ok) throw new Error('publish failed')
       router.refresh()
@@ -353,7 +354,7 @@ function Detail({
 
       {/* Approval bar */}
       {!isPublished && (
-        <section className="pib-card sticky bottom-4 p-5 flex flex-wrap items-center justify-between gap-3 backdrop-blur-md">
+        <section className="pib-card sticky bottom-4 p-5 flex flex-col gap-3 backdrop-blur-md">
           <div>
             <p className="text-sm font-headline font-semibold">Ready to ship?</p>
             <p className="text-xs text-on-surface-variant">
@@ -362,18 +363,35 @@ function Detail({
                 : `${comments.length} comment${comments.length === 1 ? '' : 's'} pending. Approve to publish anyway, or wait for the writer to address them.`}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={approve}
-            disabled={!!busy}
-            className="text-sm font-label px-5 py-2 rounded-md transition-opacity disabled:opacity-50"
-            style={{
-              background: 'var(--org-accent, var(--color-pib-accent))',
-              color: '#000',
-            }}
-          >
-            {busy === 'approve' ? 'Publishing…' : 'Approve & publish'}
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-on-surface-variant whitespace-nowrap">Publish date</label>
+              <input
+                type="date"
+                value={publishDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={e => setPublishDate(e.target.value)}
+                className="text-xs rounded-md px-2 py-1.5 bg-surface-container-high text-on-surface border border-[var(--org-border,var(--color-pib-line))] focus:outline-none"
+              />
+              <span className="text-[10px] text-on-surface-variant">(leave blank = publish now)</span>
+            </div>
+            <button
+              type="button"
+              onClick={approve}
+              disabled={!!busy}
+              className="text-sm font-label px-5 py-2 rounded-md transition-opacity disabled:opacity-50"
+              style={{
+                background: 'var(--org-accent, var(--color-pib-accent))',
+                color: '#000',
+              }}
+            >
+              {busy === 'approve'
+                ? (publishDate && publishDate > new Date().toISOString().slice(0, 10) ? 'Scheduling…' : 'Publishing…')
+                : (publishDate && publishDate > new Date().toISOString().slice(0, 10)
+                    ? `Schedule for ${publishDate}`
+                    : 'Approve & publish')}
+            </button>
+          </div>
         </section>
       )}
 

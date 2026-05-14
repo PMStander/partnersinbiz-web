@@ -42,6 +42,7 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   draft:            { label: 'Draft',         color: 'rgba(148,163,184,0.18)' },
   review:           { label: 'Needs Review',  color: 'rgba(245,166,35,0.22)' },
   pending_approval: { label: 'Needs Review',  color: 'rgba(245,166,35,0.22)' },
+  client_approved:  { label: 'Approved ✓',   color: 'rgba(74,222,128,0.20)' },
   approved:         { label: 'Approved',      color: 'rgba(96,165,250,0.20)' },
   live:             { label: 'Published',     color: 'rgba(74,222,128,0.20)' },
   published:        { label: 'Published',     color: 'rgba(74,222,128,0.20)' },

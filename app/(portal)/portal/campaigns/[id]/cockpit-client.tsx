@@ -512,6 +512,48 @@ function emptyCopy(label: string, kind: string): React.ReactNode {
   )
 }
 
+function BlogApproveButton({ contentId, onApproved }: { contentId: string; onApproved: () => void }) {
+  const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  async function handleApprove(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (loading) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/v1/seo/content/${contentId}/client-approve`, { method: 'POST' })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json?.error ?? 'Approval failed')
+      }
+      onApproved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="px-5 pb-5 pt-0" onClick={e => e.preventDefault()}>
+      {error && (
+        <p className="text-xs text-red-400 mb-2">{error}</p>
+      )}
+      <button
+        type="button"
+        onClick={handleApprove}
+        disabled={loading}
+        className="w-full text-sm font-label py-2 rounded-md transition-opacity disabled:opacity-50"
+        style={{ background: 'var(--org-accent, var(--color-pib-accent))', color: '#000' }}
+      >
+        {loading ? 'Approving…' : 'Approve this post ✓'}
+      </button>
+    </div>
+  )
+}
+
 function BlogsTab({
   campaignId,
   blogs,
@@ -521,6 +563,8 @@ function BlogsTab({
   blogs: AnyObj[]
   brand: PreviewBrand | undefined
 }) {
+  const [statuses, setStatuses] = React.useState<Record<string, string>>({})
+
   if (blogs.length === 0) {
     return (
       <div className="pib-card p-10 text-center text-sm text-[var(--color-pib-text-muted)]">
@@ -528,17 +572,34 @@ function BlogsTab({
       </div>
     )
   }
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {blogs.map(b => (
-        <BlogPreviewCard
-          key={b.id}
-          blog={b}
-          brand={brand}
-          status={b.status}
-          href={`/portal/campaigns/${campaignId}/blog/${b.id}`}
-        />
-      ))}
+      {blogs.map(b => {
+        const currentStatus = statuses[b.id] ?? b.status
+        const isReview = currentStatus === 'review'
+        return (
+          <div key={b.id} className="flex flex-col">
+            <BlogPreviewCard
+              blog={b}
+              brand={brand}
+              status={currentStatus}
+              href={`/portal/campaigns/${campaignId}/blog/${b.id}`}
+            />
+            {isReview && (
+              <BlogApproveButton
+                contentId={b.id}
+                onApproved={() => setStatuses(prev => ({ ...prev, [b.id]: 'client_approved' }))}
+              />
+            )}
+            {currentStatus === 'client_approved' && !isReview && (
+              <div className="px-5 pb-5 pt-1 text-center text-xs text-emerald-400 font-label">
+                Approved ✓ — awaiting publishing
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
