@@ -1,0 +1,59 @@
+{
+  "name": "Partners in Biz",
+  "short_name": "PartnersInBiz",
+  "description": "Web, AI & Growth Studio for ambitious SMEs — CRM, content, SEO, billing and analytics in one workspace.",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "portrait-primary",
+  "background_color": "#0A0A0B",
+  "theme_color": "#0A0A0B",
+  "lang": "en-ZA",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "marketing"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pib-logo-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open portal",
+      "short_name": "Portal",
+      "description": "Open your client portal",
+      "url": "/portal?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Admin dashboard",
+      "short_name": "Admin",
+      "description": "Open the admin dashboard",
+      "url": "/admin?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

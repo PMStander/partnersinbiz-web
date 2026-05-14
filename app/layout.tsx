@@ -4,6 +4,8 @@ import Script from 'next/script'
 import { Analytics } from '@vercel/analytics/react'
 import { SITE } from '@/lib/seo/site'
 import { organizationGraph, JsonLd } from '@/lib/seo/schema'
+import { PwaRegistrar } from '@/components/pwa/PwaRegistrar'
+import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
@@ -34,6 +36,12 @@ export const metadata: Metadata = {
   },
   description: SITE.description,
   applicationName: SITE.name,
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: SITE.name,
+    statusBarStyle: 'black-translucent',
+  },
   keywords: [
     'web development South Africa',
     'Next.js development agency',
@@ -128,7 +136,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`${inter.variable} ${spaceGrotesk.variable} ${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} bg-[var(--pib-bg)] text-[var(--pib-text)] font-sans antialiased selection:bg-[var(--pib-accent)] selection:text-black`}
       >
         <JsonLd data={organizationGraph} />
+        <PwaRegistrar />
         {children}
+        <InstallPrompt />
         <Analytics />
       </body>
     </html>

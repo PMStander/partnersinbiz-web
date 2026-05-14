@@ -15,6 +15,7 @@ import {
   type NotificationPriority,
   type NotificationStatus,
 } from '@/lib/notifications/types'
+import { sendPushToUser } from '@/lib/notifications/push'
 
 export const dynamic = 'force-dynamic'
 
@@ -122,6 +123,18 @@ export const POST = withAuth('admin', async (req, user) => {
 
   try {
     const ref = await adminDb.collection('notifications').add(doc)
+
+    // Fire-and-forget web push to the targeted user. We deliberately don't
+    // await — push failures shouldn't block the in-app feed write.
+    if (doc.userId && priority !== 'low') {
+      sendPushToUser(String(doc.userId), {
+        title: doc.title,
+        body: doc.body,
+        link: doc.link ?? undefined,
+        data: { notificationId: ref.id, type: doc.type, priority },
+      }).catch((err) => console.error('[notifications-push-error]', err))
+    }
+
     return apiSuccess({ id: ref.id }, 201)
   } catch (err) {
     console.error('[notifications-create-error]', err)

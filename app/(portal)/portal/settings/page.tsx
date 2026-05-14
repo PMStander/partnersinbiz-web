@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { updateProfile } from 'firebase/auth'
 import { getClientAuth } from '@/lib/firebase/config'
+import { PushNotificationsToggle } from '@/components/pwa/PushNotificationsToggle'
 
 interface OrgInfo {
   id: string
@@ -189,6 +190,11 @@ export default function SettingsPage() {
           </p>
         </section>
       )}
+
+      {/* Notifications */}
+      <section className="bento-card !p-6">
+        <PushNotificationsToggle />
+      </section>
 
       {/* Branding shortcut */}
       <section className="bento-card !p-6 flex items-center justify-between gap-4">

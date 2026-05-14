@@ -166,6 +166,12 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Push tokens — written exclusively through /api/v1/push-tokens via the
+    // Admin SDK so user/org metadata can't be forged from the client.
+    match /pushTokens/{id} {
+      allow read, write: if false;
+    }
+
     // File metadata — admin read/write. Uploads are via Admin SDK through /upload.
     match /uploads/{id} {
       allow read, write: if isAdmin();
