@@ -18,6 +18,8 @@ import {
   validateTransition,
 } from '@/lib/social/approval'
 import type { DeliveryMode, PostStatus } from '@/lib/social/providers'
+import { sendEmail } from '@/lib/email/send'
+import { getHermesProfileLink, createHermesRun } from '@/lib/hermes/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,6 +107,44 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
     details: { stage: 'client', to: newStatus },
     ip: req.headers.get('x-forwarded-for'),
   })
+
+  // Fire-and-forget side-effects — none of these block the response.
+
+  // 1. Firestore notification
+  adminDb.collection('notifications').add({
+    orgId,
+    userId: null,
+    agentId: null,
+    type: 'social_post_client_approved',
+    title: `Social post approved by client`,
+    body: newStatus === 'scheduled'
+      ? `Post approved and scheduled for publishing.`
+      : `Post approved — ready to publish.`,
+    link: `/admin/social`,
+    data: { postId: id, orgId, newStatus },
+    priority: 'high',
+    status: 'unread',
+    snoozedUntil: null,
+    readAt: null,
+    createdAt: FieldValue.serverTimestamp(),
+  }).catch(() => {})
+
+  // 2. Email to operator
+  sendEmail({
+    to: 'peet.stander@partnersinbiz.online',
+    subject: `✅ Social post approved by client (${orgId})`,
+    html: `<p>A client has approved a social post for org <strong>${orgId}</strong>.</p><p>New status: <strong>${newStatus}</strong></p><p><a href="https://partnersinbiz.online/admin/social">View in admin</a></p>`,
+  }).catch(() => {})
+
+  // 3. Hermes agent dispatch
+  getHermesProfileLink(orgId)
+    .then((link) => {
+      if (!link) return
+      return createHermesRun(link, user.uid, {
+        prompt: `A client has approved social post ${id} for org ${orgId}. New status: ${newStatus}. ${newStatus === 'scheduled' ? 'It is now queued for scheduled publishing — no action needed.' : 'Please confirm the post is ready and publish it when appropriate.'}`,
+      })
+    })
+    .catch(() => {})
 
   return apiSuccess({ id, status: newStatus })
 }))

@@ -9,6 +9,7 @@ import { withAuth } from '@/lib/api/auth'
 import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { notifyNewComment } from '@/lib/notifications/notify'
+import { getHermesProfileLink, createHermesRun } from '@/lib/hermes/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -143,6 +144,39 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
       orgId,
       viewUrl: `/portal/social`,
     }).catch(() => {})
+
+    // Firestore notification (fire-and-forget)
+    adminDb.collection('notifications').add({
+      orgId,
+      userId: null,
+      agentId: null,
+      type: 'social_post_commented',
+      title: `New comment on social post`,
+      body: `${displayName}: "${text.trim().slice(0, 120)}"`,
+      link: `/admin/social`,
+      data: { postId: id, orgId, commentId: commentRef.id },
+      priority: 'normal',
+      status: 'unread',
+      snoozedUntil: null,
+      readAt: null,
+      createdAt: FieldValue.serverTimestamp(),
+    }).catch(() => {})
+
+    // Hermes agent dispatch (fire-and-forget)
+    getHermesProfileLink(orgId)
+      .then((link) => {
+        if (!link) return
+        const anchorHint =
+          anchor?.type === 'text'
+            ? ` Specifically about this text: "${(anchor.text ?? '').slice(0, 120)}"`
+            : anchor?.type === 'image'
+              ? ' (on an image in the post)'
+              : ''
+        return createHermesRun(link, user.uid, {
+          prompt: `Client ${displayName} left feedback on a social post for org ${orgId}.${anchorHint} Their comment: "${text.trim().slice(0, 300)}". Post ID: ${id}. Please review this feedback and revise the post if appropriate.`,
+        })
+      })
+      .catch(() => {})
 
     return apiSuccess({
       id: commentRef.id,
