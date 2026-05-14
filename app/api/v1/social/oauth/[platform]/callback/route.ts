@@ -91,16 +91,8 @@ export async function GET(req: NextRequest) {
       apiKeySecret: clientCreds.clientSecret,
     }
 
-    // Instagram Business Login: exchange short-lived token (1h) for long-lived token (60 days)
-    if (platform === 'instagram') {
-      const longLived = await exchangeInstagramLongLivedToken(
-        tokenResponse.accessToken,
-        clientCreds.clientSecret,
-      )
-      providerCreds.accessToken = longLived.accessToken
-      tokenResponse.accessToken = longLived.accessToken
-      tokenResponse.expiresIn = longLived.expiresIn
-    }
+    // Instagram Business Login tokens are valid immediately from api.instagram.com/oauth/access_token.
+    // The ig_exchange_token endpoint is for the legacy Basic Display API only and is not used here.
 
     // Threads: exchange short-lived token (1h) for long-lived token (60 days)
     if (platform === 'threads') {
