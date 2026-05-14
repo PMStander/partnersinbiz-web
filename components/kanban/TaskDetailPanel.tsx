@@ -113,6 +113,9 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
   const [newChecklistItem, setNewChecklistItem] = useState('')
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const [showRevisionForm, setShowRevisionForm] = useState(false)
+  const [revisionNote, setRevisionNote] = useState('')
+  const [submittingRevision, setSubmittingRevision] = useState(false)
 
   useEffect(() => {
     setEditing(false)
@@ -183,6 +186,39 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
     if (!confirm('Delete this task?')) return
     await onDelete(task.id)
     onClose()
+  }
+
+  async function handleRequestRevision() {
+    if (!revisionNote.trim() || !task?.id || !projectId) return
+    setSubmittingRevision(true)
+    try {
+      // Post the rejection comment so there's a visible audit trail
+      const res = await fetch(`/api/v1/projects/${projectId}/tasks/${task.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: `❌ Revision requested: ${revisionNote.trim()}` }),
+      })
+      const body = await res.json()
+      if (body.success && body.data) setComments(prev => [...prev, body.data])
+
+      // Re-queue the agent with the rejection reason appended to the spec
+      const existingSpec = task.agentInput?.spec ?? ''
+      const updatedSpec = existingSpec
+        ? `${existingSpec}\n\n---\nRevision requested: ${revisionNote.trim()}`
+        : `Revision requested: ${revisionNote.trim()}`
+
+      await onUpdate(task.id, {
+        agentStatus: 'pending',
+        agentInput: { ...task.agentInput, spec: updatedSpec },
+      })
+
+      setRevisionNote('')
+      setShowRevisionForm(false)
+    } catch (err) {
+      console.error('Failed to request revision:', err)
+    } finally {
+      setSubmittingRevision(false)
+    }
   }
 
   async function handleSubmitComment() {
@@ -630,6 +666,16 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
                           Retry
                         </button>
                       )}
+                      {task.agentStatus === 'done' && !showRevisionForm && (
+                        <button
+                          type="button"
+                          onClick={() => setShowRevisionForm(true)}
+                          className="inline-flex items-center gap-1 text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">replay</span>
+                          Request Revision
+                        </button>
+                      )}
                       {orgSlug && task.assigneeAgentId && (
                         <button
                           type="button"
@@ -646,6 +692,37 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
                     <p className="text-[10px] text-orange-400/80 leading-snug">
                       No heartbeat in over 5 minutes — the agent may be stuck. Hit Retry to re-queue it.
                     </p>
+                  )}
+                  {showRevisionForm && (
+                    <div className="rounded border border-red-500/20 bg-red-500/5 p-3 space-y-2">
+                      <p className="text-[10px] font-label uppercase tracking-widest text-red-400">What needs to change?</p>
+                      <textarea
+                        value={revisionNote}
+                        onChange={e => setRevisionNote(e.target.value)}
+                        placeholder="Describe what's wrong or what to do differently…"
+                        rows={3}
+                        className="w-full rounded border border-[var(--color-card-border)] bg-[var(--color-card)] px-3 py-2 text-xs text-on-surface placeholder:text-on-surface-variant focus:border-red-400 focus:outline-none resize-none"
+                        autoFocus
+                      />
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => { setShowRevisionForm(false); setRevisionNote('') }}
+                          className="text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded text-on-surface-variant hover:text-on-surface transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRequestRevision}
+                          disabled={!revisionNote.trim() || submittingRevision}
+                          className="inline-flex items-center gap-1 text-[10px] font-label uppercase tracking-wide px-3 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 disabled:opacity-40 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">replay</span>
+                          {submittingRevision ? 'Sending…' : 'Re-queue with feedback'}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )
