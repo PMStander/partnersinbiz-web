@@ -487,6 +487,18 @@ export default function AccountsPage() {
 
   useEffect(() => { fetchAccounts() }, [fetchAccounts])
 
+  useEffect(() => {
+    const status = searchParams.get('status')
+    const msg = searchParams.get('message')
+    const platform = searchParams.get('platform')
+    if (status === 'error' && msg) {
+      setActionError(decodeURIComponent(msg))
+    } else if (status === 'success' && platform && !pickerNonce) {
+      fetchAccounts()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function handleDisconnect(id: string) {
     if (!confirm('Disconnect this account? You can reconnect later.')) return
     setActionError(null)
