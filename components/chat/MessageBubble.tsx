@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import type { ChatEvent } from '@/lib/hermes/types'
 
 // Matches Phase 1 ConversationMessage shape
@@ -47,6 +48,17 @@ function initials(name: string): string {
     .join('')
 }
 
+function useElapsed(active: boolean): number {
+  const [secs, setSecs] = useState(0)
+  useEffect(() => {
+    if (!active) { setSecs(0); return }
+    setSecs(0)
+    const t = setInterval(() => setSecs((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [active])
+  return secs
+}
+
 export default function MessageBubble({
   message: m,
   currentUserUid,
@@ -59,6 +71,7 @@ export default function MessageBubble({
   const isPending = m.status === 'pending' || m.status === 'streaming'
   const isWaiting = m.status === 'waiting_approval'
   const isFailed = m.status === 'failed'
+  const elapsed = useElapsed(isPending || isWaiting)
 
   // Tool pill — no avatar, compact
   if (isTool) {
@@ -119,16 +132,27 @@ export default function MessageBubble({
         </p>
 
         {/* Live events (while pending/streaming/waiting) */}
-        {displayEvents.length > 0 && (isPending || isWaiting) && (
-          <div className="mb-1 space-y-1 text-xs text-on-surface-variant">
-            {displayEvents.slice(-5).map((ev, i) => (
+        {(isPending || isWaiting) && (
+          <div className="mb-1 space-y-1">
+            {/* Elapsed timer */}
+            <div className="flex items-center gap-2 text-[10px] text-on-surface-variant/60 px-1">
+              <span className="inline-flex gap-0.5">
+                <span className="animate-bounce [animation-delay:0ms]">·</span>
+                <span className="animate-bounce [animation-delay:150ms]">·</span>
+                <span className="animate-bounce [animation-delay:300ms]">·</span>
+              </span>
+              {elapsed > 0 && <span>{elapsed}s</span>}
+              {elapsed > 60 && <span className="text-amber-400/70">still working…</span>}
+            </div>
+            {displayEvents.slice(-6).map((ev, i) => (
               <div
                 key={i}
-                className="flex items-baseline gap-2 rounded-md bg-[var(--color-card,rgba(255,255,255,0.03))] px-2 py-1"
+                className="flex items-baseline gap-2 rounded-md bg-[var(--color-card,rgba(255,255,255,0.03))] px-2 py-1 text-xs text-on-surface-variant"
               >
-                <span className="font-mono opacity-70">{ev.event ?? 'event'}</span>
-                {ev.tool && <span className="text-primary">{ev.tool}</span>}
-                {ev.preview && <span className="truncate opacity-80">{ev.preview}</span>}
+                <span className="material-symbols-outlined text-[12px] text-primary/70 shrink-0">build</span>
+                {ev.tool && <span className="text-primary font-mono shrink-0">{ev.tool}</span>}
+                <span className="font-mono opacity-50 shrink-0">{ev.event ?? 'event'}</span>
+                {ev.preview && <span className="truncate opacity-70">{ev.preview}</span>}
               </div>
             ))}
           </div>
@@ -173,13 +197,7 @@ export default function MessageBubble({
           }`}
         >
           {isPending && !m.content && (
-            <span className="opacity-70 italic">
-              <span className="inline-flex gap-1">
-                <span className="animate-bounce [animation-delay:0ms]">·</span>
-                <span className="animate-bounce [animation-delay:150ms]">·</span>
-                <span className="animate-bounce [animation-delay:300ms]">·</span>
-              </span>
-            </span>
+            <span className="opacity-40 italic text-xs">Thinking…</span>
           )}
           {isWaiting && !m.content && (
             <span className="opacity-70 italic">Paused — awaiting tool approval…</span>

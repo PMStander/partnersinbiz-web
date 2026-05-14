@@ -239,3 +239,43 @@ export async function pingAgentHealth(
 
   return { status, latencyMs }
 }
+
+/**
+ * Call a raw path on an agent's Hermes endpoint. Decrypts the apiKey server-side.
+ * Used by the agent admin API routes that proxy skills/config/logs.
+ */
+export async function callAgentPath(
+  agentId: AgentId,
+  path: string,
+  init: RequestInit = {},
+): Promise<{ response: Response; data: unknown }> {
+  const raw = await getRaw(agentId)
+  if (!raw) throw new Error(`agent_team/${agentId} not found`)
+  const apiKey = decryptAgentApiKey(raw.apiKey).trim()
+  const baseUrl = raw.baseUrl.replace(/\/+$/, '')
+  const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`
+  const existingHeaders = init.headers
+    ? (init.headers instanceof Headers
+        ? Object.fromEntries((init.headers as unknown as { entries(): Iterable<[string, string]> }).entries())
+        : Array.isArray(init.headers)
+          ? Object.fromEntries(init.headers as [string, string][])
+          : (init.headers as Record<string, string>))
+    : {}
+  const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}`, ...existingHeaders }
+  const response = await fetch(url, { ...init, headers })
+  const text = await response.text()
+  let data: unknown = null
+  try { data = JSON.parse(text) } catch { data = { raw: text } }
+  return { response, data }
+}
+
+/** Like callAgentPath but returns the raw Response for streaming (SSE). */
+export async function callAgentStream(agentId: AgentId, path: string): Promise<Response> {
+  const raw = await getRaw(agentId)
+  if (!raw) throw new Error(`agent_team/${agentId} not found`)
+  const apiKey = decryptAgentApiKey(raw.apiKey).trim()
+  const baseUrl = raw.baseUrl.replace(/\/+$/, '')
+  const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } })
+  return response
+}

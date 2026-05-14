@@ -1551,6 +1551,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "hermes_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "profile",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

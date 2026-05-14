@@ -86,9 +86,16 @@ export default function UnifiedChat({
   const [newParticipants, setNewParticipants] = useState<SelectedParticipant[]>([])
   const [creatingConv, setCreatingConv] = useState(false)
 
+  // Attachment state
+  const [attachments, setAttachments] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
   // Refs
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const eventSourcesRef = useRef<Record<string, EventSource>>({})
   const messagesContainerRef = useRef<HTMLDivElement | null>(null)
+  // Tracks which assistant message IDs we've already started polling for (prevents duplicates)
+  const resumedRunsRef = useRef<Set<string>>(new Set())
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const activeConversation = useMemo(
@@ -176,18 +183,69 @@ export default function UnifiedChat({
     return () => document.removeEventListener('mousedown', handler)
   }, [menuOpenId])
 
-  // Cleanup polling on unmount
+  // Cleanup polling + SSE on unmount
   useEffect(() => () => {
     if (pollRef.current) clearTimeout(pollRef.current)
+    Object.values(eventSourcesRef.current).forEach((es) => es.close())
+  }, [])
+
+  // ── SSE event stream ─────────────────────────────────────────────────────
+  const startEventStream = useCallback(
+    (msgId: string, runId: string, agentId: AgentId) => {
+      eventSourcesRef.current[msgId]?.close()
+      const url = `/api/v1/admin/agents/${agentId}/runs/${encodeURIComponent(runId)}/events`
+      const es = new EventSource(url)
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data) as ChatEvent
+          setLiveEvents((prev) => ({
+            ...prev,
+            [msgId]: [...(prev[msgId] ?? []), data],
+          }))
+        } catch { /* ignore parse errors */ }
+      }
+      es.onerror = () => {
+        // SSE disconnects normally when run ends — just clean up
+        es.close()
+        delete eventSourcesRef.current[msgId]
+      }
+      eventSourcesRef.current[msgId] = es
+    },
+    [],
+  )
+
+  const closeEventStream = useCallback((msgId: string) => {
+    eventSourcesRef.current[msgId]?.close()
+    delete eventSourcesRef.current[msgId]
   }, [])
 
   // ── Polling finalize ──────────────────────────────────────────────────────
   const pollFinalize = useCallback(
     async (convId: string, msgId: string, runId: string, agentId: AgentId, attempts = 0) => {
-      if (attempts > 120) {
-        setError('Run timed out waiting for completion')
+      if (attempts > 400) {
+        closeEventStream(msgId)
+        // Update the pending message to show a timeout notice without killing it
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId
+              ? { ...m, status: 'failed', error: 'Run timed out — the agent may still be working. Refresh to check.', content: '' }
+              : m,
+          ),
+        )
         return
       }
+
+      // Show elapsed time hint in the bubble after 30s
+      if (attempts === 20) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId && m.status === 'pending'
+              ? { ...m, content: '' } // keep pending state visible
+              : m,
+          ),
+        )
+      }
+
       try {
         const events = liveEventsRef.current[msgId] ?? []
         const res = await fetch(`/api/v1/conversations/${convId}/messages/${msgId}/finalize`, {
@@ -197,6 +255,15 @@ export default function UnifiedChat({
         })
         const body = await res.json()
         const status: string | undefined = body.data?.status
+
+        // Non-2xx from finalize API (e.g. 502 upstream) — keep polling, don't bail
+        if (!res.ok && status !== 'failed') {
+          pollRef.current = setTimeout(
+            () => pollFinalize(convId, msgId, runId, agentId, attempts + 1),
+            POLL_INTERVAL,
+          )
+          return
+        }
 
         if (!status || status === 'running') {
           pollRef.current = setTimeout(
@@ -218,15 +285,42 @@ export default function UnifiedChat({
           return
         }
 
-        // completed or failed — reload
+        // completed or failed — close stream and reload
+        closeEventStream(msgId)
         await loadMessages(convId)
         await loadConversations()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Finalize failed')
       }
     },
-    [loadMessages, loadConversations],
+    [loadMessages, loadConversations, closeEventStream],
   )
+
+  // ── Auto-resume polling for pending messages (e.g. from previous sessions) ─
+  // Must be after startEventStream + pollFinalize to avoid TDZ
+  useEffect(() => {
+    resumedRunsRef.current = new Set()
+  }, [activeId])
+
+  useEffect(() => {
+    if (!activeId) return
+    const knownAgentIds: AgentId[] = ['pip', 'theo', 'maya', 'sage', 'nora']
+    for (const m of messages) {
+      if (
+        m.role === 'assistant' &&
+        (m.status === 'pending' || m.status === 'streaming') &&
+        m.runId &&
+        !resumedRunsRef.current.has(m.id)
+      ) {
+        resumedRunsRef.current.add(m.id)
+        const agentId: AgentId = knownAgentIds.includes(m.authorId as AgentId)
+          ? (m.authorId as AgentId)
+          : 'pip'
+        startEventStream(m.id, m.runId, agentId)
+        pollFinalize(activeId, m.id, m.runId, agentId)
+      }
+    }
+  }, [messages, activeId, startEventStream, pollFinalize])
 
   // ── Resolve approval ──────────────────────────────────────────────────────
   const resolveApproval = useCallback(
@@ -257,12 +351,15 @@ export default function UnifiedChat({
         )
         const agentId: AgentId =
           agentParticipant?.kind === 'agent' ? agentParticipant.agentId : 'pip'
-        if (activeId) pollFinalize(activeId, msgId, pending.runId, agentId)
+        if (activeId) {
+          startEventStream(msgId, pending.runId, agentId)
+          pollFinalize(activeId, msgId, pending.runId, agentId)
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Approval failed')
       }
     },
-    [approvalPending, orgId, activeId, activeConversation, pollFinalize],
+    [approvalPending, orgId, activeId, activeConversation, pollFinalize, startEventStream],
   )
 
   // ── Rename conversation ───────────────────────────────────────────────────
@@ -341,7 +438,7 @@ export default function UnifiedChat({
   const send = useCallback(
     async (e: FormEvent) => {
       e.preventDefault()
-      if (!input.trim() || sending) return
+      if ((!input.trim() && attachments.length === 0) || sending) return
       setError(null)
       setSending(true)
       let convId = activeId
@@ -368,8 +465,14 @@ export default function UnifiedChat({
           setActiveId(convId)
         }
 
-        const content = input
+        // Build content — append attachment filenames as context notes
+        let content = input
+        if (attachments.length > 0) {
+          const attNote = attachments.map((f) => `📎 ${f.name} (${(f.size / 1024).toFixed(1)} KB)`).join('\n')
+          content = content.trim() ? `${content}\n\n${attNote}` : attNote
+        }
         setInput('')
+        setAttachments([])
         const nowSec = Date.now() / 1000
 
         // Optimistic messages
@@ -413,13 +516,14 @@ export default function UnifiedChat({
         await loadMessages(convId)
 
         if (newAssistantId && runId) {
-          // Determine the agent from conversation participants or response
           const agentParticipant = conversations
             .find((c) => c.id === convId)
             ?.participants.find((p) => p.kind === 'agent')
           const agentId: AgentId =
             agentParticipant?.kind === 'agent' ? agentParticipant.agentId : 'pip'
-          void runDocId // Phase 3: use for Firestore subscription
+          void runDocId
+          // Open SSE stream to receive live tool-call events
+          startEventStream(newAssistantId, runId, agentId)
           pollFinalize(convId, newAssistantId, runId, agentId)
         }
       } catch (e) {
@@ -431,6 +535,7 @@ export default function UnifiedChat({
     [
       activeId,
       input,
+      attachments,
       sending,
       orgId,
       currentUserUid,
@@ -439,15 +544,16 @@ export default function UnifiedChat({
       scopeRefId,
       loadMessages,
       pollFinalize,
+      startEventStream,
       conversations,
     ],
   )
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="grid gap-4 lg:grid-cols-[280px_1fr] min-h-[600px]">
+    <div className="grid gap-4 lg:grid-cols-[280px_1fr] flex-1 min-h-0 overflow-hidden">
       {/* ── Left: conversation list ─────────────────────────────────────── */}
-      <aside className="pib-card flex flex-col gap-2 p-3">
+      <aside className="pib-card flex flex-col gap-2 p-3 overflow-hidden">
         <button
           type="button"
           onClick={() => setShowNewModal(true)}
@@ -560,7 +666,7 @@ export default function UnifiedChat({
       )}
 
       {/* ── Right: active conversation ──────────────────────────────────── */}
-      <section className="pib-card flex flex-col">
+      <section className="pib-card flex flex-col overflow-hidden min-h-0">
         {/* Header */}
         <div className="border-b border-[var(--color-card-border)] px-4 py-3">
           <div className="flex items-center justify-between mb-1.5">
@@ -576,7 +682,7 @@ export default function UnifiedChat({
         {/* Messages */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[400px]"
+          className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0"
         >
           {loading && <div className="text-xs text-on-surface-variant">Loading…</div>}
           {!loading && messages.length === 0 && (
@@ -666,33 +772,84 @@ export default function UnifiedChat({
         {/* Input */}
         <form
           onSubmit={send}
-          className="flex gap-2 border-t border-[var(--color-card-border)] p-3"
+          className="flex flex-col gap-2 border-t border-[var(--color-card-border)] p-3"
         >
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                send(e as unknown as FormEvent)
+          {/* Attachment chips */}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {attachments.map((f, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 rounded-full bg-white/8 border border-white/10 px-2.5 py-1 text-xs text-on-surface-variant"
+                >
+                  <span className="material-symbols-outlined text-[13px]">
+                    {f.type.startsWith('image/') ? 'image' : f.type === 'application/pdf' ? 'picture_as_pdf' : 'attach_file'}
+                  </span>
+                  <span className="max-w-[160px] truncate">{f.name}</span>
+                  <span className="opacity-50">({(f.size / 1024).toFixed(0)} KB)</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                    className="ml-0.5 text-on-surface-variant/60 hover:text-on-surface transition-colors"
+                    aria-label="Remove attachment"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">close</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            {/* Attach file button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || !activeConversation}
+              title="Attach file"
+              className="self-end p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/8 transition-colors disabled:opacity-40"
+            >
+              <span className="material-symbols-outlined text-[20px]">attach_file</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.pdf,.txt,.md,.csv,.json,.docx,.xlsx"
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? [])
+                setAttachments((prev) => [...prev, ...files].slice(0, 5))
+                e.target.value = ''
+              }}
+            />
+
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  send(e as unknown as FormEvent)
+                }
+              }}
+              placeholder={
+                activeConversation
+                  ? 'Send a message — Enter to send, Shift+Enter for new line'
+                  : 'Create or select a conversation first'
               }
-            }}
-            placeholder={
-              activeConversation
-                ? 'Send a message — Enter to send, Shift+Enter for new line'
-                : 'Create or select a conversation first'
-            }
-            disabled={sending}
-            rows={2}
-            className="flex-1 resize-none rounded-lg border border-[var(--color-card-border)] bg-[var(--color-card)] px-3 py-2 text-sm disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={sending || !input.trim()}
-            className="self-end rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50 hover:opacity-90"
-          >
-            {sending ? 'Sending…' : 'Send'}
-          </button>
+              disabled={sending}
+              rows={2}
+              className="flex-1 resize-none rounded-lg border border-[var(--color-card-border)] bg-[var(--color-card)] px-3 py-2 text-sm disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={sending || (!input.trim() && attachments.length === 0)}
+              className="self-end rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50 hover:opacity-90"
+            >
+              {sending ? 'Sending…' : 'Send'}
+            </button>
+          </div>
         </form>
       </section>
 

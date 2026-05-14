@@ -75,6 +75,16 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser, c
   // Fetch run status from Hermes
   const { response, data } = await callHermesJson(agentLink, `/v1/runs/${encodeURIComponent(runId)}`)
   if (!response.ok) {
+    // 404 = run expired or never found — mark message as failed so UI stops polling
+    if (response.status === 404) {
+      await messagesCollection(convId).doc(msgId).update({
+        content: '',
+        status: 'failed',
+        error: 'Run expired or not found on agent gateway',
+        runId,
+      })
+      return apiSuccess({ status: 'failed', content: '', runId })
+    }
     return apiError('Failed to fetch Hermes run', response.status || 502, { hermes: data })
   }
 

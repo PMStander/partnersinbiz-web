@@ -144,7 +144,7 @@ export default function AgentsBoardClient() {
 
           {/* Panel */}
           <div
-            className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-[var(--color-pib-bg)] border-l border-white/10 shadow-2xl flex flex-col"
+            className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-[var(--color-pib-bg)] border-l border-white/10 shadow-2xl flex flex-col"
             style={{ animation: 'slideIn 0.2s ease-out' }}
           >
             <AgentDetailPanel

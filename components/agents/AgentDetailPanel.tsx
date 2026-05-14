@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import type { AgentTeamDoc } from './AgentCard'
 import type { HealthStatus } from './AgentCard'
@@ -28,6 +28,18 @@ const HEALTH_PILL: Record<HealthStatus, { label: string; className: string }> = 
   loading:     { label: 'Checking…',   className: 'bg-white/10 text-on-surface-variant' },
 }
 
+const TABS = ['overview', 'skills', 'cron', 'env', 'config', 'logs', 'edit'] as const
+type Tab = typeof TABS[number]
+const TAB_LABELS: Record<Tab, string> = {
+  overview: 'Overview',
+  skills:   'Skills',
+  cron:     'Cron',
+  env:      'Env',
+  config:   'Config',
+  logs:     'Logs',
+  edit:     'Edit',
+}
+
 interface AgentDetailPanelProps {
   agent: AgentTeamDoc | null
   onClose: () => void
@@ -37,6 +49,52 @@ interface AgentDetailPanelProps {
 interface HealthResult {
   status: HealthStatus
   latencyMs?: number
+}
+
+type Skill = {
+  name: string
+  description?: string | null
+  fileCount: number
+  sizeBytes: number
+}
+
+type LogRun = {
+  id: string
+  orgId: string | null
+  profile: string | null
+  hermesRunId: string | null
+  requestedBy: string | null
+  prompt: string | null
+  status: string | null
+  createdAt: string | null
+}
+
+type CronJob = {
+  id: string
+  name?: string | null
+  prompt: string
+  schedule: string
+  status?: string | null
+  last_run?: string | null
+  next_run?: string | null
+}
+
+type EnvEntry = {
+  key: string
+  is_set: boolean
+  redacted_value?: string | null
+  description?: string | null
+  url?: string | null
+  category?: string | null
+  is_password?: boolean
+  tools?: string[]
+  advanced?: boolean
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return n + ' B'
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'
+  return (n / 1048576).toFixed(1) + ' MB'
 }
 
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -53,32 +111,210 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
 export function AgentDetailPanel({ agent, onClose, onSaved }: AgentDetailPanelProps) {
   const { success: toastSuccess, error: toastError } = useToast()
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<Tab>('overview')
+
   // Edit form state
-  const [editName, setEditName]             = useState('')
-  const [editPersona, setEditPersona]       = useState('')
-  const [editEnabled, setEditEnabled]       = useState(true)
-  const [editBaseUrl, setEditBaseUrl]       = useState('')
-  const [editApiKey, setEditApiKey]         = useState('')
-  const [editModel, setEditModel]           = useState('')
+  const [editName, setEditName]       = useState('')
+  const [editPersona, setEditPersona] = useState('')
+  const [editEnabled, setEditEnabled] = useState(true)
+  const [editBaseUrl, setEditBaseUrl] = useState('')
+  const [editApiKey, setEditApiKey]   = useState('')
+  const [editModel, setEditModel]     = useState('')
 
   // Health check state
-  const [healthResult, setHealthResult]     = useState<HealthResult | null>(null)
-  const [pinging, setPinging]               = useState(false)
+  const [healthResult, setHealthResult] = useState<HealthResult | null>(null)
+  const [pinging, setPinging]           = useState(false)
 
   // Save state
-  const [saving, setSaving]                 = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  // Sync form fields when agent changes
+  // Skills tab state
+  const [skills, setSkills]       = useState<Skill[]>([])
+  const [skillsLoading, setSkillsLoading] = useState(false)
+  const [skillsError, setSkillsError]     = useState<string | null>(null)
+  const [skillsMessage, setSkillsMessage] = useState<string | null>(null)
+  const [uploading, setUploading]         = useState(false)
+  const [dragOver, setDragOver]           = useState(false)
+  const skillInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Config tab state
+  const [configData, setConfigData]       = useState<unknown>(null)
+  const [configLoading, setConfigLoading] = useState(false)
+  const [configError, setConfigError]     = useState<string | null>(null)
+
+  // Logs tab state
+  const [logsData, setLogsData]       = useState<LogRun[] | null>(null)
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsError, setLogsError]     = useState<string | null>(null)
+
+  // Cron tab state
+  const [cronJobs, setCronJobs]               = useState<CronJob[]>([])
+  const [cronSupported, setCronSupported]     = useState<boolean | null>(null)
+  const [cronLoading, setCronLoading]         = useState(false)
+  const [cronError, setCronError]             = useState<string | null>(null)
+  const [cronMessage, setCronMessage]     = useState<string | null>(null)
+  const [cronName, setCronName]           = useState('')
+  const [cronPrompt, setCronPrompt]       = useState('')
+  const [cronSchedule, setCronSchedule]   = useState('0 9 * * *')
+  const [cronCreating, setCronCreating]   = useState(false)
+  const [showCronForm, setShowCronForm]   = useState(false)
+
+  // Env tab state
+  const [envData, setEnvData]             = useState<EnvEntry[] | null>(null)
+  const [envSupported, setEnvSupported]   = useState<boolean | null>(null)
+  const [envLoading, setEnvLoading]       = useState(false)
+  const [envError, setEnvError]           = useState<string | null>(null)
+
+  // Lazy-load tracking: which tabs have been loaded for the current agent
+  const loadedTabs = useRef<Set<Tab>>(new Set())
+
+  // Reset everything when agent changes
   useEffect(() => {
     if (!agent) return
+    setActiveTab('overview')
     setEditName(agent.name)
     setEditPersona(agent.persona)
     setEditEnabled(agent.enabled)
     setEditBaseUrl(agent.baseUrl)
-    setEditApiKey('')        // always start blank — placeholder shows masked key
+    setEditApiKey('')
     setEditModel(agent.defaultModel)
     setHealthResult(null)
+    setSkills([])
+    setSkillsError(null)
+    setSkillsMessage(null)
+    setConfigData(null)
+    setConfigError(null)
+    setLogsData(null)
+    setLogsError(null)
+    setCronJobs([])
+    setCronSupported(null)
+    setCronError(null)
+    setCronMessage(null)
+    setShowCronForm(false)
+    setCronName('')
+    setCronPrompt('')
+    setCronSchedule('0 9 * * *')
+    setEnvData(null)
+    setEnvSupported(null)
+    setEnvError(null)
+    loadedTabs.current = new Set()
   }, [agent?.agentId])
+
+  const loadSkills = useCallback(async (agentId: string) => {
+    setSkillsLoading(true)
+    setSkillsError(null)
+    try {
+      const res = await fetch(`/api/v1/admin/agents/${agentId}/skills`)
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `Failed to load skills (${res.status})`)
+      setSkills(body.data?.skills ?? [])
+    } catch (e) {
+      setSkillsError(e instanceof Error ? e.message : 'Failed to load skills')
+    } finally {
+      setSkillsLoading(false)
+    }
+  }, [])
+
+  const loadConfig = useCallback(async (agentId: string) => {
+    setConfigLoading(true)
+    setConfigError(null)
+    try {
+      const res = await fetch(`/api/v1/admin/agents/${agentId}/config`)
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `Failed to load config (${res.status})`)
+      setConfigData(body.data ?? body)
+    } catch (e) {
+      setConfigError(e instanceof Error ? e.message : 'Failed to load config')
+    } finally {
+      setConfigLoading(false)
+    }
+  }, [])
+
+  const loadLogs = useCallback(async (agentId: string) => {
+    setLogsLoading(true)
+    setLogsError(null)
+    try {
+      const res = await fetch(`/api/v1/admin/agents/${agentId}/logs`)
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `Failed to load logs (${res.status})`)
+      setLogsData(body.data?.runs ?? [])
+    } catch (e) {
+      setLogsError(e instanceof Error ? e.message : 'Failed to load logs')
+    } finally {
+      setLogsLoading(false)
+    }
+  }, [])
+
+  const loadCron = useCallback(async (agentId: string) => {
+    setCronLoading(true)
+    setCronError(null)
+    try {
+      const res = await fetch(`/api/v1/admin/agents/${agentId}/cron`)
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `Failed to load cron jobs (${res.status})`)
+      const jobs = body.data?.jobs ?? body.data ?? []
+      setCronJobs(Array.isArray(jobs) ? jobs : [])
+      setCronSupported(body.data?.supported !== false)
+    } catch (e) {
+      setCronError(e instanceof Error ? e.message : 'Failed to load cron jobs')
+    } finally {
+      setCronLoading(false)
+    }
+  }, [])
+
+  const loadEnv = useCallback(async (agentId: string) => {
+    setEnvLoading(true)
+    setEnvError(null)
+    try {
+      const res = await fetch(`/api/v1/admin/agents/${agentId}/env`)
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `Failed to load env (${res.status})`)
+      const raw = body.data?.env ?? {}
+      // Convert object map to sorted array
+      const entries: EnvEntry[] = Object.entries(raw).map(([key, val]) => ({
+        key,
+        ...(val as Omit<EnvEntry, 'key'>),
+      }))
+      entries.sort((a, b) => {
+        if (a.is_set !== b.is_set) return a.is_set ? -1 : 1
+        return a.key.localeCompare(b.key)
+      })
+      setEnvData(entries)
+      setEnvSupported(body.data?.supported !== false)
+    } catch (e) {
+      setEnvError(e instanceof Error ? e.message : 'Failed to load env')
+    } finally {
+      setEnvLoading(false)
+    }
+  }, [])
+
+  // Activate tab and lazy-load its data
+  function activateTab(tab: Tab) {
+    setActiveTab(tab)
+    if (!agent) return
+    const { agentId } = agent
+    if (tab === 'skills' && !loadedTabs.current.has('skills')) {
+      loadedTabs.current.add('skills')
+      loadSkills(agentId)
+    }
+    if (tab === 'config' && !loadedTabs.current.has('config')) {
+      loadedTabs.current.add('config')
+      loadConfig(agentId)
+    }
+    if (tab === 'logs' && !loadedTabs.current.has('logs')) {
+      loadedTabs.current.add('logs')
+      loadLogs(agentId)
+    }
+    if (tab === 'cron' && !loadedTabs.current.has('cron')) {
+      loadedTabs.current.add('cron')
+      loadCron(agentId)
+    }
+    if (tab === 'env' && !loadedTabs.current.has('env')) {
+      loadedTabs.current.add('env')
+      loadEnv(agentId)
+    }
+  }
 
   if (!agent) return null
 
@@ -118,11 +354,9 @@ export function AgentDetailPanel({ agent, onClose, onSaved }: AgentDetailPanelPr
         baseUrl:      editBaseUrl.trim(),
         defaultModel: editModel.trim(),
       }
-      // Only send apiKey if user typed a new value
       if (editApiKey.trim()) {
         payload.apiKey = editApiKey.trim()
       }
-
       const res  = await fetch(`/api/v1/admin/agents/${agentId}`, {
         method:  'PUT',
         headers: { 'content-type': 'application/json' },
@@ -143,7 +377,52 @@ export function AgentDetailPanel({ agent, onClose, onSaved }: AgentDetailPanelPr
     }
   }
 
+  async function uploadSkill(file: File) {
+    if (!file.name.endsWith('.zip')) {
+      setSkillsError('File must be a .zip')
+      return
+    }
+    setSkillsError(null)
+    setSkillsMessage(null)
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res  = await fetch(`/api/v1/admin/agents/${agentId}/skills`, { method: 'POST', body: fd })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `Upload failed (${res.status})`)
+      setSkillsMessage(`Installed: ${body.data?.installed || 'skill'} (${body.data?.fileCount ?? '?'} files). Gateway restarting…`)
+      setTimeout(() => loadSkills(agentId), 4000)
+    } catch (e) {
+      setSkillsError(e instanceof Error ? e.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function removeSkill(name: string) {
+    if (!confirm(`Delete skill "${name}"? This will remove it from the VPS and restart the gateway.`)) return
+    setSkillsError(null)
+    try {
+      const res  = await fetch(`/api/v1/admin/agents/${agentId}/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error || `Delete failed (${res.status})`)
+      setSkillsMessage(`Deleted ${name}. Gateway restarting…`)
+      setTimeout(() => loadSkills(agentId), 4000)
+    } catch (e) {
+      setSkillsError(e instanceof Error ? e.message : 'Delete failed')
+    }
+  }
+
   const healthPill = healthResult ? HEALTH_PILL[healthResult.status] : null
+
+  // Config summary extraction — API returns flat Firestore fields
+  const configObj          = configData && typeof configData === 'object' ? configData as Record<string, unknown> : null
+  const configModelDefault = configObj?.defaultModel as string | undefined
+  const configRole         = configObj?.role as string | undefined
+  const configPersona      = configObj?.persona as string | undefined
+  const configEnabled      = configObj?.enabled as boolean | undefined
+  const configModels       = configObj?.models  // optional /v1/models probe result
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -165,165 +444,678 @@ export function AgentDetailPanel({ agent, onClose, onSaved }: AgentDetailPanelPr
         </button>
       </div>
 
+      {/* Tab bar */}
+      <div className="shrink-0 flex items-center gap-1 px-4 py-2 border-b border-white/10 overflow-x-auto">
+        {TABS.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => activateTab(tab)}
+            className={`px-3 py-1 rounded-full text-xs font-label whitespace-nowrap transition-colors ${
+              activeTab === tab
+                ? 'bg-white/15 text-on-surface'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-white/8'
+            }`}
+          >
+            {TAB_LABELS[tab]}
+          </button>
+        ))}
+      </div>
+
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+      <div className="flex-1 overflow-y-auto px-6 py-5">
 
-        {/* Read-only summary */}
-        <section className="space-y-3">
-          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-            Overview
-          </p>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="pib-card p-3 space-y-0.5">
-              <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant">Status</p>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${agent.enabled ? 'bg-emerald-400' : 'bg-white/20'}`} />
-                <span className="text-sm text-on-surface">{agent.enabled ? 'Enabled' : 'Disabled'}</span>
+        {/* OVERVIEW TAB */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            <section className="space-y-3">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="pib-card p-3 space-y-0.5">
+                  <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant">Status</p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${agent.enabled ? 'bg-emerald-400' : 'bg-white/20'}`} />
+                    <span className="text-sm text-on-surface">{agent.enabled ? 'Enabled' : 'Disabled'}</span>
+                  </div>
+                </div>
+                <div className="pib-card p-3 space-y-0.5">
+                  <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant">Last health</p>
+                  {agent.lastHealthStatus ? (
+                    <span className={`inline-block mt-1 text-[10px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full ${HEALTH_PILL[agent.lastHealthStatus].className}`}>
+                      {HEALTH_PILL[agent.lastHealthStatus].label}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-on-surface-variant/50 mt-1 block">No data</span>
+                  )}
+                </div>
               </div>
+
+              <div className="pib-card p-3">
+                <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant mb-1">API Key (masked)</p>
+                <code className="text-xs font-mono text-on-surface-variant/70 break-all">{agent.apiKey}</code>
+              </div>
+
+              <div className="pib-card p-3">
+                <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant mb-1">Base URL</p>
+                <code className="text-xs font-mono text-on-surface break-all">{agent.baseUrl}</code>
+              </div>
+            </section>
+
+            {/* Health ping */}
+            <section className="space-y-3">
+              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                Health Check
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={pingHealth}
+                  disabled={pinging}
+                  className="pib-btn-ghost text-sm font-label flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[16px]">wifi_tethering</span>
+                  {pinging ? 'Pinging…' : 'Ping now'}
+                </button>
+                {healthPill && !pinging && (
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full ${healthPill.className}`}>
+                      {healthPill.label}
+                    </span>
+                    {healthResult?.latencyMs !== undefined && (
+                      <span className="text-xs text-on-surface-variant">{healthResult.latencyMs}ms</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* SKILLS TAB */}
+        {activeTab === 'skills' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                {skills.length} installed
+              </p>
+              <button
+                type="button"
+                onClick={() => loadSkills(agentId)}
+                disabled={skillsLoading}
+                className="pib-btn-ghost text-xs font-label flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[14px]">refresh</span>
+                {skillsLoading ? 'Loading…' : 'Refresh'}
+              </button>
             </div>
-            <div className="pib-card p-3 space-y-0.5">
-              <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant">Last health</p>
-              {agent.lastHealthStatus ? (
-                <span className={`inline-block mt-1 text-[10px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full ${HEALTH_PILL[agent.lastHealthStatus].className}`}>
-                  {HEALTH_PILL[agent.lastHealthStatus].label}
-                </span>
-              ) : (
-                <span className="text-xs text-on-surface-variant/50 mt-1 block">No data</span>
-              )}
-            </div>
-          </div>
 
-          {/* API key masked */}
-          <div className="pib-card p-3">
-            <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant mb-1">API Key (masked)</p>
-            <code className="text-xs font-mono text-on-surface-variant/70 break-all">{agent.apiKey}</code>
-          </div>
-
-          {/* Base URL */}
-          <div className="pib-card p-3">
-            <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant mb-1">Base URL</p>
-            <code className="text-xs font-mono text-on-surface break-all">{agent.baseUrl}</code>
-          </div>
-        </section>
-
-        {/* Health ping */}
-        <section className="space-y-3">
-          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-            Health Check
-          </p>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={pingHealth}
-              disabled={pinging}
-              className="pib-btn-ghost text-sm font-label flex items-center gap-1.5 disabled:opacity-50"
+            {/* Upload zone */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragOver(false)
+                const f = e.dataTransfer.files?.[0]
+                if (f) uploadSkill(f)
+              }}
+              onClick={() => skillInputRef.current?.click()}
+              className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors ${
+                dragOver
+                  ? 'border-primary bg-primary/5'
+                  : 'border-[var(--color-card-border)] hover:border-primary/50'
+              }`}
             >
-              <span className="material-symbols-outlined text-[16px]">wifi_tethering</span>
-              {pinging ? 'Pinging…' : 'Ping now'}
-            </button>
-            {healthPill && !pinging && (
-              <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-label uppercase tracking-wide px-2 py-0.5 rounded-full ${healthPill.className}`}>
-                  {healthPill.label}
-                </span>
-                {healthResult?.latencyMs !== undefined && (
-                  <span className="text-xs text-on-surface-variant">{healthResult.latencyMs}ms</span>
+              <span className="material-symbols-outlined text-3xl text-on-surface-variant">cloud_upload</span>
+              <div className="text-sm text-on-surface text-center">
+                {uploading ? 'Uploading…' : 'Drop a skill .zip here, or click to choose'}
+              </div>
+              <div className="text-xs text-on-surface-variant">Max 50 MB. Gateway auto-restarts after install.</div>
+              <input
+                ref={skillInputRef}
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) uploadSkill(f)
+                  e.target.value = ''
+                }}
+              />
+            </div>
+
+            {skillsError   && <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">{skillsError}</div>}
+            {skillsMessage && <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-xs text-green-300">{skillsMessage}</div>}
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {skills.length === 0 && !skillsLoading && (
+                <div className="sm:col-span-2 text-sm text-on-surface-variant py-4 text-center">No skills installed.</div>
+              )}
+              {skills.map((s) => (
+                <div key={s.name} className="rounded-lg border border-[var(--color-card-border)] bg-[var(--color-card)] p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-on-surface truncate">{s.name}</div>
+                      {s.description && <div className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">{s.description}</div>}
+                      <div className="text-xs text-on-surface-variant mt-1">{s.fileCount} files · {formatBytes(s.sizeBytes)}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeSkill(s.name)}
+                      className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-500/10"
+                      title="Delete skill"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* CONFIG TAB */}
+        {activeTab === 'config' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                Agent Config
+              </p>
+              <button
+                type="button"
+                onClick={() => { loadedTabs.current.delete('config'); loadConfig(agentId) }}
+                disabled={configLoading}
+                className="pib-btn-ghost text-xs font-label flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[14px]">refresh</span>
+                {configLoading ? 'Loading…' : 'Refresh'}
+              </button>
+            </div>
+
+            {configLoading && (
+              <div className="space-y-2">
+                <div className="pib-skeleton h-6 rounded" />
+                <div className="pib-skeleton h-6 rounded w-3/4" />
+                <div className="pib-skeleton h-32 rounded" />
+              </div>
+            )}
+
+            {configError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">{configError}</div>
+            )}
+
+            {!configLoading && !configError && configData !== null && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  {configModelDefault && (
+                    <div className="pib-card p-3">
+                      <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant mb-1">Default model</p>
+                      <code className="text-xs font-mono text-on-surface">{configModelDefault}</code>
+                    </div>
+                  )}
+                  {configRole && (
+                    <div className="pib-card p-3">
+                      <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant mb-1">Role</p>
+                      <span className="text-xs text-on-surface">{configRole}</span>
+                    </div>
+                  )}
+                  {configEnabled !== undefined && (
+                    <div className="pib-card p-3">
+                      <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant mb-1">Status</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${configEnabled ? 'bg-emerald-400' : 'bg-white/20'}`} />
+                        <span className="text-xs text-on-surface">{configEnabled ? 'Enabled' : 'Disabled'}</span>
+                      </div>
+                    </div>
+                  )}
+                  {configModels !== undefined && configModels !== null && (
+                    <div className="pib-card p-3 col-span-2">
+                      <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant mb-1">Live models (VPS)</p>
+                      <code className="text-xs font-mono text-on-surface-variant/80">{JSON.stringify(configModels)}</code>
+                    </div>
+                  )}
+                </div>
+                {configPersona && (
+                  <div className="pib-card p-3">
+                    <p className="text-[10px] font-label uppercase tracking-wide text-on-surface-variant mb-1">Persona</p>
+                    <p className="text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap">{configPersona}</p>
+                  </div>
                 )}
               </div>
             )}
           </div>
-        </section>
+        )}
 
-        {/* Edit form */}
-        <form id="agent-edit-form" onSubmit={handleSave} className="space-y-4">
-          <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
-            Edit
-          </p>
-
-          <FieldRow label="Name">
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="pib-input w-full"
-              required
-            />
-          </FieldRow>
-
-          <FieldRow label="Persona">
-            <textarea
-              value={editPersona}
-              onChange={(e) => setEditPersona(e.target.value)}
-              className="pib-input w-full resize-none"
-              rows={4}
-            />
-          </FieldRow>
-
-          <FieldRow label="Default Model">
-            <input
-              type="text"
-              value={editModel}
-              onChange={(e) => setEditModel(e.target.value)}
-              className="pib-input w-full font-mono text-sm"
-              placeholder="e.g. claude-sonnet-4-6"
-            />
-          </FieldRow>
-
-          <FieldRow label="Base URL">
-            <input
-              type="url"
-              value={editBaseUrl}
-              onChange={(e) => setEditBaseUrl(e.target.value)}
-              className="pib-input w-full font-mono text-sm"
-              placeholder="https://…"
-            />
-          </FieldRow>
-
-          <FieldRow label="API Key (leave blank to keep current)">
-            <input
-              type="password"
-              value={editApiKey}
-              onChange={(e) => setEditApiKey(e.target.value)}
-              className="pib-input w-full font-mono text-sm"
-              placeholder={agent.apiKey}
-              autoComplete="new-password"
-            />
-          </FieldRow>
-
-          <label className="flex items-center gap-3 cursor-pointer group select-none">
-            <div
-              onClick={() => setEditEnabled((v) => !v)}
-              className={`relative w-10 h-6 rounded-full transition-colors duration-150 ${editEnabled ? 'bg-emerald-500' : 'bg-white/20'}`}
-            >
-              <span
-                className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-150 ${editEnabled ? 'translate-x-4' : 'translate-x-0'}`}
-              />
+        {/* LOGS TAB */}
+        {activeTab === 'logs' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                Agent Logs
+              </p>
+              <button
+                type="button"
+                onClick={() => { loadedTabs.current.delete('logs'); loadLogs(agentId) }}
+                disabled={logsLoading}
+                className="pib-btn-ghost text-xs font-label flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[14px]">refresh</span>
+                {logsLoading ? 'Loading…' : 'Refresh'}
+              </button>
             </div>
-            <span className="text-sm text-on-surface group-hover:text-on-surface">
-              Agent enabled
-            </span>
-          </label>
-        </form>
+
+            {logsLoading && (
+              <div className="space-y-1">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="pib-skeleton h-4 rounded" style={{ width: `${60 + Math.random() * 40}%` }} />
+                ))}
+              </div>
+            )}
+
+            {logsError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">{logsError}</div>
+            )}
+
+            {!logsLoading && !logsError && logsData !== null && logsData.length === 0 && (
+              <div className="text-sm text-on-surface-variant text-center py-8">No runs recorded for this agent yet.</div>
+            )}
+
+            {!logsLoading && !logsError && logsData !== null && logsData.length > 0 && (
+              <div className="space-y-2">
+                {logsData.map((run) => (
+                  <div key={run.id} className="pib-card p-3 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-label uppercase tracking-wide px-1.5 py-0.5 rounded-full ${
+                          run.status === 'done' || run.status === 'completed'
+                            ? 'bg-emerald-500/15 text-emerald-400'
+                            : run.status === 'error' || run.status === 'failed'
+                            ? 'bg-red-500/15 text-red-400'
+                            : run.status === 'in-progress'
+                            ? 'bg-amber-500/15 text-amber-400'
+                            : 'bg-white/10 text-on-surface-variant'
+                        }`}>{run.status ?? 'unknown'}</span>
+                        {run.orgId && (
+                          <span className="text-[10px] font-mono text-on-surface-variant/60 truncate max-w-[120px]">{run.orgId}</span>
+                        )}
+                      </div>
+                      {run.createdAt && (
+                        <span className="text-[10px] text-on-surface-variant/50 shrink-0">
+                          {new Date(run.createdAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    {run.prompt && (
+                      <p className="text-xs text-on-surface-variant line-clamp-2">{run.prompt}</p>
+                    )}
+                    {run.hermesRunId && (
+                      <code className="text-[10px] font-mono text-on-surface-variant/40">{run.hermesRunId}</code>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CRON TAB */}
+        {activeTab === 'cron' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                Scheduled Jobs ({cronJobs.length})
+              </p>
+              <div className="flex items-center gap-2">
+                {cronSupported !== false && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCronForm((v) => !v)}
+                    className="pib-btn-ghost text-xs font-label flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">{showCronForm ? 'remove' : 'add'}</span>
+                    New Job
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { loadedTabs.current.delete('cron'); loadCron(agentId) }}
+                  disabled={cronLoading}
+                  className="pib-btn-ghost text-xs font-label flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[14px]">refresh</span>
+                  {cronLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {/* New job form */}
+            {showCronForm && (
+              <form
+                className="pib-card p-4 space-y-3"
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  if (!cronPrompt.trim() || !cronSchedule.trim()) return
+                  setCronCreating(true)
+                  setCronError(null)
+                  setCronMessage(null)
+                  try {
+                    const res = await fetch(`/api/v1/admin/agents/${agentId}/cron`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        name: cronName.trim() || undefined,
+                        prompt: cronPrompt.trim(),
+                        schedule: cronSchedule.trim(),
+                      }),
+                    })
+                    const body = await res.json().catch(() => ({}))
+                    if (!res.ok) throw new Error(body.error || `Failed to create job (${res.status})`)
+                    setCronMessage('Job created.')
+                    setCronName('')
+                    setCronPrompt('')
+                    setCronSchedule('0 9 * * *')
+                    setShowCronForm(false)
+                    loadedTabs.current.delete('cron')
+                    loadCron(agentId)
+                  } catch (err) {
+                    setCronError(err instanceof Error ? err.message : 'Failed to create job')
+                  } finally {
+                    setCronCreating(false)
+                  }
+                }}
+              >
+                <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-2">New Cron Job</p>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Name (optional)"
+                    value={cronName}
+                    onChange={(e) => setCronName(e.target.value)}
+                    className="pib-input w-full text-sm"
+                  />
+                  <textarea
+                    placeholder="What should the agent do on each run?"
+                    value={cronPrompt}
+                    onChange={(e) => setCronPrompt(e.target.value)}
+                    required
+                    rows={3}
+                    className="pib-input w-full text-sm resize-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Cron expression, e.g. 0 9 * * *"
+                    value={cronSchedule}
+                    onChange={(e) => setCronSchedule(e.target.value)}
+                    required
+                    className="pib-input w-full text-sm font-mono"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button type="button" onClick={() => setShowCronForm(false)} className="pib-btn-ghost text-xs font-label">Cancel</button>
+                  <button type="submit" disabled={cronCreating} className="pib-btn-primary text-xs font-label disabled:opacity-50">
+                    {cronCreating ? 'Creating…' : 'Create Job'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {cronError   && <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">{cronError}</div>}
+            {cronMessage && <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-xs text-green-300">{cronMessage}</div>}
+
+            {cronLoading && (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => <div key={i} className="pib-skeleton h-16 rounded-lg" />)}
+              </div>
+            )}
+
+            {!cronLoading && cronSupported === false && (
+              <div className="text-sm text-on-surface-variant text-center py-8 space-y-1">
+                <p>This agent&apos;s gateway doesn&apos;t expose the cron API.</p>
+                <p className="text-[11px] text-on-surface-variant/50">Cron support requires Hermes with the full dashboard enabled.</p>
+              </div>
+            )}
+
+            {!cronLoading && cronSupported !== false && cronJobs.length === 0 && !cronError && (
+              <div className="text-sm text-on-surface-variant text-center py-8">
+                No cron jobs scheduled. Click &ldquo;New Job&rdquo; to create one.
+              </div>
+            )}
+
+            {cronJobs.map((job) => (
+              <div key={job.id} className="pib-card p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {job.name && <span className="text-sm font-medium text-on-surface">{job.name}</span>}
+                      <code className="text-[10px] font-mono text-on-surface-variant/60 bg-white/5 px-1.5 py-0.5 rounded">{job.schedule}</code>
+                      {job.status && (
+                        <span className={`text-[10px] font-label uppercase px-1.5 py-0.5 rounded-full ${
+                          job.status === 'running' ? 'bg-emerald-500/15 text-emerald-400'
+                          : job.status === 'paused' ? 'bg-amber-500/15 text-amber-400'
+                          : 'bg-white/10 text-on-surface-variant'
+                        }`}>{job.status}</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-on-surface-variant mt-1 line-clamp-2">{job.prompt}</p>
+                    <div className="flex gap-3 mt-1 text-[10px] text-on-surface-variant/50">
+                      {job.last_run && <span>Last: {new Date(job.last_run).toLocaleString()}</span>}
+                      {job.next_run && <span>Next: {new Date(job.next_run).toLocaleString()}</span>}
+                    </div>
+                  </div>
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      title="Trigger now"
+                      onClick={async () => {
+                        setCronMessage(null); setCronError(null)
+                        const res = await fetch(`/api/v1/admin/agents/${agentId}/cron/${job.id}?action=trigger`, { method: 'POST' })
+                        const b = await res.json().catch(() => ({}))
+                        if (res.ok) { setCronMessage('Job triggered.') } else { setCronError(b.error || 'Failed to trigger') }
+                      }}
+                      className="p-1.5 rounded hover:bg-white/10 text-on-surface-variant hover:text-on-surface transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                    </button>
+                    <button
+                      type="button"
+                      title={job.status === 'paused' ? 'Resume' : 'Pause'}
+                      onClick={async () => {
+                        const action = job.status === 'paused' ? 'resume' : 'pause'
+                        setCronMessage(null); setCronError(null)
+                        const res = await fetch(`/api/v1/admin/agents/${agentId}/cron/${job.id}?action=${action}`, { method: 'POST' })
+                        const b = await res.json().catch(() => ({}))
+                        if (res.ok) { setCronMessage(`Job ${action}d.`); loadedTabs.current.delete('cron'); loadCron(agentId) }
+                        else { setCronError(b.error || `Failed to ${action}`) }
+                      }}
+                      className="p-1.5 rounded hover:bg-white/10 text-on-surface-variant hover:text-on-surface transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">{job.status === 'paused' ? 'play_circle' : 'pause'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      title="Delete job"
+                      onClick={async () => {
+                        if (!confirm(`Delete cron job "${job.name || job.id}"?`)) return
+                        setCronMessage(null); setCronError(null)
+                        const res = await fetch(`/api/v1/admin/agents/${agentId}/cron/${job.id}`, { method: 'DELETE' })
+                        const b = await res.json().catch(() => ({}))
+                        if (res.ok) { setCronMessage('Job deleted.'); loadedTabs.current.delete('cron'); loadCron(agentId) }
+                        else { setCronError(b.error || 'Failed to delete') }
+                      }}
+                      className="p-1.5 rounded hover:bg-red-500/10 text-on-surface-variant hover:text-red-400 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ENV TAB */}
+        {activeTab === 'env' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">
+                Environment Keys
+              </p>
+              <button
+                type="button"
+                onClick={() => { loadedTabs.current.delete('env'); loadEnv(agentId) }}
+                disabled={envLoading}
+                className="pib-btn-ghost text-xs font-label flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[14px]">refresh</span>
+                {envLoading ? 'Loading…' : 'Refresh'}
+              </button>
+            </div>
+
+            {envLoading && (
+              <div className="space-y-2">
+                {Array.from({ length: 6 }).map((_, i) => <div key={i} className="pib-skeleton h-12 rounded-lg" />)}
+              </div>
+            )}
+
+            {envError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">{envError}</div>
+            )}
+
+            {!envLoading && !envError && envSupported === false && (
+              <div className="text-sm text-on-surface-variant text-center py-8 space-y-1">
+                <p>This agent&apos;s gateway doesn&apos;t expose the env API.</p>
+                <p className="text-[11px] text-on-surface-variant/50">Env inspection requires Hermes with the full dashboard enabled.</p>
+              </div>
+            )}
+
+            {!envLoading && !envError && envData !== null && envSupported !== false && (
+              <div className="space-y-1.5">
+                {envData.filter((e) => !e.advanced).length > 0 && (
+                  <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mt-2 mb-1">Providers</p>
+                )}
+                {envData.map((entry) => (
+                  <div
+                    key={entry.key}
+                    className={`flex items-start gap-3 rounded-lg px-3 py-2.5 ${
+                      entry.is_set ? 'bg-white/5' : 'bg-transparent border border-white/5'
+                    }`}
+                  >
+                    <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${entry.is_set ? 'bg-emerald-400' : 'bg-white/20'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <code className="text-xs font-mono text-on-surface">{entry.key}</code>
+                        {entry.is_set && entry.redacted_value && (
+                          <code className="text-[10px] font-mono text-on-surface-variant/60">{entry.redacted_value}</code>
+                        )}
+                      </div>
+                      {entry.description && (
+                        <p className="text-[10px] text-on-surface-variant/70 mt-0.5">{entry.description}</p>
+                      )}
+                      {entry.tools && entry.tools.length > 0 && (
+                        <div className="flex gap-1 flex-wrap mt-1">
+                          {entry.tools.map((t) => (
+                            <span key={t} className="text-[9px] font-label bg-primary/10 text-primary/80 px-1.5 py-0.5 rounded-full">{t}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* EDIT TAB */}
+        {activeTab === 'edit' && (
+          <form id="agent-edit-form" onSubmit={handleSave} className="space-y-4">
+            <FieldRow label="Name">
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="pib-input w-full"
+                required
+              />
+            </FieldRow>
+
+            <FieldRow label="Persona">
+              <textarea
+                value={editPersona}
+                onChange={(e) => setEditPersona(e.target.value)}
+                className="pib-input w-full resize-none"
+                rows={4}
+              />
+            </FieldRow>
+
+            <FieldRow label="Default Model">
+              <input
+                type="text"
+                value={editModel}
+                onChange={(e) => setEditModel(e.target.value)}
+                className="pib-input w-full font-mono text-sm"
+                placeholder="e.g. claude-sonnet-4-6"
+              />
+            </FieldRow>
+
+            <FieldRow label="Base URL">
+              <input
+                type="url"
+                value={editBaseUrl}
+                onChange={(e) => setEditBaseUrl(e.target.value)}
+                className="pib-input w-full font-mono text-sm"
+                placeholder="https://…"
+              />
+            </FieldRow>
+
+            <FieldRow label="API Key (leave blank to keep current)">
+              <input
+                type="password"
+                value={editApiKey}
+                onChange={(e) => setEditApiKey(e.target.value)}
+                className="pib-input w-full font-mono text-sm"
+                placeholder={agent.apiKey}
+                autoComplete="new-password"
+              />
+            </FieldRow>
+
+            <label className="flex items-center gap-3 cursor-pointer group select-none">
+              <div
+                onClick={() => setEditEnabled((v) => !v)}
+                className={`relative w-10 h-6 rounded-full transition-colors duration-150 ${editEnabled ? 'bg-emerald-500' : 'bg-white/20'}`}
+              >
+                <span
+                  className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-150 ${editEnabled ? 'translate-x-4' : 'translate-x-0'}`}
+                />
+              </div>
+              <span className="text-sm text-on-surface group-hover:text-on-surface">
+                Agent enabled
+              </span>
+            </label>
+          </form>
+        )}
+
       </div>
 
-      {/* Sticky footer */}
-      <div className="shrink-0 px-6 py-4 border-t border-white/10 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="pib-btn-ghost text-sm font-label"
-          disabled={saving}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          form="agent-edit-form"
-          className="pib-btn-primary text-sm font-label"
-          disabled={saving}
-        >
-          {saving ? 'Saving…' : 'Save changes'}
-        </button>
-      </div>
+      {/* Sticky footer — only visible on Edit tab */}
+      {activeTab === 'edit' && (
+        <div className="shrink-0 px-6 py-4 border-t border-white/10 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="pib-btn-ghost text-sm font-label"
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="agent-edit-form"
+            className="pib-btn-primary text-sm font-label"
+            disabled={saving}
+          >
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

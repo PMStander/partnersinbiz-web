@@ -9,9 +9,10 @@ interface MessagesClientProps {
 }
 
 export default function MessagesClient({ orgId, uid, displayName }: MessagesClientProps) {
+  // calc: 100dvh minus the admin banner (56px) and main's py-8 padding (64px)
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="flex flex-col gap-4 overflow-hidden" style={{ height: 'calc(100dvh - 120px)' }}>
+      <div className="shrink-0">
         <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">
           Workspace / Messages
         </p>
