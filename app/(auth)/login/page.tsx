@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { loginWithEmail, resetPassword } from '@/lib/firebase/auth'
+import { readLastPath } from '@/lib/pwa/lastPath'
 
 function EyeIcon() {
   return (
@@ -48,7 +49,14 @@ export default function LoginPage() {
       const verifyRes = await fetch('/api/auth/verify')
       const verifyData = verifyRes.ok ? await verifyRes.json() : null
       const role = verifyData?.role
-      router.push(role === 'admin' ? '/admin/dashboard' : '/portal/dashboard')
+      const fallback = role === 'admin' ? '/admin/dashboard' : '/portal/dashboard'
+      const saved = readLastPath()
+      const allowedPrefix = role === 'admin' ? '/admin' : '/portal'
+      const target =
+        saved && (saved === allowedPrefix || saved.startsWith(allowedPrefix + '/') || saved.startsWith(allowedPrefix + '?'))
+          ? saved
+          : fallback
+      router.push(target)
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? ''
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {

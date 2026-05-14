@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { Suspense } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth, getClientAuth } from '@/lib/firebase/config'
 import { logout } from '@/lib/firebase/auth'
+import { LastPathTracker } from '@/components/pwa/LastPathTracker'
+import { clearLastPath } from '@/lib/pwa/lastPath'
 
 interface NavItem {
   href: string
@@ -158,6 +161,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }
 
   async function handleLogout() {
+    clearLastPath()
     await logout()
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
     router.push('/')
@@ -181,10 +185,17 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   const initials = (name || email).split(/[.\s@]/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')
 
+  const tracker = (
+    <Suspense fallback={null}>
+      <LastPathTracker />
+    </Suspense>
+  )
+
   // ── Topbar mode ────────────────────────────────────────────────────────────
   if (layoutMode === 'topbar') {
     return (
       <div className="flex flex-col min-h-screen bg-[var(--color-pib-bg)] text-[var(--color-pib-text)]">
+        {tracker}
         <header className="h-14 sticky top-0 z-30 bg-[var(--color-pib-bg)]/95 backdrop-blur-md border-b border-[var(--color-pib-line)] shrink-0">
           <div className="flex items-center h-full px-4 gap-2">
             {/* Brand */}
@@ -311,6 +322,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   // ── Sidebar mode ───────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[var(--color-pib-bg)] text-[var(--color-pib-text)] flex">
+      {tracker}
       {/* Mobile backdrop */}
       <div
         onClick={() => setDrawerOpen(false)}
