@@ -93,8 +93,8 @@ export default function ConversationsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <header>
+    <div className="space-y-6 lg:space-y-6">
+      <header className="hidden lg:block">
         <p className="eyebrow">Direct line to your team</p>
         <h1 className="pib-page-title mt-2">Conversations</h1>
         <p className="pib-page-sub">Chat with your team and AI agents in one place.</p>
@@ -104,6 +104,7 @@ export default function ConversationsPage() {
         orgId={org.id}
         currentUserUid={user.uid}
         currentUserDisplayName={user.name}
+        orgName={org.name}
       />
     </div>
   )

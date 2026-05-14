@@ -59,6 +59,33 @@ function useElapsed(active: boolean): number {
   return secs
 }
 
+// Categorize tool-call events into a short human summary like
+// "Ran 6 commands, read 2 files, wrote 1 file".
+function summarizeEvents(events: ChatEvent[]): string {
+  if (events.length === 0) return ''
+  let commands = 0, read = 0, wrote = 0, searched = 0, web = 0, other = 0
+  for (const ev of events) {
+    const t = (ev.tool ?? ev.event ?? '').toLowerCase()
+    if (!t) { other++; continue }
+    if (/(^|_)(read|view|cat|glob|ls|list)(_|$)/.test(t)) read++
+    else if (/(bash|exec|shell|command|^run$|run_)/.test(t)) commands++
+    else if (/(write|edit|update|create|patch|save)/.test(t)) wrote++
+    else if (/(grep|search|find)/.test(t)) searched++
+    else if (/(web|fetch|http|url)/.test(t)) web++
+    else other++
+  }
+  const parts: string[] = []
+  const plur = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+  if (commands) parts.push(`ran ${plur(commands, 'command')}`)
+  if (read) parts.push(`read ${plur(read, 'file')}`)
+  if (wrote) parts.push(`wrote ${plur(wrote, 'file')}`)
+  if (searched) parts.push(`searched ${plur(searched, 'time')}`)
+  if (web) parts.push(`fetched ${plur(web, 'page')}`)
+  if (!parts.length) parts.push(plur(other, 'action'))
+  const joined = parts.join(', ')
+  return joined.charAt(0).toUpperCase() + joined.slice(1)
+}
+
 export default function MessageBubble({
   message: m,
   currentUserUid,
@@ -95,8 +122,8 @@ export default function MessageBubble({
   if (isMine) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%]">
-          <div className="rounded-2xl rounded-br-md px-4 py-2.5 text-sm whitespace-pre-wrap bg-primary text-on-primary">
+        <div className="max-w-[85%] lg:max-w-[80%]">
+          <div className="rounded-2xl rounded-br-md px-4 py-2.5 text-[15px] lg:text-sm whitespace-pre-wrap bg-[var(--color-card-active,rgba(255,255,255,0.08))] lg:bg-primary lg:text-on-primary text-on-surface">
             {m.content}
           </div>
         </div>
@@ -104,13 +131,14 @@ export default function MessageBubble({
     )
   }
 
-  // Other (agent or another user) — float left with avatar
+  // Other (agent or another user)
   const isAgent = m.authorKind === 'agent'
+  const eventSummary = displayEvents.length > 0 ? summarizeEvents(displayEvents) : ''
 
   return (
-    <div className="flex justify-start gap-2.5 w-full">
-      {/* Avatar */}
-      <div className="shrink-0 mt-0.5">
+    <div className="flex justify-start gap-2.5 w-full lg:gap-2.5">
+      {/* Avatar — hidden on mobile for cleaner prose-style look */}
+      <div className="shrink-0 mt-0.5 hidden lg:block">
         {isAgent ? (
           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${color.bg}`}>
             <span className={`material-symbols-outlined text-[16px] ${color.text}`}>
@@ -125,9 +153,9 @@ export default function MessageBubble({
       </div>
 
       {/* Bubble content */}
-      <div className="max-w-[78%] flex-1 min-w-0">
-        {/* Author label */}
-        <p className={`text-[10px] font-medium mb-1 ${isAgent ? color.text : 'text-on-surface-variant'}`}>
+      <div className="max-w-full lg:max-w-[78%] flex-1 min-w-0">
+        {/* Author label — hidden on mobile */}
+        <p className={`hidden lg:block text-[10px] font-medium mb-1 ${isAgent ? color.text : 'text-on-surface-variant'}`}>
           {m.authorDisplayName}
         </p>
 
@@ -160,15 +188,12 @@ export default function MessageBubble({
 
         {/* Completed tool-call timeline (collapsible) */}
         {displayEvents.length > 0 && !isPending && !isWaiting && (
-          <details className="mb-2 text-xs text-on-surface-variant group/details">
-            <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center gap-1 px-1 py-0.5 rounded hover:bg-[var(--color-card,rgba(255,255,255,0.03))]">
-              <span className="group-open/details:hidden">▶</span>
-              <span className="hidden group-open/details:inline">▼</span>
-              <span>
-                {displayEvents.length} tool call{displayEvents.length !== 1 ? 's' : ''}
-              </span>
+          <details className="my-2 text-on-surface-variant group/details">
+            <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden flex items-center gap-1.5 py-1 -mx-1 px-1 rounded hover:bg-[var(--color-card,rgba(255,255,255,0.03))] text-[13px] lg:text-xs">
+              <span className="opacity-60 group-open/details:rotate-90 transition-transform text-[14px] leading-none">›</span>
+              <span className="opacity-80">{eventSummary}</span>
             </summary>
-            <div className="mt-1 space-y-0.5 pl-3 border-l border-[var(--color-card-border)]">
+            <div className="mt-1 space-y-0.5 pl-3 border-l border-[var(--color-card-border)] text-xs">
               {displayEvents.map((ev, i) => {
                 const ts = ev.timestamp
                   ? new Date(ev.timestamp * 1000).toISOString().slice(11, 19)
@@ -188,13 +213,18 @@ export default function MessageBubble({
           </details>
         )}
 
-        {/* The bubble itself */}
+        {/* The bubble itself — plain prose on mobile, bubble on desktop */}
         <div
-          className={`rounded-2xl rounded-tl-md px-4 py-2.5 text-sm whitespace-pre-wrap ${
+          className={
             isFailed
-              ? 'bg-red-500/15 text-red-200 border border-red-500/40'
-              : 'bg-[var(--color-card-active,rgba(255,255,255,0.06))] text-on-surface'
-          }`}
+              ? 'rounded-2xl rounded-tl-md px-4 py-2.5 text-sm whitespace-pre-wrap bg-red-500/15 text-red-200 border border-red-500/40'
+              : [
+                  // Mobile: plain prose, no background, larger readable text
+                  'text-[15px] leading-relaxed text-on-surface whitespace-pre-wrap',
+                  // Desktop: keep the bubble look
+                  'lg:rounded-2xl lg:rounded-tl-md lg:px-4 lg:py-2.5 lg:text-sm lg:bg-[var(--color-card-active,rgba(255,255,255,0.06))]',
+                ].join(' ')
+          }
         >
           {isPending && !m.content && (
             <span className="opacity-40 italic text-xs">Thinking…</span>
