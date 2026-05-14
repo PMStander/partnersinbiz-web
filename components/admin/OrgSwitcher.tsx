@@ -65,9 +65,11 @@ export function OrgSwitcher() {
     setOrg(org.id, org.name)
     setOpen(false)
     setSearch('')
-    const orgMatch = pathname.match(/^\/admin\/org\/[^/]+(.*)$/)
-    const subPath = orgMatch ? (orgMatch[1] || '/dashboard') : '/dashboard'
-    router.push(`/admin/org/${org.slug}${subPath}`)
+    // Keep the top-level section (e.g. /messages, /projects) but drop any
+    // deeper record path — a project or post ID from the old org is meaningless.
+    const orgMatch = pathname.match(/^\/admin\/org\/[^/]+\/([^/]+)/)
+    const section = orgMatch ? `/${orgMatch[1]}` : '/dashboard'
+    router.push(`/admin/org/${org.slug}${section}`)
   }
 
   const label = orgName || selectedOrgId || 'All orgs'
