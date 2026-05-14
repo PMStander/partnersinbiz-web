@@ -2,7 +2,6 @@
  * GET  /api/v1/social/posts  — list social posts
  * POST /api/v1/social/posts  — create a social post
  */
-import { NextRequest } from 'next/server'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
@@ -15,6 +14,7 @@ import { validatePostContent } from '@/lib/social/validation'
 import { logAudit } from '@/lib/social/audit'
 import { notifyApprovalNeeded } from '@/lib/notifications/notify'
 import { logActivity } from '@/lib/activity/log'
+import { emptyApprovalState } from '@/lib/social/approval'
 
 export const dynamic = 'force-dynamic'
 
@@ -160,7 +160,6 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId) => {
       return apiError('scheduledFor/scheduledAt must be a valid ISO date string')
     }
     scheduledAt = Timestamp.fromDate(scheduledDate)
-    status = (body.status === 'draft') ? 'draft' : 'scheduled'
   }
 
   if (body.status === 'draft') status = 'draft'
@@ -189,6 +188,7 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId) => {
     audience: typeof body.audience === 'string' ? body.audience : null,
     createdBy: user.uid,
     assignedTo: null,
+    approval: emptyApprovalState(),
     approvedBy: null,
     approvedAt: null,
     comments: [],
@@ -203,28 +203,6 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId) => {
   }
 
   const docRef = await adminDb.collection('social_posts').add(doc)
-
-  // Create queue entry if scheduled
-  if (status === 'scheduled' && scheduledAt) {
-    await adminDb.collection('social_queue').doc(docRef.id).set({
-      orgId,
-      postId: docRef.id,
-      scheduledAt,
-      status: 'pending',
-      priority: 0,
-      attempts: 0,
-      maxAttempts: 5,
-      lastAttemptAt: null,
-      nextRetryAt: null,
-      backoffSeconds: 60,
-      lockedBy: null,
-      lockedAt: null,
-      startedAt: null,
-      completedAt: null,
-      error: null,
-      createdAt: FieldValue.serverTimestamp(),
-    })
-  }
 
   await logAudit({
     orgId,

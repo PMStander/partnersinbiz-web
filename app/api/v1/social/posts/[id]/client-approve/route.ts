@@ -22,6 +22,7 @@ import { sendEmail } from '@/lib/email/send'
 import { getOrgManagerEmails } from '@/lib/organizations/manager-emails'
 import { getHermesProfileLink, createHermesRun } from '@/lib/hermes/server'
 import { logActivity } from '@/lib/activity/log'
+import { resolveQueueableStatus, upsertSocialQueueEntry } from '@/lib/social/scheduling'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,10 +51,15 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
     : user.uid
   const deliveryMode = (post.deliveryMode as DeliveryMode | undefined) ?? orgSettings.defaultDeliveryMode
 
-  const newStatus = resolveAfterFinalApproval({
+  const desiredStatus = resolveAfterFinalApproval({
     deliveryMode,
     hasScheduledAt: !!post.scheduledAt,
   })
+  const newStatus = await resolveQueueableStatus(
+    { ...post, approvedBy: user.uid, approvedAt: FieldValue.serverTimestamp() },
+    orgId,
+    desiredStatus,
+  )
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateData: Record<string, any> = {
@@ -72,23 +78,11 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
 
   // Create a queue entry if we just landed on "scheduled".
   if (newStatus === 'scheduled' && post.scheduledAt) {
-    await adminDb.collection('social_queue').doc(id).set({
-      orgId,
+    await upsertSocialQueueEntry({
       postId: id,
+      orgId,
       scheduledAt: post.scheduledAt,
-      status: 'pending',
-      priority: 0,
-      attempts: 0,
-      maxAttempts: 5,
-      lastAttemptAt: null,
-      nextRetryAt: null,
-      backoffSeconds: 60,
-      lockedBy: null,
-      lockedAt: null,
-      startedAt: null,
-      completedAt: null,
-      error: null,
-      createdAt: FieldValue.serverTimestamp(),
+      post: { ...post, ...updateData, status: newStatus },
     })
   }
 

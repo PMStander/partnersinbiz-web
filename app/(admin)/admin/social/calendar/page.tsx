@@ -10,8 +10,9 @@ import { useRouter } from 'next/navigation'
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type SocialPostStatus = 'draft' | 'scheduled' | 'published' | 'failed' | 'cancelled'
+type SocialPostStatus = 'draft' | 'qa_review' | 'client_review' | 'pending_approval' | 'approved' | 'vaulted' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled'
 type ViewMode = 'month' | 'week'
+type SerializableTimestamp = { _seconds?: number; seconds?: number } | string | number | Date | null | undefined
 
 interface SocialPost {
   id: string
@@ -19,17 +20,17 @@ interface SocialPost {
   platforms?: string[]
   content: string | { text: string }
   threadParts?: string[]
-  scheduledFor?: any
-  scheduledAt?: any
+  scheduledFor?: SerializableTimestamp
+  scheduledAt?: SerializableTimestamp
   status: SocialPostStatus
-  publishedAt: any | null
+  publishedAt: SerializableTimestamp
   externalId: string | null
   error: string | null
   category: string
   tags: string[]
   createdBy: string
-  createdAt: any
-  updatedAt: any
+  createdAt: SerializableTimestamp
+  updatedAt: SerializableTimestamp
   media?: Array<{
     id?: string
     url: string
@@ -59,7 +60,13 @@ const PLATFORM_ICONS: Record<string, { label: string; color: string; icon: strin
 }
 
 const STATUS_COLORS: Record<SocialPostStatus, { bg: string; text: string; border: string }> = {
+  qa_review: { bg: 'bg-amber-900/30', text: 'text-amber-300', border: 'border-amber-500/40' },
+  client_review: { bg: 'bg-amber-900/30', text: 'text-amber-300', border: 'border-amber-500/40' },
+  pending_approval: { bg: 'bg-amber-900/30', text: 'text-amber-300', border: 'border-amber-500/40' },
+  approved: { bg: 'bg-teal-900/30', text: 'text-teal-300', border: 'border-teal-500/40' },
+  vaulted: { bg: 'bg-purple-900/30', text: 'text-purple-300', border: 'border-purple-500/40' },
   scheduled: { bg: 'bg-blue-900/40', text: 'text-blue-300', border: 'border-blue-500/40' },
+  publishing: { bg: 'bg-blue-900/40', text: 'text-blue-300', border: 'border-blue-500/40' },
   published: { bg: 'bg-green-900/40', text: 'text-green-300', border: 'border-green-500/40' },
   failed: { bg: 'bg-red-900/40', text: 'text-red-300', border: 'border-red-500/40' },
   draft: { bg: 'bg-surface-container-high', text: 'text-on-surface-variant', border: 'border-outline-variant' },
@@ -86,10 +93,12 @@ function getPostPlatforms(post: SocialPost): string[] {
   return []
 }
 
-function tsToDate(ts: any): Date | null {
+function tsToDate(ts: SerializableTimestamp): Date | null {
   if (!ts) return null
-  if (ts._seconds) return new Date(ts._seconds * 1000)
-  if (ts.seconds) return new Date(ts.seconds * 1000)
+  if (ts instanceof Date) return ts
+  if (typeof ts === 'object' && '_seconds' in ts && ts._seconds) return new Date(ts._seconds * 1000)
+  if (typeof ts === 'object' && 'seconds' in ts && ts.seconds) return new Date(ts.seconds * 1000)
+  if (typeof ts === 'object') return null
   return new Date(ts)
 }
 
@@ -97,13 +106,9 @@ function getScheduledDate(post: SocialPost): Date | null {
   return tsToDate(post.scheduledAt) ?? tsToDate(post.scheduledFor) ?? null
 }
 
-function fmtTime(ts: any) {
+function fmtTime(ts: SerializableTimestamp) {
   const d = tsToDate(ts)
   return d ? d.toLocaleString('en-ZA', { hour: '2-digit', minute: '2-digit' }) : '—'
-}
-
-function fmtDateLong(d: Date) {
-  return d.toLocaleDateString('en-ZA', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -270,7 +275,7 @@ function PostSlideOver({ post, onClose, onPublish, onCancel, publishing, cancell
         </div>
 
         <div className="px-5 py-4 border-t border-outline-variant flex gap-2 flex-wrap">
-          {['draft', 'scheduled', 'failed'].includes(post.status) && (
+          {['approved', 'scheduled', 'failed'].includes(post.status) && (
             <button
               onClick={() => onPublish(post)}
               disabled={publishing === post.id}
@@ -442,14 +447,18 @@ export default function CalendarPage() {
     // Optimistic update
     setPosts(prev => prev.map(p => {
       if (p.id !== post.id) return p
-      return { ...p, scheduledAt: { seconds: Math.floor(newDate.getTime() / 1000) }, scheduledFor: { seconds: Math.floor(newDate.getTime() / 1000) }, status: 'scheduled' }
+      return {
+        ...p,
+        scheduledAt: { seconds: Math.floor(newDate.getTime() / 1000) },
+        scheduledFor: { seconds: Math.floor(newDate.getTime() / 1000) },
+      }
     }))
 
     try {
       await fetch(`/api/v1/social/posts/${post.id}${orgId ? `?orgId=${orgId}` : ''}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scheduledAt: newDate.toISOString(), status: 'scheduled' }),
+        body: JSON.stringify({ scheduledAt: newDate.toISOString(), status: post.status }),
       })
     } catch {
       fetchPosts() // Revert on failure
@@ -542,6 +551,8 @@ export default function CalendarPage() {
       <div className="flex gap-4 text-[11px]">
         {[
           { label: 'Scheduled', cls: 'bg-blue-900/40 text-blue-300 border border-blue-500/40' },
+          { label: 'Needs approval', cls: 'bg-amber-900/30 text-amber-300 border border-amber-500/40' },
+          { label: 'Approved', cls: 'bg-teal-900/30 text-teal-300 border border-teal-500/40' },
           { label: 'Published', cls: 'bg-green-900/40 text-green-300 border border-green-500/40' },
           { label: 'Failed', cls: 'bg-red-900/40 text-red-300 border border-red-500/40' },
           { label: 'Draft', cls: 'bg-surface-container-high text-on-surface-variant border border-outline-variant' },

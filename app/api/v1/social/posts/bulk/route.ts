@@ -15,6 +15,7 @@ import { ACTIVE_PLATFORMS } from '@/lib/social/providers'
 import type { SocialPlatformType } from '@/lib/social/providers'
 import { validatePostContent } from '@/lib/social/validation'
 import { logAudit } from '@/lib/social/audit'
+import { emptyApprovalState } from '@/lib/social/approval'
 
 export const dynamic = 'force-dynamic'
 
@@ -202,12 +203,11 @@ async function createBulkPosts(
       }
 
       let scheduledAt: Timestamp | null = null
-      let status: 'draft' | 'scheduled' = 'draft'
+      const status = 'draft'
       if (post.scheduledAt) {
         const d = new Date(post.scheduledAt)
         if (!isNaN(d.getTime())) {
           scheduledAt = Timestamp.fromDate(d)
-          status = 'scheduled'
         }
       }
 
@@ -228,6 +228,7 @@ async function createBulkPosts(
         campaign: null,
         createdBy: userId,
         assignedTo: null,
+        approval: emptyApprovalState(),
         approvedBy: null,
         approvedAt: null,
         comments: [],
@@ -242,27 +243,6 @@ async function createBulkPosts(
       }
 
       const docRef = await adminDb.collection('social_posts').add(doc)
-
-      if (status === 'scheduled' && scheduledAt) {
-        await adminDb.collection('social_queue').doc(docRef.id).set({
-          orgId,
-          postId: docRef.id,
-          scheduledAt,
-          status: 'pending',
-          priority: 0,
-          attempts: 0,
-          maxAttempts: 5,
-          lastAttemptAt: null,
-          nextRetryAt: null,
-          backoffSeconds: 60,
-          lockedBy: null,
-          lockedAt: null,
-          startedAt: null,
-          completedAt: null,
-          error: null,
-          createdAt: FieldValue.serverTimestamp(),
-        })
-      }
 
       await logAudit({
         orgId,

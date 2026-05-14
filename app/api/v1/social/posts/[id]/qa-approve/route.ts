@@ -18,6 +18,7 @@ import {
   validateTransition,
 } from '@/lib/social/approval'
 import type { DeliveryMode, PostStatus } from '@/lib/social/providers'
+import { resolveQueueableStatus, upsertSocialQueueEntry } from '@/lib/social/scheduling'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,10 +44,15 @@ export const POST = withAuth('admin', withTenant(async (req, user, orgId, contex
   // If we land directly on "approved", apply finalisation rules.
   if (newStatus === 'approved') {
     const deliveryMode = (post.deliveryMode as DeliveryMode | undefined) ?? orgSettings.defaultDeliveryMode
-    newStatus = resolveAfterFinalApproval({
+    const desiredStatus = resolveAfterFinalApproval({
       deliveryMode,
       hasScheduledAt: !!post.scheduledAt,
     })
+    newStatus = await resolveQueueableStatus(
+      { ...post, approvedBy: user.uid, approvedAt: FieldValue.serverTimestamp() },
+      orgId,
+      desiredStatus,
+    )
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,23 +67,11 @@ export const POST = withAuth('admin', withTenant(async (req, user, orgId, contex
 
   // If this was the final approval (no client step), create a queue entry where applicable.
   if (newStatus === 'scheduled' && post.scheduledAt) {
-    await adminDb.collection('social_queue').doc(id).set({
-      orgId,
+    await upsertSocialQueueEntry({
       postId: id,
+      orgId,
       scheduledAt: post.scheduledAt,
-      status: 'pending',
-      priority: 0,
-      attempts: 0,
-      maxAttempts: 5,
-      lastAttemptAt: null,
-      nextRetryAt: null,
-      backoffSeconds: 60,
-      lockedBy: null,
-      lockedAt: null,
-      startedAt: null,
-      completedAt: null,
-      error: null,
-      createdAt: FieldValue.serverTimestamp(),
+      post: { ...post, ...updateData, status: newStatus },
     })
   }
 

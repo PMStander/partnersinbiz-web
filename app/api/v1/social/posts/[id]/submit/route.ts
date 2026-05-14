@@ -21,6 +21,7 @@ import {
   resolveSubmitStatus,
 } from '@/lib/social/approval'
 import type { DeliveryMode, PostStatus } from '@/lib/social/providers'
+import { resolveQueueableStatus, upsertSocialQueueEntry } from '@/lib/social/scheduling'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,10 +57,15 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
   // If submission goes straight to "approved", apply finalisation rules.
   if (newStatus === 'approved') {
     const deliveryMode = (post.deliveryMode as DeliveryMode | undefined) ?? orgSettings.defaultDeliveryMode
-    newStatus = resolveAfterFinalApproval({
+    const desiredStatus = resolveAfterFinalApproval({
       deliveryMode,
       hasScheduledAt: !!post.scheduledAt,
     })
+    newStatus = await resolveQueueableStatus(
+      { ...post, approvedBy: user.uid, approvedAt: FieldValue.serverTimestamp() },
+      orgId,
+      desiredStatus,
+    )
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,6 +80,15 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
   }
 
   await ref.update(updateData)
+
+  if (newStatus === 'scheduled' && post.scheduledAt) {
+    await upsertSocialQueueEntry({
+      postId: id,
+      orgId,
+      scheduledAt: post.scheduledAt,
+      post: { ...post, ...updateData, approvedBy: user.uid, approvedAt: FieldValue.serverTimestamp() },
+    })
+  }
 
   await logAudit({
     orgId,

@@ -1,7 +1,6 @@
 /**
  * POST /api/v1/social/posts/:id/publish  — publish a post immediately
  */
-import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
@@ -10,6 +9,7 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { toPlatformType, resolveProvider, refreshAccountToken } from '@/lib/social/account-resolver'
 import { logAudit } from '@/lib/social/audit'
 import { logActivity } from '@/lib/activity/log'
+import { hasFinalApproval } from '@/lib/social/scheduling'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +25,7 @@ export const POST = withAuth('admin', withTenant(async (_req, user, orgId, conte
   if (post.orgId && post.orgId !== orgId) return apiError('Post not found', 404)
   if (post.status === 'published') return apiError('Post already published', 409)
   if (post.status === 'cancelled') return apiError('Cannot publish a cancelled post', 400)
+  if (!hasFinalApproval(post)) return apiError('Post must be approved before publishing', 400)
 
   const platformType = toPlatformType(post.platform)
   if (!platformType) return apiError(`Unsupported platform: ${post.platform}`, 400)
@@ -41,6 +42,7 @@ export const POST = withAuth('admin', withTenant(async (_req, user, orgId, conte
   try {
     // Resolve provider: explicit accountIds > default account for org+platform > env vars
     const { provider, accountId } = await resolveProvider(post, orgId, platformType)
+    if (!accountId) return apiError('Connect an active social account before publishing this post', 400)
     const threadParts: string[] | undefined = post.threadParts
 
     // Attempt publish with auto-refresh on 401

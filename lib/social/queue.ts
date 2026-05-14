@@ -8,6 +8,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { toPlatformType, resolveProvider, refreshAccountToken } from '@/lib/social/account-resolver'
 import type { SocialPlatformType } from '@/lib/social/providers'
+import { hasFinalApproval } from '@/lib/social/scheduling'
 import crypto from 'crypto'
 
 /** Backoff schedule in seconds: 1min, 5min, 15min, 1hr */
@@ -131,6 +132,18 @@ export async function processQueue(): Promise<QueueProcessResult> {
       result.skipped++; continue
     }
 
+    if (post.status !== 'scheduled' && post.status !== 'publishing') {
+      await lockRef.update({ status: 'blocked', error: `Post status is ${post.status}; only approved scheduled posts can publish`, lockedBy: null, lockedAt: null, completedAt: FieldValue.serverTimestamp() })
+      result.skipped++
+      continue
+    }
+
+    if (!hasFinalApproval(post)) {
+      await lockRef.update({ status: 'blocked', error: 'Post has not been approved', lockedBy: null, lockedAt: null, completedAt: FieldValue.serverTimestamp() })
+      result.skipped++
+      continue
+    }
+
     const platformType = toPlatformType(post.platform)
     if (!platformType) { await failQueueEntry(lockRef, entry, `Unsupported platform: ${post.platform}`); result.failed++; result.errors.push({ postId: entry.postId, error: `Unsupported: ${post.platform}` }); continue }
 
@@ -146,6 +159,12 @@ export async function processQueue(): Promise<QueueProcessResult> {
         continue
       }
       const { provider, accountId } = await resolveProvider(post, orgId, platformType)
+      if (!accountId) {
+        await failQueueEntry(lockRef, entry, 'No active connected social account for this org/platform')
+        result.failed++
+        result.errors.push({ postId: entry.postId, error: 'No connected account' })
+        continue
+      }
       const mediaUrls: string[] | undefined = Array.isArray(post.media) && post.media.length > 0
         ? (post.media as Array<{ url?: string }>).map(m => m.url).filter((u): u is string => Boolean(u))
         : undefined

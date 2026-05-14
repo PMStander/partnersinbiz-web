@@ -3,7 +3,6 @@
  * PUT    /api/v1/social/posts/:id  — update a social post (partial)
  * DELETE /api/v1/social/posts/:id  — soft delete (sets status: 'cancelled')
  */
-import { NextRequest } from 'next/server'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
@@ -14,12 +13,18 @@ import { logAudit } from '@/lib/social/audit'
 import { logActivity } from '@/lib/activity/log'
 import type { SocialPostCategory } from '@/lib/social/types'
 import type { SocialPlatformType, PostStatus } from '@/lib/social/providers'
+import {
+  cancelSocialQueueEntry,
+  hasActivePublishAccount,
+  hasFinalApproval,
+  upsertSocialQueueEntry,
+} from '@/lib/social/scheduling'
 
 export const dynamic = 'force-dynamic'
 
 // Use the canonical PostStatus type — includes pending_approval, approved, publishing, partially_published
 const VALID_STATUSES: PostStatus[] = [
-  'draft', 'pending_approval', 'approved', 'scheduled',
+  'draft', 'qa_review', 'regenerating', 'client_review', 'pending_approval', 'approved', 'vaulted', 'scheduled',
   'publishing', 'published', 'partially_published', 'failed', 'cancelled',
 ]
 const VALID_CATEGORIES: SocialPostCategory[] = ['work', 'personal', 'ai', 'sport', 'sa', 'other']
@@ -85,6 +90,9 @@ export const PUT = withAuth('admin', withTenant(async (req, user, orgId, context
     if (!VALID_STATUSES.includes(body.status as PostStatus)) {
       return apiError('Invalid status', 400)
     }
+    if (body.status === 'scheduled' && !hasFinalApproval(existing)) {
+      return apiError('Post must be approved before it can be scheduled', 400)
+    }
     updates.status = body.status as PostStatus
   }
 
@@ -105,38 +113,28 @@ export const PUT = withAuth('admin', withTenant(async (req, user, orgId, context
   if ('pillarId' in body) updates.pillarId = body.pillarId
   if ('audience' in body) updates.audience = body.audience
 
+  const proposedPost = { ...existing, ...updates }
+  const proposedStatus = (updates.status ?? existing.status) as PostStatus | undefined
+  if (proposedStatus === 'scheduled') {
+    if (!hasFinalApproval(proposedPost)) {
+      return apiError('Post must be approved before it can be scheduled', 400)
+    }
+    if (!(await hasActivePublishAccount(proposedPost, orgId))) {
+      return apiError('Connect an active social account before scheduling this post', 400)
+    }
+  }
+
   await adminDb.collection('social_posts').doc(id).update(updates)
 
-  // Sync queue entry when rescheduling
-  if (updates.scheduledAt) {
-    const queueDoc = await adminDb.collection('social_queue').doc(id).get()
-    if (queueDoc.exists) {
-      await adminDb.collection('social_queue').doc(id).update({
-        scheduledAt: updates.scheduledAt,
-        status: 'pending',
-        lockedBy: null,
-        lockedAt: null,
-      })
-    } else if (updates.status === 'scheduled' || existing.status === 'scheduled') {
-      await adminDb.collection('social_queue').doc(id).set({
-        orgId,
-        postId: id,
-        scheduledAt: updates.scheduledAt,
-        status: 'pending',
-        priority: 0,
-        attempts: 0,
-        maxAttempts: 5,
-        lastAttemptAt: null,
-        nextRetryAt: null,
-        backoffSeconds: 60,
-        lockedBy: null,
-        lockedAt: null,
-        startedAt: null,
-        completedAt: null,
-        error: null,
-        createdAt: FieldValue.serverTimestamp(),
-      })
-    }
+  if (proposedStatus === 'scheduled' && proposedPost.scheduledAt) {
+    await upsertSocialQueueEntry({
+      postId: id,
+      orgId,
+      scheduledAt: proposedPost.scheduledAt,
+      post: proposedPost,
+    })
+  } else if (updates.scheduledAt || updates.status) {
+    await cancelSocialQueueEntry(id)
   }
 
   await logAudit({
