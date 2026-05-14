@@ -19,6 +19,7 @@ import {
 } from '@/lib/social/approval'
 import type { DeliveryMode, PostStatus } from '@/lib/social/providers'
 import { sendEmail } from '@/lib/email/send'
+import { getOrgManagerEmails } from '@/lib/organizations/manager-emails'
 import { getHermesProfileLink, createHermesRun } from '@/lib/hermes/server'
 
 export const dynamic = 'force-dynamic'
@@ -129,12 +130,14 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
     createdAt: FieldValue.serverTimestamp(),
   }).catch(() => {})
 
-  // 2. Email to operator
-  sendEmail({
-    to: 'peet.stander@partnersinbiz.online',
-    subject: `✅ Social post approved by client (${orgId})`,
-    html: `<p>A client has approved a social post for org <strong>${orgId}</strong>.</p><p>New status: <strong>${newStatus}</strong></p><p><a href="https://partnersinbiz.online/admin/social">View in admin</a></p>`,
-  }).catch(() => {})
+  // 2. Email to org managers
+  getOrgManagerEmails(orgId).then(emails =>
+    Promise.all(emails.map(email => sendEmail({
+      to: email,
+      subject: `✅ Social post approved by client (${orgId})`,
+      html: `<p>A client has approved a social post for org <strong>${orgId}</strong>.</p><p>New status: <strong>${newStatus}</strong></p><p><a href="https://partnersinbiz.online/admin/social">View in admin</a></p>`,
+    })))
+  ).catch(() => {})
 
   // 3. Hermes agent dispatch
   getHermesProfileLink(orgId)

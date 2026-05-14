@@ -2,6 +2,7 @@
 import { adminDb } from '@/lib/firebase/admin'
 import { sendEmail } from '@/lib/email/send'
 import { approvalNeededEmail, newCommentEmail, invoiceSentEmail } from '@/lib/email/templates'
+import { getOrgManagerEmails } from '@/lib/organizations/manager-emails'
 
 // Base URL for links in emails
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://partnersinbiz.online'
@@ -34,18 +35,15 @@ export async function notifyNewComment(opts: {
     // If commenter is admin/ai → notify org's notification email
 
     if (opts.commenterRole === 'client' && opts.orgId) {
-      // Notify the platform admin (look up platform_owner org)
-      const adminOrgs = await adminDb
-        .collection('organizations')
-        .where('type', '==', 'platform_owner')
-        .limit(1)
-        .get()
-      if (!adminOrgs.empty) {
-        const adminEmail = adminOrgs.docs[0].data().settings?.notificationEmail ?? adminOrgs.docs[0].data().billingEmail
-        if (adminEmail) {
-          const html = newCommentEmail(opts.commentText, opts.commenterName, `on ${opts.context}`, `${BASE_URL}${opts.viewUrl}`)
-          await sendEmail({ to: adminEmail, subject: `[PIB] New comment on ${opts.context}`, html })
-        }
+      // Notify whoever is assigned to manage this client in the Teams tab
+      const managerEmails = await getOrgManagerEmails(opts.orgId)
+      if (managerEmails.length > 0) {
+        const html = newCommentEmail(opts.commentText, opts.commenterName, `on ${opts.context}`, `${BASE_URL}${opts.viewUrl}`)
+        await Promise.all(
+          managerEmails.map(email =>
+            sendEmail({ to: email, subject: `[PIB] New comment on ${opts.context}`, html })
+          )
+        )
       }
     } else if (opts.orgId) {
       // Notify the client org

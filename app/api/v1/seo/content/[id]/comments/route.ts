@@ -15,6 +15,7 @@ import { lastActorFrom } from '@/lib/api/actor'
 import { logActivity } from '@/lib/activity/log'
 import { sendEmail } from '@/lib/email/send'
 import { getHermesProfileLink, createHermesRun } from '@/lib/hermes/server'
+import { getOrgManagerEmails } from '@/lib/organizations/manager-emails'
 import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
@@ -166,11 +167,13 @@ export const POST = withAuth(
           : anchor?.type === 'image'
             ? ' re: image'
             : ''
-      sendEmail({
-        to: 'peet.stander@partnersinbiz.online',
-        subject: `⚠️ Changes requested on "${data.title ?? id}" by ${displayName}`,
-        html: `<p>${displayName} requested changes on <strong>${data.title ?? id}</strong>:</p><blockquote>${text.trim()}</blockquote>${emailAnchorPreview ? `<p><em>On: ${emailAnchorPreview}</em></p>` : ''}<p><a href="https://partnersinbiz.online/admin/org/${data.orgId}/social">View in admin</a></p>`,
-      }).catch(() => {})
+      getOrgManagerEmails(data.orgId).then(emails =>
+        Promise.all(emails.map(email => sendEmail({
+          to: email,
+          subject: `⚠️ Changes requested on "${data.title ?? id}" by ${displayName}`,
+          html: `<p>${displayName} requested changes on <strong>${data.title ?? id}</strong>:</p><blockquote>${text.trim()}</blockquote>${emailAnchorPreview ? `<p><em>On: ${emailAnchorPreview}</em></p>` : ''}<p><a href="https://partnersinbiz.online/admin/org/${data.orgId}/social">View in admin</a></p>`,
+        })))
+      ).catch(() => {})
     }
 
     // 3. Hermes dispatch (changes-requested only)

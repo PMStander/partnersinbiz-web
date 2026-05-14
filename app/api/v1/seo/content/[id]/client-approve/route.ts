@@ -6,6 +6,7 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { lastActorFrom } from '@/lib/api/actor'
 import { logActivity } from '@/lib/activity/log'
 import { sendEmail } from '@/lib/email/send'
+import { getOrgManagerEmails } from '@/lib/organizations/manager-emails'
 import type { ApiUser } from '@/lib/api/types'
 
 export const dynamic = 'force-dynamic'
@@ -77,12 +78,14 @@ export const POST = withAuth(
       })
       .catch(() => {})
 
-    // Email to Peet (fire and forget)
-    sendEmail({
-      to: 'peet.stander@partnersinbiz.online',
-      subject: `✅ "${data.title}" approved by client`,
-      html: `<p>${displayName} has approved <strong>${data.title}</strong> for publishing. Log in to publish it.</p><p><a href="https://partnersinbiz.online/admin">Open admin</a></p>`,
-    }).catch(() => {})
+    // Email to org managers (fire and forget)
+    getOrgManagerEmails(data.orgId).then(emails =>
+      Promise.all(emails.map(email => sendEmail({
+        to: email,
+        subject: `✅ "${data.title}" approved by client`,
+        html: `<p>${displayName} has approved <strong>${data.title}</strong> for publishing. Log in to publish it.</p><p><a href="https://partnersinbiz.online/admin">Open admin</a></p>`,
+      })))
+    ).catch(() => {})
 
     return apiSuccess({ id, status: 'client_approved' })
   },
