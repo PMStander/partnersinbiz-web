@@ -9,10 +9,13 @@ interface MessagesClientProps {
 }
 
 export default function MessagesClient({ orgId, uid, displayName }: MessagesClientProps) {
-  // calc: 100dvh minus the admin banner (56px) and main's py-8 padding (64px)
+  // Mobile: edge-to-edge, fills viewport below the 56px admin topbar.
+  // Desktop: keeps the page header and respects main's py-8 (64px) + topbar (56px).
   return (
-    <div className="flex flex-col gap-4 overflow-hidden" style={{ height: 'calc(100dvh - 120px)' }}>
-      <div className="shrink-0">
+    <div
+      className="flex flex-col gap-0 lg:gap-4 overflow-hidden -mx-4 -my-8 lg:mx-0 lg:my-0 h-[calc(100dvh-56px)] lg:h-[calc(100dvh-120px)]"
+    >
+      <div className="hidden lg:block shrink-0">
         <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-1">
           Workspace / Messages
         </p>

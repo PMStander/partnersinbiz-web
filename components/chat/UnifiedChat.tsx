@@ -581,11 +581,12 @@ export default function UnifiedChat({
   const showListOnMobile = mobilePane === 'list'
 
   return (
-    <div className="flex lg:grid lg:gap-4 lg:grid-cols-[280px_1fr] flex-1 min-h-[calc(100dvh-9rem)] lg:min-h-0 overflow-hidden">
+    <div className="flex lg:grid lg:gap-4 lg:grid-cols-[280px_1fr] flex-1 min-h-0 overflow-hidden">
       {/* ── Left: conversation list ─────────────────────────────────────── */}
       <aside
         className={[
           'pib-card flex-col gap-2 p-3 overflow-hidden flex-1 lg:flex',
+          'max-lg:!rounded-none max-lg:!border-0 max-lg:!bg-transparent',
           showListOnMobile ? 'flex' : 'hidden',
         ].join(' ')}
       >
@@ -707,6 +708,7 @@ export default function UnifiedChat({
       <section
         className={[
           'pib-card flex-col overflow-hidden min-h-0 flex-1 lg:flex',
+          'max-lg:!p-0 max-lg:!rounded-none max-lg:!border-0 max-lg:!bg-transparent',
           showListOnMobile ? 'hidden' : 'flex',
         ].join(' ')}
       >
