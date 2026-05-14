@@ -111,8 +111,8 @@ function Tweet({
 export function TwitterPostCard({ post, brand }: TwitterPostCardProps) {
   const image = getFirstImage(post.media)
   const video = getFirstVideo(post.media)
-  const name = post.authorName || 'Your Brand'
-  const handle = post.authorHandle || 'yourbrand'
+  const name = post.authorName || brand?.name || 'Your Brand'
+  const handle = post.authorHandle || brand?.name?.toLowerCase().replace(/\s+/g, '') || 'yourbrand'
   const avatar = post.authorAvatarUrl || brand?.logoUrl
   const time = relativeTime(post.scheduledFor)
   const accent = brand?.palette.accent || '#1D9BF0'
@@ -123,7 +123,7 @@ export function TwitterPostCard({ post, brand }: TwitterPostCardProps) {
   return (
     <div
       style={{
-        width: 560,
+        width: '100%',
         background: '#000',
         color: '#E7E9EA',
         borderRadius: 16,

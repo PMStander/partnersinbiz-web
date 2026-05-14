@@ -21,7 +21,7 @@ export function LinkedInPostCard({ post, brand }: LinkedInPostCardProps) {
   const [expanded, setExpanded] = useState(false)
   const image = getFirstImage(post.media)
   const video = getFirstVideo(post.media)
-  const name = post.authorName || 'Your Brand'
+  const name = post.authorName || brand?.name || 'Your Brand'
   const headline = post.authorHeadline || 'Helping businesses grow · Partners in Biz'
   const time = relativeTime(post.scheduledFor)
   const accent = brand?.palette.accent || '#0A66C2'
@@ -32,7 +32,7 @@ export function LinkedInPostCard({ post, brand }: LinkedInPostCardProps) {
   return (
     <div
       style={{
-        width: 540,
+        width: '100%',
         background: '#fff',
         color: '#000000E6',
         borderRadius: 8,

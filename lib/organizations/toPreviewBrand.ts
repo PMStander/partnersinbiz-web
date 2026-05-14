@@ -28,9 +28,10 @@ export interface BrandColorsLike {
 export function toPreviewBrand(
   brandColors: BrandColorsLike | undefined,
   brandProfile: BrandProfile | undefined,
+  orgName?: string,
 ): PreviewBrand | undefined {
   const accent = brandColors?.accent ?? brandColors?.primary
-  if (!accent && !brandProfile?.logoUrl) return undefined
+  if (!accent && !brandProfile?.logoUrl && !orgName) return undefined
 
   const palette: PreviewBrand['palette'] = {
     bg: brandColors?.background ?? '#0A0A0B',
@@ -48,6 +49,7 @@ export function toPreviewBrand(
     : undefined
 
   return {
+    name: orgName,
     palette,
     typography,
     logoUrl: brandProfile?.logoUrl,

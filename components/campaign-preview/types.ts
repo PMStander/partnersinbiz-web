@@ -55,6 +55,7 @@ export interface PreviewBlog {
 }
 
 export interface PreviewBrand {
+  name?: string
   palette: {
     bg: string
     accent: string

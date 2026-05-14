@@ -12,14 +12,14 @@ export interface InstagramReelsCardProps {
 export function InstagramReelsCard({ post, brand }: InstagramReelsCardProps) {
   const video = getFirstVideo(post.media)
   const image = getFirstImage(post.media)
-  const handle = post.authorHandle || 'yourbrand'
+  const handle = post.authorHandle || brand?.name || 'yourbrand'
   const fullCaption = withHashtags(post.content, post.hashtags)
   const accent = brand?.palette.accent || '#fff'
 
   return (
     <div
       style={{
-        width: 320,
+        width: '100%',
         aspectRatio: '9 / 16',
         position: 'relative',
         background: '#000',

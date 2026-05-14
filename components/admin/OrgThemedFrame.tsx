@@ -73,8 +73,8 @@ export function OrgThemedFrame({
     | BrandColorsLike
     | undefined
   const brand = useMemo(
-    () => toPreviewBrand(brandColors, org?.brandProfile),
-    [brandColors, org?.brandProfile],
+    () => toPreviewBrand(brandColors, org?.brandProfile, org?.name),
+    [brandColors, org?.brandProfile, org?.name],
   )
 
   // Inline CSS-var injection scoped to this wrapper. Defaults preserved via

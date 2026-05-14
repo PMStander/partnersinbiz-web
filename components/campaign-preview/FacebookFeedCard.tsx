@@ -12,7 +12,7 @@ export interface FacebookFeedCardProps {
 export function FacebookFeedCard({ post, brand }: FacebookFeedCardProps) {
   const image = getFirstImage(post.media)
   const video = getFirstVideo(post.media)
-  const name = post.authorName || 'Your Brand'
+  const name = post.authorName || brand?.name || 'Your Brand'
   const time = relativeTime(post.scheduledFor)
   const accent = brand?.palette.accent || '#1877F2'
   const fullCaption = withHashtags(post.content, post.hashtags)
@@ -20,7 +20,7 @@ export function FacebookFeedCard({ post, brand }: FacebookFeedCardProps) {
   return (
     <div
       style={{
-        width: 500,
+        width: '100%',
         background: '#fff',
         color: '#050505',
         borderRadius: 8,

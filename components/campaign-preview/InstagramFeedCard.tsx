@@ -12,7 +12,7 @@ export interface InstagramFeedCardProps {
 export function InstagramFeedCard({ post, brand }: InstagramFeedCardProps) {
   const [expanded, setExpanded] = useState(false)
   const image = getFirstImage(post.media)
-  const handle = post.authorHandle || 'yourbrand'
+  const handle = post.authorHandle || brand?.name || 'yourbrand'
   const avatar = post.authorAvatarUrl || brand?.logoUrl
   const fullCaption = withHashtags(post.content, post.hashtags)
   const isLong = fullCaption.length > 90
@@ -22,7 +22,7 @@ export function InstagramFeedCard({ post, brand }: InstagramFeedCardProps) {
   return (
     <div
       style={{
-        width: 380,
+        width: '100%',
         background: '#000',
         color: '#fff',
         borderRadius: 8,

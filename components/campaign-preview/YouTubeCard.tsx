@@ -26,14 +26,14 @@ export function YouTubeCard({ post, brand }: YouTubeCardProps) {
         ? (post.content as { text: string }).text
         : '')) as string
   const title = post.videoTitle || text.split('\n')[0] || 'Untitled video'
-  const channel = post.channelName || post.authorName || 'Your Brand'
+  const channel = post.channelName || post.authorName || brand?.name || 'Your Brand'
   const channelAvatar = post.channelAvatarUrl || post.authorAvatarUrl || brand?.logoUrl
   const time = relativeTime(post.scheduledFor)
 
   return (
     <div
       style={{
-        width: 380,
+        width: '100%',
         background: 'transparent',
         color: '#0F0F0F',
         fontFamily: 'Roboto, system-ui, -apple-system, "Segoe UI", sans-serif',

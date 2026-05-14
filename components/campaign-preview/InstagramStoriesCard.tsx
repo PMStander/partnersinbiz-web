@@ -12,7 +12,7 @@ export interface InstagramStoriesCardProps {
 export function InstagramStoriesCard({ post, brand }: InstagramStoriesCardProps) {
   const video = getFirstVideo(post.media)
   const image = getFirstImage(post.media)
-  const handle = post.authorHandle || 'yourbrand'
+  const handle = post.authorHandle || brand?.name || 'yourbrand'
   const text = getPostText(post.content)
   const showSticker = text.length > 0 && text.length <= 80
   const accent = brand?.palette.accent || '#F5A623'
@@ -20,7 +20,7 @@ export function InstagramStoriesCard({ post, brand }: InstagramStoriesCardProps)
   return (
     <div
       style={{
-        width: 300,
+        width: '100%',
         aspectRatio: '9 / 16',
         position: 'relative',
         background: '#000',
