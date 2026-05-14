@@ -9,6 +9,7 @@ import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { toPlatformType, resolveProvider, refreshAccountToken } from '@/lib/social/account-resolver'
 import { logAudit } from '@/lib/social/audit'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -97,12 +98,24 @@ export const POST = withAuth('admin', withTenant(async (_req, user, orgId, conte
     })
   }
 
+  const publishRole = user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client'
   await logAudit({
     orgId, action: 'post.published', entityType: 'post', entityId: id,
     performedBy: user.uid,
-    performedByRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    performedByRole: publishRole,
     details: { externalId, platform: post.platform },
   })
+
+  logActivity({
+    orgId,
+    type: 'social_post_published',
+    actorId: user.uid,
+    actorName: user.uid,
+    actorRole: publishRole,
+    description: `Published ${post.platform} post`,
+    entityId: id,
+    entityType: 'social_post',
+  }).catch(() => {})
 
   return apiSuccess({ id, externalId, platform: post.platform })
 }))

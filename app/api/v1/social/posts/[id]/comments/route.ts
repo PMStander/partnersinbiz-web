@@ -10,6 +10,7 @@ import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { notifyNewComment } from '@/lib/notifications/notify'
 import { getHermesProfileLink, createHermesRun } from '@/lib/hermes/server'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -177,6 +178,17 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
         })
       })
       .catch(() => {})
+
+    logActivity({
+      orgId,
+      type: 'social_post_commented',
+      actorId: user.uid,
+      actorName: displayName,
+      actorRole: userRole,
+      description: `Commented on social post: "${text.trim().slice(0, 120)}"`,
+      entityId: id,
+      entityType: 'social_post',
+    }).catch(() => {})
 
     return apiSuccess({
       id: commentRef.id,

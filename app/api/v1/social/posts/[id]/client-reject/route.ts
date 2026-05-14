@@ -12,6 +12,7 @@ import { withAuth } from '@/lib/api/auth'
 import { withTenant } from '@/lib/api/tenant'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { logAudit } from '@/lib/social/audit'
+import { logActivity } from '@/lib/activity/log'
 import { buildRejectionRecord, validateTransition } from '@/lib/social/approval'
 import { regeneratePost } from '@/lib/social/regenerate'
 import type { PostStatus } from '@/lib/social/providers'
@@ -93,6 +94,18 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
     details: { reason, rejectionCount: newRejectionCount },
     ip: req.headers.get('x-forwarded-for'),
   })
+
+  // Activity log (fire-and-forget)
+  logActivity({
+    orgId,
+    type: 'social_post_client_rejected',
+    actorId: user.uid,
+    actorName: displayName,
+    actorRole: role,
+    description: `Requested changes on social post: "${reason.slice(0, 120)}"`,
+    entityId: id,
+    entityType: 'social_post',
+  }).catch(() => {})
 
   // Fire-and-forget regeneration — don't block the response.
   regeneratePost({

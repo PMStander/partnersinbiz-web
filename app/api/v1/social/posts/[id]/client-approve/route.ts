@@ -21,6 +21,7 @@ import type { DeliveryMode, PostStatus } from '@/lib/social/providers'
 import { sendEmail } from '@/lib/email/send'
 import { getOrgManagerEmails } from '@/lib/organizations/manager-emails'
 import { getHermesProfileLink, createHermesRun } from '@/lib/hermes/server'
+import { logActivity } from '@/lib/activity/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -116,6 +117,18 @@ export const POST = withAuth('client', withTenant(async (req, user, orgId, conte
     details: { stage: 'client', to: newStatus },
     ip: req.headers.get('x-forwarded-for'),
   })
+
+  // Activity log (fire-and-forget)
+  logActivity({
+    orgId,
+    type: 'social_post_client_approved',
+    actorId: user.uid,
+    actorName: displayName,
+    actorRole: role,
+    description: `Approved social post — status now ${newStatus}`,
+    entityId: id,
+    entityType: 'social_post',
+  }).catch(() => {})
 
   // Fire-and-forget side-effects — none of these block the response.
 
