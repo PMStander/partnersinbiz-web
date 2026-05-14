@@ -27,6 +27,7 @@ export interface UnifiedChatProps {
   orgId: string
   currentUserUid: string
   currentUserDisplayName: string
+  orgName?: string
   projectId?: string
   scope?: 'general' | 'project' | 'task' | 'campaign'
   scopeRefId?: string
@@ -45,6 +46,7 @@ export default function UnifiedChat({
   orgId,
   currentUserUid,
   currentUserDisplayName,
+  orgName,
   projectId,
   scope,
   scopeRefId,
@@ -89,6 +91,12 @@ export default function UnifiedChat({
   // Attachment state
   const [attachments, setAttachments] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Mobile pane navigation: which pane is visible on small screens
+  const [mobilePane, setMobilePane] = useState<'list' | 'conversation'>('list')
+
+  // Mobile header "…" menu
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
 
   // Refs
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -182,6 +190,20 @@ export default function UnifiedChat({
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [menuOpenId])
+
+  // Close mobile header menu on outside click
+  useEffect(() => {
+    if (!headerMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-header-menu]')) setHeaderMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [headerMenuOpen])
+
+  // Close header menu when switching conversations
+  useEffect(() => { setHeaderMenuOpen(false) }, [activeId])
 
   // Cleanup polling + SSE on unmount
   useEffect(() => () => {
@@ -423,6 +445,7 @@ export default function UnifiedChat({
       const conv: Conversation = body.data?.conversation
       setConversations((prev) => [conv, ...prev])
       setActiveId(conv.id)
+      setMobilePane('conversation')
       setMessages([])
       setShowNewModal(false)
       setNewTitle('')
@@ -463,6 +486,7 @@ export default function UnifiedChat({
           if (!convId) throw new Error('Failed to create conversation')
           setConversations((prev) => [b.data.conversation, ...prev])
           setActiveId(convId)
+          setMobilePane('conversation')
         }
 
         // Build content — append attachment filenames as context notes
@@ -550,10 +574,21 @@ export default function UnifiedChat({
   )
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const scopeLabel = scope && scope !== 'general'
+    ? scope.charAt(0).toUpperCase() + scope.slice(1)
+    : 'Default'
+  const subtitle = [orgName, scopeLabel].filter(Boolean).join(' · ')
+  const showListOnMobile = mobilePane === 'list'
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[280px_1fr] flex-1 min-h-0 overflow-hidden">
+    <div className="flex lg:grid lg:gap-4 lg:grid-cols-[280px_1fr] flex-1 min-h-[calc(100dvh-9rem)] lg:min-h-0 overflow-hidden">
       {/* ── Left: conversation list ─────────────────────────────────────── */}
-      <aside className="pib-card flex flex-col gap-2 p-3 overflow-hidden">
+      <aside
+        className={[
+          'pib-card flex-col gap-2 p-3 overflow-hidden flex-1 lg:flex',
+          showListOnMobile ? 'flex' : 'hidden',
+        ].join(' ')}
+      >
         <button
           type="button"
           onClick={() => setShowNewModal(true)}
@@ -565,7 +600,7 @@ export default function UnifiedChat({
 
         <div className="text-xs text-on-surface-variant mt-2 px-1">Conversations</div>
 
-        <div className="flex flex-col gap-0.5 overflow-y-auto flex-1 max-h-[520px]">
+        <div className="flex flex-col gap-0.5 overflow-y-auto flex-1 lg:max-h-[520px]">
           {conversations.length === 0 && (
             <div className="text-xs text-on-surface-variant px-2 py-3">
               No conversations yet. Start one.
@@ -597,7 +632,10 @@ export default function UnifiedChat({
                 <ConversationListItem
                   conversation={c}
                   active={c.id === activeId}
-                  onClick={() => setActiveId(c.id)}
+                  onClick={() => {
+                    setActiveId(c.id)
+                    setMobilePane('conversation')
+                  }}
                   currentUserUid={currentUserUid}
                 />
               )}
@@ -666,16 +704,87 @@ export default function UnifiedChat({
       )}
 
       {/* ── Right: active conversation ──────────────────────────────────── */}
-      <section className="pib-card flex flex-col overflow-hidden min-h-0">
-        {/* Header */}
-        <div className="border-b border-[var(--color-card-border)] px-4 py-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="text-on-surface font-medium text-sm">
-              {activeConversation?.title || 'New conversation'}
+      <section
+        className={[
+          'pib-card flex-col overflow-hidden min-h-0 flex-1 lg:flex',
+          showListOnMobile ? 'hidden' : 'flex',
+        ].join(' ')}
+      >
+        {/* Header — mobile style (back / title+subtitle / ⋯) on small,
+            keeps original sticky look on desktop */}
+        <div className="border-b border-[var(--color-card-border)] px-3 py-2.5 lg:px-4 lg:py-3">
+          <div className="flex items-center gap-2">
+            {/* Back arrow — mobile only */}
+            <button
+              type="button"
+              onClick={() => setMobilePane('list')}
+              aria-label="Back to conversations"
+              className="lg:hidden -ml-1 flex items-center justify-center w-9 h-9 rounded-full hover:bg-white/[0.06] active:bg-white/[0.1] text-on-surface-variant transition-colors shrink-0"
+            >
+              <span className="material-symbols-outlined text-[22px]">arrow_back_ios_new</span>
+            </button>
+
+            {/* Title + subtitle */}
+            <div className="flex-1 min-w-0">
+              <div className="text-on-surface font-medium text-[15px] lg:text-sm truncate">
+                {activeConversation?.title || 'New conversation'}
+              </div>
+              {subtitle && (
+                <div className="lg:hidden text-[11px] text-on-surface-variant truncate mt-0.5">
+                  {subtitle}
+                </div>
+              )}
             </div>
+
+            {/* ⋯ menu — mobile only (rename/archive) */}
+            {activeConversation && (
+              <div className="lg:hidden relative shrink-0" data-header-menu>
+                <button
+                  type="button"
+                  onClick={() => setHeaderMenuOpen((v) => !v)}
+                  aria-label="Conversation options"
+                  className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-white/[0.06] active:bg-white/[0.1] text-on-surface-variant transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[22px]">more_horiz</span>
+                </button>
+                {headerMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1 z-30 min-w-[160px] rounded-lg border border-[var(--color-card-border)] bg-[var(--color-surface,#1c1c1c)] py-1 shadow-xl">
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))] flex items-center gap-2"
+                      onClick={() => {
+                        setHeaderMenuOpen(false)
+                        setRenamingId(activeConversation.id)
+                        setRenameValue(activeConversation.title || '')
+                        setMobilePane('list')
+                      }}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-[var(--color-card-hover,rgba(255,255,255,0.06))] flex items-center gap-2"
+                      onClick={() => {
+                        setHeaderMenuOpen(false)
+                        archiveConversation(activeConversation.id)
+                        setMobilePane('list')
+                      }}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">archive</span>
+                      Archive
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Participant bar — desktop only (kept) */}
           {activeConversation?.participants && activeConversation.participants.length > 0 && (
-            <ParticipantBar participants={activeConversation.participants} />
+            <div className="hidden lg:block mt-1.5">
+              <ParticipantBar participants={activeConversation.participants} />
+            </div>
           )}
         </div>
 
@@ -800,17 +909,8 @@ export default function UnifiedChat({
             </div>
           )}
 
-          <div className="flex gap-2">
-            {/* Attach file button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={sending || !activeConversation}
-              title="Attach file"
-              className="self-end p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/8 transition-colors disabled:opacity-40"
-            >
-              <span className="material-symbols-outlined text-[20px]">attach_file</span>
-            </button>
+          {/* Mobile: pill-style composer; Desktop: keep flat textarea + button */}
+          <div className="flex items-end gap-2 rounded-3xl border border-[var(--color-card-border)] bg-[var(--color-card)] px-2 py-1.5 lg:rounded-lg lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
             <input
               ref={fileInputRef}
               type="file"
@@ -823,6 +923,17 @@ export default function UnifiedChat({
                 e.target.value = ''
               }}
             />
+            {/* Attach */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || !activeConversation}
+              title="Attach file"
+              aria-label="Attach file"
+              className="self-end flex items-center justify-center w-9 h-9 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-white/[0.08] transition-colors disabled:opacity-40 shrink-0"
+            >
+              <span className="material-symbols-outlined text-[20px]">attach_file</span>
+            </button>
 
             <textarea
               value={input}
@@ -835,19 +946,23 @@ export default function UnifiedChat({
               }}
               placeholder={
                 activeConversation
-                  ? 'Send a message — Enter to send, Shift+Enter for new line'
+                  ? 'Send a message'
                   : 'Create or select a conversation first'
               }
               disabled={sending}
-              rows={2}
-              className="flex-1 resize-none rounded-lg border border-[var(--color-card-border)] bg-[var(--color-card)] px-3 py-2 text-sm disabled:opacity-60"
+              rows={1}
+              className="flex-1 resize-none bg-transparent px-1 py-2 text-[15px] lg:text-sm placeholder:text-on-surface-variant disabled:opacity-60 focus:outline-none min-h-[40px] max-h-[160px] lg:rounded-lg lg:border lg:border-[var(--color-card-border)] lg:bg-[var(--color-card)] lg:px-3 lg:py-2 lg:min-h-0"
             />
             <button
               type="submit"
               disabled={sending || (!input.trim() && attachments.length === 0)}
-              className="self-end rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-50 hover:opacity-90"
+              aria-label="Send message"
+              className="self-end flex items-center justify-center w-9 h-9 rounded-full bg-primary text-on-primary disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0 lg:w-auto lg:h-auto lg:rounded-lg lg:px-4 lg:py-2 lg:text-sm lg:font-medium"
             >
-              {sending ? 'Sending…' : 'Send'}
+              <span className="material-symbols-outlined text-[20px] lg:hidden">
+                {sending ? 'hourglass_empty' : 'arrow_upward'}
+              </span>
+              <span className="hidden lg:inline">{sending ? 'Sending…' : 'Send'}</span>
             </button>
           </div>
         </form>
