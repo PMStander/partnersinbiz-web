@@ -314,6 +314,12 @@ export function buildProjectTaskUpdateData(body: Record<string, unknown>): Paylo
     if (!dependsOn.ok) return dependsOn
     updates.dependsOn = dependsOn.value
   }
+  if (body.agentConversationId !== undefined) {
+    updates.agentConversationId =
+      typeof body.agentConversationId === 'string' && body.agentConversationId.trim()
+        ? body.agentConversationId.trim()
+        : null
+  }
   if (body.agentHeartbeatAt === true) {
     // Sentinel — caller asks us to bump the heartbeat to "now".
     // Real timestamp is set in the route handler via FieldValue.serverTimestamp().

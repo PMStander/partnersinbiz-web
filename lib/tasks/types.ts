@@ -62,6 +62,7 @@ export interface Task {
   agentStatus?: AgentStatus
   agentInput?: AgentInput
   agentOutput?: AgentOutput
+  agentConversationId?: string | null
   agentHeartbeatAt?: unknown
   dependsOn?: string[]
 }
@@ -81,6 +82,7 @@ export interface TaskInput {
   agentStatus?: AgentStatus
   agentInput?: AgentInput
   agentOutput?: AgentOutput
+  agentConversationId?: string | null
   dependsOn?: string[]
 }
 

@@ -95,6 +95,7 @@ export interface Task {
   agentStatus?: AgentStatus
   agentInput?: AgentInput
   agentOutput?: AgentOutput
+  agentConversationId?: string | null  // Hermes run/conversation ID written at pickup; used to embed live session
   agentHeartbeatAt?: unknown   // last time the claiming agent reported alive; lets us reclaim stale picks
   dependsOn?: string[]         // task IDs that must reach agentStatus='done' first
 

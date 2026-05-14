@@ -54,6 +54,7 @@ const UPDATABLE_FIELDS = [
   'agentStatus',
   'agentInput',
   'agentOutput',
+  'agentConversationId',
   'dependsOn',
 ] as const
 

@@ -64,6 +64,7 @@ export interface Task {
     artifacts?: Array<{ type: string; ref: string; label?: string }>
     completedAt?: unknown
   } | null
+  agentConversationId?: string | null
   agentHeartbeatAt?: unknown
   dependsOn?: string[]
   mentionIds?: string[]
