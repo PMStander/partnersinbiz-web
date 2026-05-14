@@ -45,9 +45,9 @@ export function SelectionPopover({ containerRef, onComment }: Props) {
       if (selectedText === lastSelRef.current && pos) return
       lastSelRef.current = selectedText
       const rect = range.getBoundingClientRect()
-      // Position above the start of the selection; account for scroll.
-      const top = rect.top + window.scrollY - 44
-      const left = rect.left + window.scrollX + rect.width / 2 - 80
+      // Fixed positioning — viewport-relative, no scroll offset needed.
+      const top = rect.top - 44
+      const left = rect.left + rect.width / 2 - 80
       setPos({ top: Math.max(8, top), left: Math.max(8, left) })
       setText(selectedText)
     }
@@ -66,7 +66,7 @@ export function SelectionPopover({ containerRef, onComment }: Props) {
     <div
       role="toolbar"
       style={{
-        position: 'absolute',
+        position: 'fixed',
         top: pos.top,
         left: pos.left,
         zIndex: 50,
