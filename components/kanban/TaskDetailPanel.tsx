@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { uploadTaskFile } from './TaskComposer'
 import type { AgentId, AgentMember, Attachment, ChecklistItem, Task, TeamMember } from './types'
 
@@ -70,7 +71,24 @@ function formatSize(size?: number): string {
   return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
+function isAgentStale(heartbeatAt: unknown, staleMinutes = 5): boolean {
+  if (!heartbeatAt) return false
+  let ms: number | null = null
+  if (typeof heartbeatAt === 'object' && heartbeatAt !== null) {
+    const h = heartbeatAt as { seconds?: number; _seconds?: number; toDate?: () => Date }
+    if (typeof h.toDate === 'function') ms = h.toDate().getTime()
+    else if (typeof h.seconds === 'number') ms = h.seconds * 1000
+    else if (typeof h._seconds === 'number') ms = h._seconds * 1000
+  }
+  if (ms === null) return false
+  return Date.now() - ms > staleMinutes * 60 * 1000
+}
+
 export function TaskDetailPanel({ task, columnName, projectId, orgId, members = [], agents = [], onClose, onUpdate, onDelete }: TaskDetailPanelProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  // Extract org slug from current URL: /admin/org/[slug]/...
+  const orgSlug = pathname.split('/').find((_, i, arr) => arr[i - 1] === 'org') ?? null
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
@@ -583,13 +601,58 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
                 ))
               )}
             </div>
-            {task.agentStatus && (
-              <div className="mt-2 rounded border border-[var(--color-card-border)] bg-[var(--color-surface-container)] px-2 py-1.5 text-xs text-on-surface-variant">
-                <span className="font-label uppercase tracking-wide">Agent status:</span> {task.agentStatus}
-              </div>
-            )}
+            {task.agentStatus && (() => {
+              const STATUS_STYLE: Record<string, { label: string; className: string }> = {
+                'pending':        { label: 'Waiting',   className: 'bg-white/10 text-on-surface-variant' },
+                'picked-up':      { label: 'Picked up', className: 'bg-sky-500/20 text-sky-400' },
+                'in-progress':    { label: 'Working',   className: 'bg-amber-500/20 text-amber-400' },
+                'awaiting-input': { label: 'Needs your input', className: 'bg-orange-500/20 text-orange-400' },
+                'done':           { label: 'Done',      className: 'bg-emerald-500/20 text-emerald-400' },
+                'blocked':        { label: 'Blocked',   className: 'bg-red-500/20 text-red-400' },
+              }
+              const style = STATUS_STYLE[task.agentStatus] ?? { label: task.agentStatus, className: 'bg-white/10 text-on-surface-variant' }
+              const stale = (task.agentStatus === 'in-progress' || task.agentStatus === 'picked-up') && isAgentStale(task.agentHeartbeatAt, 5)
+              const agentName = task.assigneeAgentId ? (task.assigneeAgentId.charAt(0).toUpperCase() + task.assigneeAgentId.slice(1)) : 'Agent'
+              return (
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded ${style.className}`}>
+                      {style.label}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {stale && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdate(task.id, { assigneeAgentId: task.assigneeAgentId as AgentId })}
+                          className="text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-colors"
+                          title="Agent may be stuck — reset to re-queue"
+                        >
+                          Retry
+                        </button>
+                      )}
+                      {orgSlug && task.assigneeAgentId && (
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/admin/org/${orgSlug}/messages?agent=${task.assigneeAgentId}&taskId=${task.id}&taskTitle=${encodeURIComponent(String(task.title ?? ''))}`)}
+                          className="inline-flex items-center gap-1 text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded bg-[var(--color-accent-v2)]/10 text-[var(--color-accent-v2)] hover:bg-[var(--color-accent-v2)]/20 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">forum</span>
+                          Chat with {agentName}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {stale && (
+                    <p className="text-[10px] text-orange-400/80 leading-snug">
+                      No heartbeat in over 5 minutes — the agent may be stuck. Hit Retry to re-queue it.
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
             {task.agentOutput?.summary && (
               <div className="mt-2 rounded border border-[var(--color-card-border)] bg-[var(--color-surface-container)] p-2 text-xs text-on-surface-variant">
+                <p className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Agent output</p>
                 {task.agentOutput.summary}
               </div>
             )}
