@@ -2,6 +2,7 @@
 import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
+import crypto from 'crypto'
 import { adminDb, getAdminApp } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
@@ -31,12 +32,15 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
     const bucket = getStorage(getAdminApp()).bucket()
     const fileRef = bucket.file(filename)
 
+    const downloadToken = crypto.randomUUID()
     await fileRef.save(buffer, {
-      metadata: { contentType: file.type },
+      metadata: {
+        contentType: file.type,
+        metadata: { firebaseStorageDownloadTokens: downloadToken },
+      },
     })
-    await fileRef.makePublic()
 
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filename)}?alt=media&token=${downloadToken}`
 
     const docRef = await adminDb.collection('uploads').add({
       orgId,

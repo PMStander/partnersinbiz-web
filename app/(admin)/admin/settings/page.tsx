@@ -66,6 +66,7 @@ export default function SettingsPage() {
       <div className="pib-card space-y-2">
         <p className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant mb-3">Platform</p>
         {[
+          { label: 'Platform Users', desc: 'Manage admin and operator user accounts', href: '/admin/platform-users' },
           { label: 'API Keys', desc: 'Manage API keys for AI agents and integrations', href: '/admin/settings/api-keys' },
         ].map(item => (
           <Link key={item.href} href={item.href} className="flex items-center justify-between p-3 rounded-lg hover:bg-[var(--color-row-hover)] transition-colors">

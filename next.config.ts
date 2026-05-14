@@ -2,7 +2,7 @@ import path from 'path'
 
 const nextConfig = {
   turbopack: {
-    root: path.resolve('.'),
+    root: path.resolve(process.cwd()),
   },
   transpilePackages: ['@partnersinbiz/analytics-js'],
   serverExternalPackages: ['@react-pdf/renderer'],
