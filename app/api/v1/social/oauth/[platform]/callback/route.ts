@@ -418,27 +418,39 @@ async function fetchAllFacebookAccounts(userAccessToken: string): Promise<Facebo
 }
 
 async function fetchInstagramProfile(accessToken: string) {
-  // Instagram Business Login — profile fetched directly from Instagram Graph API
+  // Fetch minimal fields first; followers_count and profile_picture_url are optional
   const res = await fetch(
-    `https://graph.instagram.com/v21.0/me?fields=id,username,name,profile_picture_url,followers_count&access_token=${accessToken}`,
+    `https://graph.instagram.com/v21.0/me?fields=id,username,name&access_token=${accessToken}`,
   )
   if (!res.ok) throw new Error(`Failed to fetch Instagram profile: ${await res.text()}`)
   const data = await res.json() as {
     id: string
     username: string
     name?: string
-    profile_picture_url?: string
-    followers_count?: number
   }
+
+  // Attempt to fetch optional fields separately so a missing permission doesn't break the whole profile
+  let avatarUrl = ''
+  let followersCount: number | undefined
+  try {
+    const extRes = await fetch(
+      `https://graph.instagram.com/v21.0/me?fields=profile_picture_url,followers_count&access_token=${accessToken}`,
+    )
+    if (extRes.ok) {
+      const ext = await extRes.json() as { profile_picture_url?: string; followers_count?: number }
+      avatarUrl = ext.profile_picture_url ?? ''
+      followersCount = ext.followers_count
+    }
+  } catch { /* optional — ignore */ }
 
   return {
     platformAccountId: data.id,
     displayName: data.name ?? data.username,
     username: data.username,
-    avatarUrl: data.profile_picture_url ?? '',
+    avatarUrl,
     profileUrl: `https://www.instagram.com/${data.username}/`,
     accountType: 'business' as const,
-    meta: { followersCount: data.followers_count },
+    meta: { followersCount },
   }
 }
 
