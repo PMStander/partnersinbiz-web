@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
+import { getClientDb } from '@/lib/firebase/config'
 import Link from 'next/link'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { TaskDetailPanel } from '@/components/kanban/TaskDetailPanel'
@@ -104,13 +106,12 @@ export default function ProjectDetailPage() {
   const [settingsSaved, setSettingsSaved] = useState(false)
 
   useEffect(() => {
+    // Project + docs: one-shot fetch
     Promise.all([
       fetch(`/api/v1/projects/${projectId}`).then(r => r.json()),
-      fetch(`/api/v1/projects/${projectId}/tasks`).then(r => r.json()),
       fetch(`/api/v1/projects/${projectId}/docs`).then(r => r.json()),
-    ]).then(([pBody, tBody, dBody]) => {
+    ]).then(([pBody, dBody]) => {
       setProject(pBody.data)
-      setTasks(tBody.data ?? [])
       setDocs(dBody.data ?? [])
       setBriefValue(pBody.data?.brief ?? '')
       setSettingsName(pBody.data?.name ?? '')
@@ -118,6 +119,28 @@ export default function ProjectDetailPage() {
       setSettingsDescription(pBody.data?.description ?? '')
       setLoading(false)
     }).catch(() => setLoading(false))
+
+    // Tasks: live Firestore listener — updates instantly when agent writes back
+    const tasksQuery = query(
+      collection(getClientDb(), 'projects', projectId, 'tasks'),
+      orderBy('order', 'asc'),
+    )
+    const unsubscribe = onSnapshot(tasksQuery, (snap) => {
+      const live = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task))
+      setTasks(live)
+      // Keep open task detail in sync with latest doc
+      setSelectedTask(prev => {
+        if (!prev) return prev
+        const updated = live.find(t => t.id === prev.id)
+        return updated ?? prev
+      })
+    }, () => {
+      // Fallback to REST if Firestore listener fails (e.g. rules deny client reads)
+      fetch(`/api/v1/projects/${projectId}/tasks`).then(r => r.json())
+        .then(body => setTasks(body.data ?? []))
+        .catch(() => {})
+    })
+    return () => unsubscribe()
   }, [projectId])
 
   useEffect(() => {
