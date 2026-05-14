@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
+import { collection, onSnapshot } from 'firebase/firestore'
 import { getClientDb } from '@/lib/firebase/config'
 import Link from 'next/link'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
@@ -120,26 +120,37 @@ export default function ProjectDetailPage() {
       setLoading(false)
     }).catch(() => setLoading(false))
 
-    // Tasks: live Firestore listener — updates instantly when agent writes back
-    const tasksQuery = query(
+    // Initial tasks load via REST — always reliable regardless of client auth
+    fetch(`/api/v1/projects/${projectId}/tasks`).then(r => r.json())
+      .then(body => setTasks(body.data ?? []))
+      .catch(() => {})
+
+    // Live patches via Firestore — only applies incremental changes on top of
+    // REST data, so if the listener fails or has no auth the board still shows.
+    const unsubscribe = onSnapshot(
       collection(getClientDb(), 'projects', projectId, 'tasks'),
-      orderBy('order', 'asc'),
+      (snap) => {
+        snap.docChanges().forEach(change => {
+          const taskData = { id: change.doc.id, ...change.doc.data() } as Task
+          if (change.type === 'added' || change.type === 'modified') {
+            setTasks(prev => {
+              const idx = prev.findIndex(t => t.id === taskData.id)
+              if (idx >= 0) {
+                const next = [...prev]
+                next[idx] = taskData
+                return next
+              }
+              return [...prev, taskData]
+            })
+            setSelectedTask(prev => prev?.id === taskData.id ? taskData : prev)
+          }
+          if (change.type === 'removed') {
+            setTasks(prev => prev.filter(t => t.id !== change.doc.id))
+          }
+        })
+      },
+      () => {} // silent fail — REST data already loaded
     )
-    const unsubscribe = onSnapshot(tasksQuery, (snap) => {
-      const live = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task))
-      setTasks(live)
-      // Keep open task detail in sync with latest doc
-      setSelectedTask(prev => {
-        if (!prev) return prev
-        const updated = live.find(t => t.id === prev.id)
-        return updated ?? prev
-      })
-    }, () => {
-      // Fallback to REST if Firestore listener fails (e.g. rules deny client reads)
-      fetch(`/api/v1/projects/${projectId}/tasks`).then(r => r.json())
-        .then(body => setTasks(body.data ?? []))
-        .catch(() => {})
-    })
     return () => unsubscribe()
   }, [projectId])
 
