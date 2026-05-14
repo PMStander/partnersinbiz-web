@@ -50,6 +50,32 @@ export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
   }
 
   const existing = doc.data() ?? {}
+
+  // Notify reporter when agent marks task done
+  const agentJustDone = updates.value.agentStatus === 'done' && existing.agentStatus !== 'done'
+  if (agentJustDone && projectOrgId) {
+    const reporterId = typeof existing.reporterId === 'string' ? existing.reporterId : typeof existing.createdBy === 'string' ? existing.createdBy : null
+    const agentId = typeof updates.value.assigneeAgentId === 'string' ? updates.value.assigneeAgentId : typeof existing.assigneeAgentId === 'string' ? existing.assigneeAgentId : 'agent'
+    const taskTitle = String(existing.title ?? 'Task')
+    if (reporterId && reporterId !== user.uid) {
+      adminDb.collection('notifications').add({
+        orgId: projectOrgId,
+        userId: reporterId,
+        agentId: null,
+        type: 'task.agent_done',
+        title: `${agentId.charAt(0).toUpperCase() + agentId.slice(1)} finished a task`,
+        body: taskTitle,
+        link: `/admin/projects/${projectId}?task=${taskId}`,
+        data: { projectId, taskId },
+        status: 'unread',
+        priority: notificationPriority(existing.priority),
+        snoozedUntil: null,
+        readAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+      }).catch(() => {})
+    }
+  }
+
   const previousAssignees = new Set(Array.isArray(existing.assigneeIds) ? existing.assigneeIds : existing.assigneeId ? [existing.assigneeId] : [])
   const nextAssignees = Array.isArray(updates.value.assigneeIds)
     ? updates.value.assigneeIds.filter((id): id is string => typeof id === 'string')

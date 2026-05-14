@@ -102,6 +102,15 @@ const AGENT_DEFAULT_COLOR: Record<string, string> = {
   nora: 'bg-rose-400',
 }
 
+const AGENT_STATUS_STYLE: Record<string, { label: string; className: string }> = {
+  'pending':        { label: 'Waiting',   className: 'bg-white/10 text-on-surface-variant' },
+  'picked-up':      { label: 'Picked up', className: 'bg-sky-500/20 text-sky-400' },
+  'in-progress':    { label: 'Working',   className: 'bg-amber-500/20 text-amber-400' },
+  'awaiting-input': { label: 'Needs you', className: 'bg-orange-500/20 text-orange-400' },
+  'done':           { label: 'Done',      className: 'bg-emerald-500/20 text-emerald-400' },
+  'blocked':        { label: 'Blocked',   className: 'bg-red-500/20 text-red-400' },
+}
+
 // ── Task Card ─────────────────────────────────────────────────────────────
 
 function TaskCard({
@@ -202,11 +211,18 @@ function TaskCard({
           })}
           {assigneeIds.length > 3 && <span>+{assigneeIds.length - 3}</span>}
           {task.assigneeAgentId && (
-            <span
-              title={assignedAgent?.name || task.assigneeAgentId}
-              className={`grid h-5 w-5 place-items-center rounded-full border border-[var(--color-card-border)] text-[13px] text-white ${AGENT_DEFAULT_COLOR[task.assigneeAgentId] ?? 'bg-white/40'}`}
-            >
-              <span className="material-symbols-outlined text-[13px]">{assignedAgent?.iconKey ?? 'smart_toy'}</span>
+            <span className="inline-flex items-center gap-1">
+              <span
+                title={assignedAgent?.name || task.assigneeAgentId}
+                className={`grid h-5 w-5 place-items-center rounded-full border border-[var(--color-card-border)] text-[13px] text-white ${AGENT_DEFAULT_COLOR[task.assigneeAgentId] ?? 'bg-white/40'}`}
+              >
+                <span className="material-symbols-outlined text-[13px]">{assignedAgent?.iconKey ?? 'smart_toy'}</span>
+              </span>
+              {task.agentStatus && AGENT_STATUS_STYLE[task.agentStatus] && (
+                <span className={`text-[9px] font-label uppercase tracking-wide px-1.5 py-0.5 rounded ${AGENT_STATUS_STYLE[task.agentStatus].className}`}>
+                  {AGENT_STATUS_STYLE[task.agentStatus].label}
+                </span>
+              )}
             </span>
           )}
         </div>

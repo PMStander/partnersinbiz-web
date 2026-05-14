@@ -162,6 +162,29 @@ export const PUT = withAuth('admin', async (req, user, context) => {
     }).catch(() => {})
   }
 
+  // Notify reporter when agent marks task done.
+  const agentJustDone = updates.agentStatus === 'done' && existing.agentStatus !== 'done'
+  if (agentJustDone && existing.orgId) {
+    const reporterId = typeof existing.createdBy === 'string' ? existing.createdBy : null
+    const agentId = typeof updates.assigneeAgentId === 'string' ? updates.assigneeAgentId : typeof existing.assigneeAgentId === 'string' ? existing.assigneeAgentId : 'agent'
+    if (reporterId && reporterId !== user.uid) {
+      adminDb.collection('notifications').add({
+        orgId: existing.orgId,
+        userId: reporterId,
+        agentId: null,
+        type: 'task.agent_done',
+        title: `${agentId.charAt(0).toUpperCase() + agentId.slice(1)} finished a task`,
+        body: (updates.title as string | undefined) ?? existing.title ?? 'Task',
+        link: `/admin/tasks/${id}`,
+        status: 'unread',
+        priority: (updates.priority as string | undefined) ?? existing.priority ?? 'medium',
+        snoozedUntil: null,
+        readAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+      }).catch(() => {})
+    }
+  }
+
   // Notify the new assignee if it changed to a non-null value.
   if (assigneeChanged && body.assignedTo) {
     const a = body.assignedTo as TaskAssignee
