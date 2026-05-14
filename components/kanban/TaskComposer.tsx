@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { AgentId, AgentMember, Attachment, ChecklistItem, Column, Task, TeamMember } from './types'
 
 interface TaskComposerProps {
@@ -90,6 +90,7 @@ export function TaskComposer({ open, column, projectId, orgId, members, agents =
   const [dragging, setDragging] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const mouseDownOnBackdrop = useRef(false)
 
   const canSave = title.trim().length > 0 && !saving
   const selectedMembers = useMemo(
@@ -184,7 +185,11 @@ export function TaskComposer({ open, column, projectId, orgId, members, agents =
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6"
+      onMouseDown={(e) => { mouseDownOnBackdrop.current = e.target === e.currentTarget }}
+      onClick={() => { if (mouseDownOnBackdrop.current) onClose() }}
+    >
       <div className="absolute inset-0 bg-black/70" />
       <section
         className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-[var(--color-card-border)] bg-[var(--color-sidebar)] shadow-2xl"
