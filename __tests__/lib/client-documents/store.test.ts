@@ -177,7 +177,7 @@ describe('client document store', () => {
 
     const { publishClientDocument } = await import('@/lib/client-documents/store')
 
-    await expect(publishClientDocument('doc-1', { uid: 'u1', role: 'admin' })).resolves.toEqual({
+    await expect(publishClientDocument('doc-1', { uid: 'u1', role: 'admin' }, 'org-1')).resolves.toEqual({
       id: 'doc-1',
       versionId: 'version-1',
     })
@@ -200,5 +200,26 @@ describe('client document store', () => {
       expect.objectContaining({ id: 'version-1' }),
       { status: 'published' },
     )
+  })
+
+  it('blocks publish when the document org changes inside the transaction', async () => {
+    mockTransactionGet.mockResolvedValue({
+      exists: true,
+      id: 'doc-1',
+      data: () => ({
+        orgId: 'org-2',
+        status: 'internal_draft',
+        currentVersionId: 'version-1',
+        shareEnabled: false,
+        assumptions: [],
+      }),
+    })
+
+    const { publishClientDocument } = await import('@/lib/client-documents/store')
+
+    await expect(publishClientDocument('doc-1', { uid: 'u1', role: 'admin' }, 'org-1')).rejects.toThrow(
+      'Document organisation changed before publishing',
+    )
+    expect(mockTransactionUpdate).not.toHaveBeenCalled()
   })
 })

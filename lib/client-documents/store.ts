@@ -143,6 +143,7 @@ export async function getClientDocument(id: string): Promise<(ClientDocument & {
 export async function publishClientDocument(
   id: string,
   user: ApiUser,
+  expectedOrgId?: string | null,
 ): Promise<{ id: string; versionId: string }> {
   const documentRef = adminDb.collection(CLIENT_DOCUMENTS_COLLECTION).doc(id)
 
@@ -154,6 +155,10 @@ export async function publishClientDocument(
     }
 
     const document = snap.data() as ClientDocument
+
+    if (expectedOrgId !== undefined && (document.orgId ?? null) !== expectedOrgId) {
+      throw new Error('Document organisation changed before publishing')
+    }
 
     if (!document.orgId) {
       throw new Error('orgId is required before publishing')

@@ -1,0 +1,205 @@
+import { FieldValue } from 'firebase-admin/firestore'
+import { NextRequest } from 'next/server'
+
+import { withAuth } from '@/lib/api/auth'
+import { resolveOrgScope } from '@/lib/api/orgScope'
+import { apiError, apiSuccess } from '@/lib/api/response'
+import type { ApiUser } from '@/lib/api/types'
+import { CLIENT_DOCUMENTS_COLLECTION, getClientDocument } from '@/lib/client-documents/store'
+import type { ClientDocument, ClientDocumentLinkSet, DocumentAssumption } from '@/lib/client-documents/types'
+import { adminDb } from '@/lib/firebase/admin'
+
+export const dynamic = 'force-dynamic'
+
+type RouteContext = { params: Promise<{ id: string }> }
+
+const PATCH_FIELDS = new Set(['title', 'linked', 'assumptions', 'shareEnabled'])
+const LINKED_STRING_FIELDS = new Set(['projectId', 'campaignId', 'reportId', 'dealId', 'seoSprintId', 'invoiceId'])
+const LINKED_FIELDS = new Set([...LINKED_STRING_FIELDS, 'socialPostIds'])
+const ASSUMPTION_FIELDS = new Set([
+  'id',
+  'text',
+  'severity',
+  'status',
+  'blockId',
+  'createdBy',
+  'createdAt',
+  'resolvedBy',
+  'resolvedAt',
+])
+const ASSUMPTION_SEVERITIES = new Set(['info', 'needs_review', 'blocks_publish'])
+const ASSUMPTION_STATUSES = new Set(['open', 'resolved'])
+
+function actorType(user: ApiUser) {
+  return user.role === 'ai' ? 'agent' : 'user'
+}
+
+async function assertDocumentAccess(id: string, user: ApiUser) {
+  const document = await getClientDocument(id)
+  if (!document) {
+    return { ok: false as const, response: apiError('Document not found', 404) }
+  }
+
+  if (!document.orgId) {
+    if (user.role === 'client') {
+      return { ok: false as const, response: apiError('Forbidden', 403) }
+    }
+    return { ok: true as const, document }
+  }
+
+  const scope = resolveOrgScope(user, document.orgId)
+  if (!scope.ok) {
+    return { ok: false as const, response: apiError(scope.error, scope.status) }
+  }
+
+  return { ok: true as const, document }
+}
+
+function assertDocumentDataAccess(document: Partial<ClientDocument>, user: ApiUser) {
+  if (!document.orgId) {
+    if (user.role === 'client') {
+      return { ok: false as const, response: apiError('Forbidden', 403) }
+    }
+    return { ok: true as const }
+  }
+
+  const scope = resolveOrgScope(user, document.orgId)
+  if (!scope.ok) {
+    return { ok: false as const, response: apiError(scope.error, scope.status) }
+  }
+
+  return { ok: true as const }
+}
+
+function validateLinked(value: unknown): { ok: true; value: ClientDocumentLinkSet } | { ok: false; error: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, error: 'linked must be an object' }
+  }
+
+  const linked = value as Record<string, unknown>
+  const unknownFields = Object.keys(linked).filter((field) => !LINKED_FIELDS.has(field))
+  if (unknownFields.length > 0) {
+    return { ok: false, error: `linked contains unsupported field(s): ${unknownFields.join(', ')}` }
+  }
+
+  for (const field of LINKED_STRING_FIELDS) {
+    if (field in linked && typeof linked[field] !== 'string') {
+      return { ok: false, error: `linked.${field} must be a string` }
+    }
+  }
+
+  if (
+    'socialPostIds' in linked &&
+    (!Array.isArray(linked.socialPostIds) || linked.socialPostIds.some((postId) => typeof postId !== 'string'))
+  ) {
+    return { ok: false, error: 'linked.socialPostIds must be an array of strings' }
+  }
+
+  return { ok: true, value: linked as ClientDocumentLinkSet }
+}
+
+function validateAssumptions(
+  value: unknown,
+): { ok: true; value: DocumentAssumption[] } | { ok: false; error: string } {
+  if (!Array.isArray(value)) return { ok: false, error: 'assumptions must be an array' }
+
+  for (const [index, assumption] of value.entries()) {
+    if (!assumption || typeof assumption !== 'object' || Array.isArray(assumption)) {
+      return { ok: false, error: `assumptions[${index}] must be an object` }
+    }
+
+    const row = assumption as Record<string, unknown>
+    const unknownFields = Object.keys(row).filter((field) => !ASSUMPTION_FIELDS.has(field))
+    if (unknownFields.length > 0) {
+      return { ok: false, error: `assumptions[${index}] contains unsupported field(s): ${unknownFields.join(', ')}` }
+    }
+
+    for (const field of ['id', 'text', 'createdBy']) {
+      if (typeof row[field] !== 'string') {
+        return { ok: false, error: `assumptions[${index}].${field} must be a string` }
+      }
+    }
+
+    if (typeof row.severity !== 'string' || !ASSUMPTION_SEVERITIES.has(row.severity)) {
+      return { ok: false, error: `assumptions[${index}].severity must be one of: info, needs_review, blocks_publish` }
+    }
+
+    if (typeof row.status !== 'string' || !ASSUMPTION_STATUSES.has(row.status)) {
+      return { ok: false, error: `assumptions[${index}].status must be one of: open, resolved` }
+    }
+
+    for (const field of ['blockId', 'resolvedBy', 'createdAt', 'resolvedAt']) {
+      if (field in row && row[field] !== undefined && typeof row[field] !== 'string') {
+        return { ok: false, error: `assumptions[${index}].${field} must be a string` }
+      }
+    }
+  }
+
+  return { ok: true, value: value as DocumentAssumption[] }
+}
+
+export const GET = withAuth('client', async (_req: NextRequest, user: ApiUser, ctx: RouteContext) => {
+  const { id } = await ctx.params
+  const access = await assertDocumentAccess(id, user)
+  if (!access.ok) return access.response
+
+  return apiSuccess(access.document)
+})
+
+export const PATCH = withAuth('admin', async (req: NextRequest, user: ApiUser, ctx: RouteContext) => {
+  const { id } = await ctx.params
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return apiError('Invalid JSON', 400)
+
+  const invalidFields = Object.keys(body).filter((field) => !PATCH_FIELDS.has(field))
+  if (invalidFields.length > 0) {
+    return apiError(`Unsupported field(s): ${invalidFields.join(', ')}`, 400)
+  }
+
+  const update: Record<string, unknown> = {
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: user.uid,
+    updatedByType: actorType(user),
+  }
+
+  if ('title' in body) {
+    const title = typeof body.title === 'string' ? body.title.trim() : ''
+    if (!title) return apiError('title cannot be empty', 400)
+    update.title = title
+  }
+
+  if ('linked' in body) {
+    const linked = validateLinked(body.linked)
+    if (!linked.ok) return apiError(linked.error, 400)
+    update.linked = linked.value
+  }
+
+  if ('assumptions' in body) {
+    const assumptions = validateAssumptions(body.assumptions)
+    if (!assumptions.ok) return apiError(assumptions.error, 400)
+    update.assumptions = assumptions.value
+  }
+
+  if ('shareEnabled' in body) {
+    if (typeof body.shareEnabled !== 'boolean') return apiError('shareEnabled must be a boolean', 400)
+    update.shareEnabled = body.shareEnabled
+  }
+
+  const documentRef = adminDb.collection(CLIENT_DOCUMENTS_COLLECTION).doc(id)
+  const result = await adminDb.runTransaction(async (transaction) => {
+    const snap = await transaction.get(documentRef)
+    if (!snap.exists || snap.data()?.deleted === true) {
+      return { ok: false as const, response: apiError('Document not found', 404) }
+    }
+
+    const access = assertDocumentDataAccess(snap.data() as Partial<ClientDocument>, user)
+    if (!access.ok) return access
+
+    transaction.update(documentRef, update)
+    return { ok: true as const }
+  })
+
+  if (!result.ok) return result.response
+
+  return apiSuccess({ id, updated: Object.keys(update) })
+})
