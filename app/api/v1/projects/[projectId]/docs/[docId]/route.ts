@@ -34,10 +34,10 @@ export const GET = withAuth('client', async (req: NextRequest, user, ctx) => {
   const clientDocument = await adminDb.collection(CLIENT_DOCUMENTS_COLLECTION).doc(docId).get()
   if (!clientDocument.exists || clientDocument.data()?.deleted === true) return apiError('Document not found', 404)
 
-  const data = clientDocument.data() as ClientDocument
+  const data = clientDocument.data() as Omit<ClientDocument, 'id'>
   if (!documentLinksTo('projectId', projectId, data)) return apiError('Document not found', 404)
 
-  return apiSuccess({ id: clientDocument.id, source: 'client_documents', ...data })
+  return apiSuccess({ ...data, id: clientDocument.id, source: 'client_documents' })
 })
 
 export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
