@@ -48,7 +48,8 @@ function validateAnchor(value: unknown): { ok: true; value: unknown } | { ok: fa
     if (typeof anchor.text !== 'string' || anchor.text.trim().length === 0) {
       return { ok: false, error: 'anchor.text must be a non-empty string' }
     }
-    if (anchor.offset !== undefined && (!Number.isInteger(anchor.offset) || anchor.offset < 0)) {
+    const offset = anchor.offset
+    if (offset !== undefined && (typeof offset !== 'number' || !Number.isInteger(offset) || offset < 0)) {
       return { ok: false, error: 'anchor.offset must be a non-negative integer' }
     }
     return {
@@ -56,7 +57,7 @@ function validateAnchor(value: unknown): { ok: true; value: unknown } | { ok: fa
       value: {
         type: 'text',
         text: anchor.text.trim(),
-        ...(anchor.offset === undefined ? {} : { offset: anchor.offset }),
+        ...(offset === undefined ? {} : { offset }),
       },
     }
   }

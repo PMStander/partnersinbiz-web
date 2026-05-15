@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiError, apiSuccess } from '@/lib/api/response'
 import { CLIENT_DOCUMENTS_COLLECTION } from '@/lib/client-documents/store'
 import { stripPrivateDocumentFields } from '@/lib/client-documents/public'
+import type { ClientDocument } from '@/lib/client-documents/types'
 import { adminDb } from '@/lib/firebase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -23,7 +24,7 @@ export async function GET(_req: NextRequest, context: RouteContext): Promise<Nex
     if (snap.empty) return apiError('Document not found', 404)
 
     const doc = snap.docs[0]
-    const document = { id: doc.id, ...doc.data() }
+    const document = { id: doc.id, ...doc.data() } as ClientDocument
     if (document.deleted === true) return apiError('Document not found', 404)
     if (document.shareEnabled !== true) return apiError('Share link disabled', 403)
     if (typeof document.latestPublishedVersionId !== 'string' || !document.latestPublishedVersionId) {
