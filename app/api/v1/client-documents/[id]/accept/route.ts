@@ -5,8 +5,9 @@ import { withAuth } from '@/lib/api/auth'
 import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiError, apiSuccess } from '@/lib/api/response'
 import type { ApiUser } from '@/lib/api/types'
+import { sendDocumentApprovedEmail } from '@/lib/client-documents/notifications'
 import { CLIENT_DOCUMENTS_COLLECTION, getClientDocument } from '@/lib/client-documents/store'
-import type { ClientDocument } from '@/lib/client-documents/types'
+import type { ClientDocument, DocumentApproval } from '@/lib/client-documents/types'
 import { adminDb } from '@/lib/firebase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -93,6 +94,27 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser, c
   })
 
   await batch.commit()
+
+  // Fire-and-forget: notify PiB team inbox
+  void (async () => {
+    try {
+      const approval: DocumentApproval = {
+        id: approvalRef.id,
+        documentId: id,
+        versionId: document.latestPublishedVersionId!,
+        mode: 'formal_acceptance',
+        actorId: user.uid,
+        actorName,
+        actorRole: actorRole(user),
+        companyName,
+        typedName,
+        checkboxText,
+      }
+      await sendDocumentApprovedEmail(document, approval, 'notifications@partnersinbiz.online', 'Partners in Biz Team')
+    } catch (err) {
+      console.error('[client-documents/accept] Email notification failed:', err)
+    }
+  })()
 
   return apiSuccess({ id: approvalRef.id, versionId: document.latestPublishedVersionId })
 })

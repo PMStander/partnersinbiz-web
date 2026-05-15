@@ -45,3 +45,38 @@ Clients can leave inline comments and suggestions on accessible documents. Inter
 ## Approval
 
 Operational approvals are for specs, reports, launch sign-offs, and change requests. Formal acceptance is for sales proposals and SOW-like documents. Formal acceptance requires typed name, checkbox text, and the current terms/investment snapshot.
+
+## Agent Command: Make a Proposal
+
+When Peet says "make a proposal for [Client X]" or "create a spec for [Client X]" or similar:
+
+1. Resolve the client org: call `GET /api/v1/organizations` and find the org by name/slug.
+2. Pull context: org profile, any open CRM deals (`GET /api/v1/crm/contacts`), existing projects (`GET /api/v1/projects`), campaigns, and anything in the wiki at `~/Cowork/Cowork/agents/partners/wiki/`.
+3. Choose the template based on what Peet asked for (proposal → sales_proposal, website/app → build_spec, etc.).
+4. Create the document:
+   ```
+   POST /api/v1/client-documents
+   {
+     "title": "[Client Name] — [Document Type] [Month Year]",
+     "type": "<template_type>",
+     "templateId": "<template_type>",
+     "orgId": "<org_id>",
+     "linked": { "dealId": "<deal_id_if_known>" }
+   }
+   ```
+5. Create the first draft version with filled blocks:
+   ```
+   POST /api/v1/client-documents/[id]/versions
+   {
+     "blocks": [ ... filled block array ... ],
+     "theme": { "brandName": "<org_name>", "palette": { "bg": "#0A0A0B", "text": "#F7F4EE", "accent": "#F5A623" }, "typography": { "heading": "sans-serif", "body": "sans-serif" } },
+     "changeSummary": "Initial agent-generated draft"
+   }
+   ```
+6. Mark open assumptions: include "assumptions" in the PATCH to `/api/v1/client-documents/[id]` for any unknown price, scope, dates, or legal terms.
+7. Return:
+   - Admin review URL: `https://partnersinbiz.online/admin/documents/[id]`
+   - Client share URL: `https://partnersinbiz.online/d/[shareToken]` (only usable after publish)
+   - Summary of assumptions that need resolution before publishing
+
+Always draft first. Never publish without Peet's explicit instruction.

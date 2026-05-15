@@ -5,8 +5,9 @@ import { withAuth } from '@/lib/api/auth'
 import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiError, apiSuccess } from '@/lib/api/response'
 import type { ApiUser } from '@/lib/api/types'
+import { sendDocumentCommentEmail } from '@/lib/client-documents/notifications'
 import { CLIENT_DOCUMENTS_COLLECTION, getClientDocument } from '@/lib/client-documents/store'
-import type { ClientDocument } from '@/lib/client-documents/types'
+import type { ClientDocument, DocumentComment } from '@/lib/client-documents/types'
 import { adminDb } from '@/lib/firebase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -106,6 +107,7 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser, c
   if (!anchor.ok) return apiError(anchor.error, 400)
 
   const ref = adminDb.collection(CLIENT_DOCUMENTS_COLLECTION).doc(id).collection('comments').doc()
+  const userName = typeof body.userName === 'string' && body.userName.trim() ? body.userName.trim() : user.uid
   await ref.set({
     documentId: id,
     versionId: body.versionId ?? access.document.currentVersionId,
@@ -113,12 +115,34 @@ export const POST = withAuth('client', async (req: NextRequest, user: ApiUser, c
     text,
     anchor: anchor.value,
     userId: user.uid,
-    userName: typeof body.userName === 'string' && body.userName.trim() ? body.userName.trim() : user.uid,
+    userName,
     userRole: userRole(user),
     status: 'open',
     agentPickedUp: false,
     createdAt: FieldValue.serverTimestamp(),
   })
+
+  // Fire-and-forget: notify PiB team inbox of new client comment
+  void (async () => {
+    try {
+      const comment: DocumentComment = {
+        id: ref.id,
+        documentId: id,
+        versionId: body.versionId ?? access.document.currentVersionId,
+        blockId: typeof body.blockId === 'string' && body.blockId.trim() ? body.blockId.trim() : undefined,
+        text,
+        anchor: anchor.value as DocumentComment['anchor'],
+        userId: user.uid,
+        userName,
+        userRole: userRole(user),
+        status: 'open',
+        agentPickedUp: false,
+      }
+      await sendDocumentCommentEmail(access.document, comment, 'notifications@partnersinbiz.online', 'Partners in Biz Team')
+    } catch (err) {
+      console.error('[client-documents/comments] Email notification failed:', err)
+    }
+  })()
 
   return apiSuccess({ id: ref.id }, 201)
 })
