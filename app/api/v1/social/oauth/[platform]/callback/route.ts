@@ -491,21 +491,22 @@ async function fetchAllLinkedInAccounts(accessToken: string): Promise<LinkedInAc
   }
 
   try {
+    // versioned REST API (/rest/ not /v2/) — requires w_organization_social scope
     const orgAclsRes = await fetch(
-      'https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&count=10',
+      'https://api.linkedin.com/rest/organizationAcls?q=roleAssignee&state=APPROVED&count=10',
       { headers },
     )
     if (orgAclsRes.ok) {
       const orgAcls = await orgAclsRes.json() as {
         elements?: Array<{ organization: string; role: string; state: string }>
       }
-      const approvedOrgs = orgAcls.elements?.filter(e => e.state === 'APPROVED') ?? []
+      const approvedOrgs = orgAcls.elements ?? []
       for (const org of approvedOrgs) {
         const orgUrn = org.organization
         const orgNumId = orgUrn.split(':').pop()!
         try {
           const orgRes = await fetch(
-            `https://api.linkedin.com/v2/organizations/${orgNumId}?projection=(id,localizedName,vanityName)`,
+            `https://api.linkedin.com/rest/organizations/${orgNumId}?fields=id,localizedName,vanityName`,
             { headers },
           )
           if (orgRes.ok) {
