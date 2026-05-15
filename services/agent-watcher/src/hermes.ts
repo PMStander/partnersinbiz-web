@@ -12,6 +12,7 @@ const TERMINAL_STATUSES = new Set(['completed', 'failed', 'succeeded', 'success'
 const FAILURE_STATUSES = new Set(['failed', 'error', 'cancelled', 'canceled'])
 
 export interface RunResult {
+  runId: string | null
   output: string | null
   error: string | null
 }
@@ -168,20 +169,38 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export async function runAndPoll(cfg: AgentConfig, input: TaskDispatchInput): Promise<RunResult> {
+export async function runAndPoll(
+  cfg: AgentConfig,
+  input: TaskDispatchInput,
+  onRunCreated?: (runId: string) => void,
+): Promise<RunResult> {
   const signal = { aborted: false }
+  let capturedRunId: string | null = null
   try {
     const { runId } = await postRun(cfg, input)
+    capturedRunId = runId
     logger.info('Hermes run created', { taskId: input.taskId, runId, agentId: input.agentId })
+
+    // Notify caller of runId immediately so it can persist agentConversationId before polling.
+    if (onRunCreated) {
+      try {
+        onRunCreated(runId)
+      } catch (cbErr) {
+        logger.warn('onRunCreated callback threw', {
+          runId,
+          error: cbErr instanceof Error ? cbErr.message : String(cbErr),
+        })
+      }
+    }
 
     const final = await pollRun(cfg, runId, signal)
     const status = extractStatus(final)
     if (FAILURE_STATUSES.has(status)) {
-      return { output: null, error: extractError(final) }
+      return { runId: capturedRunId, output: null, error: extractError(final) }
     }
-    return { output: extractOutput(final), error: null }
+    return { runId: capturedRunId, output: extractOutput(final), error: null }
   } catch (err) {
     signal.aborted = true
-    return { output: null, error: err instanceof Error ? err.message : String(err) }
+    return { runId: capturedRunId, output: null, error: err instanceof Error ? err.message : String(err) }
   }
 }

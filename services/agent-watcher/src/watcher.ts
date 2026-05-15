@@ -126,8 +126,26 @@ async function dispatchTask(taskRef: DocumentReference, taskData: TaskData): Pro
       constraints: taskData.agentInput?.constraints,
     }
 
+    // Callback: fires as soon as the Hermes run is created (before polling completes).
+    // Writes agentConversationId so the PiB UI can show a "Live session →" link immediately.
+    const onRunCreated = (runId: string): void => {
+      void taskRef.update({
+        agentConversationId: runId,
+        updatedAt: FieldValue.serverTimestamp(),
+      }).then(() => {
+        logger.info('wrote agentConversationId', { taskId, agentId, runId })
+      }).catch((err: unknown) => {
+        logger.warn('failed to write agentConversationId', {
+          taskId,
+          agentId,
+          runId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    }
+
     logger.info('dispatching task to Hermes', { taskId, agentId, orgId: dispatchInput.orgId })
-    const result = await runAndPoll(cfg, dispatchInput)
+    const result = await runAndPoll(cfg, dispatchInput, onRunCreated)
     stopHeartbeat()
 
     if (result.error) {
