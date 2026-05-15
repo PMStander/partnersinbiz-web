@@ -69,3 +69,4 @@ client-secret.json
 .env.sentry-build-plugin
 functions/node_modules/
 scripts/dist/
+.superpowers/
