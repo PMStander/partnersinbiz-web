@@ -1,5 +1,12 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app'
-import { getAuth, Auth } from 'firebase/auth'
+import {
+  getAuth,
+  setPersistence,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  Auth,
+} from 'firebase/auth'
 import { getFirestore, Firestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -15,8 +22,21 @@ function getApp(): FirebaseApp {
   return getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
 }
 
+let persistenceConfigured = false
+
 export function getClientAuth(): Auth {
-  return getAuth(getApp())
+  const auth = getAuth(getApp())
+  // Keep the user signed in across PWA close / reopen. Try IndexedDB first
+  // (works inside installed PWAs and private windows on most browsers), then
+  // fall back to localStorage, then to session-only as a last resort.
+  if (!persistenceConfigured && typeof window !== 'undefined') {
+    persistenceConfigured = true
+    setPersistence(auth, indexedDBLocalPersistence)
+      .catch(() => setPersistence(auth, browserLocalPersistence))
+      .catch(() => setPersistence(auth, browserSessionPersistence))
+      .catch(() => {})
+  }
+  return auth
 }
 
 export function getClientDb(): Firestore {

@@ -4,8 +4,10 @@ import Script from 'next/script'
 import { Analytics } from '@vercel/analytics/react'
 import { SITE } from '@/lib/seo/site'
 import { organizationGraph, JsonLd } from '@/lib/seo/schema'
+import { Suspense } from 'react'
 import { PwaRegistrar } from '@/components/pwa/PwaRegistrar'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
+import { PWAReturnGate } from '@/components/pwa/PWAReturnGate'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
@@ -137,6 +139,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <JsonLd data={organizationGraph} />
         <PwaRegistrar />
+        <Suspense fallback={null}>
+          <PWAReturnGate />
+        </Suspense>
         {children}
         <InstallPrompt />
         <Analytics />
