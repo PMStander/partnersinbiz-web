@@ -19,6 +19,9 @@ const TABS = [
   { key: 'stories',   label: 'Stories' },
   { key: 'facebook',  label: 'Facebook' },
   { key: 'linkedin',  label: 'LinkedIn' },
+  { key: 'twitter',   label: 'Twitter / X' },
+  { key: 'bluesky',   label: 'Bluesky' },
+  { key: 'pinterest', label: 'Pinterest' },
   { key: 'youtube',   label: 'YouTube' },
 ] as const
 
@@ -292,6 +295,39 @@ function Drillin({ slug, id, orgName }: { slug: string; id: string; orgName: str
           <PlatformPanel
             empty={emptyCopy('LinkedIn posts', 'linkedin-feed')}
             social={split.linkedin}
+            blogs={[]}
+            videos={[]}
+            filter="social"
+            brand={brand}
+            campaignId={id}
+          />
+        )}
+        {tab === 'twitter' && (
+          <PlatformPanel
+            empty={emptyCopy('Twitter / X posts', 'twitter-feed')}
+            social={split.twitter}
+            blogs={[]}
+            videos={[]}
+            filter="social"
+            brand={brand}
+            campaignId={id}
+          />
+        )}
+        {tab === 'bluesky' && (
+          <PlatformPanel
+            empty={emptyCopy('Bluesky posts', 'bluesky-feed')}
+            social={split.bluesky}
+            blogs={[]}
+            videos={[]}
+            filter="social"
+            brand={brand}
+            campaignId={id}
+          />
+        )}
+        {tab === 'pinterest' && (
+          <PlatformPanel
+            empty={emptyCopy('Pinterest pins', 'pinterest-pin')}
+            social={split.pinterest}
             blogs={[]}
             videos={[]}
             filter="social"
@@ -628,6 +664,9 @@ function splitAssets(assets: AnyObj | null) {
     stories: [] as AnyObj[],
     facebook: [] as AnyObj[],
     linkedin: [] as AnyObj[],
+    twitter: [] as AnyObj[],
+    bluesky: [] as AnyObj[],
+    pinterest: [] as AnyObj[],
     youtubeSocial: [] as AnyObj[],
     youtubeVideos: [] as AnyObj[],
   }
@@ -666,6 +705,9 @@ function splitAssets(assets: AnyObj | null) {
   })
   const facebook = social.filter(p => platformOf(p) === 'facebook')
   const linkedin = social.filter(p => platformOf(p) === 'linkedin')
+  const twitter = social.filter(p => { const pl = platformOf(p); return pl === 'twitter' || pl === 'x' })
+  const bluesky = social.filter(p => platformOf(p) === 'bluesky')
+  const pinterest = social.filter(p => platformOf(p) === 'pinterest')
   const youtubeSocial = social.filter(p => platformOf(p) === 'youtube' && !isVideo(p))
   const youtubeVideos = videos.filter(p => {
     const plat = platformOf(p)
@@ -681,6 +723,9 @@ function splitAssets(assets: AnyObj | null) {
     stories,
     facebook,
     linkedin,
+    twitter,
+    bluesky,
+    pinterest,
     youtubeSocial,
     youtubeVideos,
   }
@@ -702,6 +747,12 @@ function countFor(tab: TabKey, split: ReturnType<typeof splitAssets>): number | 
       return split.facebook.length
     case 'linkedin':
       return split.linkedin.length
+    case 'twitter':
+      return split.twitter.length
+    case 'bluesky':
+      return split.bluesky.length
+    case 'pinterest':
+      return split.pinterest.length
     case 'youtube':
       return split.youtubeSocial.length + split.youtubeVideos.length
   }

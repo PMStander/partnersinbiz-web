@@ -38,17 +38,21 @@ Note: The legacy `x` alias maps to `twitter` internally. Prefer `twitter` in new
 
 ## Authentication
 
-All requests require authentication via the `Authorization` header.
+All requests require **two** headers for AI agent requests:
 
 ```
 Authorization: Bearer <AI_API_KEY>
+X-Org-Id: <orgId>
 ```
+
+> **Required for AI agents:** The `X-Org-Id` header is mandatory when authenticating with `AI_API_KEY`. Omitting it returns `{"success":false,"error":"X-Org-Id header is required for AI agent requests"}` even with a valid token.
 
 The token must match `process.env.AI_API_KEY` set in Vercel for the `partnersinbiz-web` project. Read it from the environment:
 
 ```javascript
 const headers = {
   'Authorization': `Bearer ${process.env.AI_API_KEY}`,
+  'X-Org-Id': orgId,
   'Content-Type': 'application/json'
 };
 ```
@@ -74,6 +78,72 @@ https://partnersinbiz.online/api/v1/social
 ```
 
 Override via `PIB_API_BASE` env var for local dev. Default to production.
+
+> **Exception:** The campaign schedule endpoint lives at `/api/v1/campaigns/[id]/schedule` — outside the `/social` prefix. See the campaigns section.
+
+---
+
+## Known Gotchas
+
+| Gotcha | Symptom | Fix |
+|---|---|---|
+| Missing `X-Org-Id` header | `"X-Org-Id header is required for AI agent requests"` | Add `-H "X-Org-Id: <orgId>"` to every curl call when using `AI_API_KEY` |
+| Trailing slash on `/accounts` | 308 redirect, empty response | Use `/accounts` not `/accounts/` |
+| Campaign schedule wrong base | 404 HTML page | Route is `/api/v1/campaigns/{id}/schedule`, NOT `/api/v1/social/campaigns/{id}/schedule` |
+| Bulk endpoint drops `campaignId` | Posts created but not linked to campaign | Use single `POST /posts` per post when `campaignId` must be preserved |
+
+---
+
+## Partners in Biz Own Accounts (orgId: `pib-platform-owner`)
+
+When scheduling content **for Partners in Biz itself** (not a client), use `orgId: pib-platform-owner` and these account IDs:
+
+| Platform | Account ID | Type | Notes |
+|---|---|---|---|
+| facebook | `l0DPTxi8xGFX4oLwOK8c` | PIB page | "PIB" — the business page. Always use this, not the personal FB. |
+| instagram | `kZFWPdCXR7HiZgTJrmJF` | personal | active |
+| linkedin | `z6jekgWOpRJs229kbd4I` | personal | company page pending CMA approval — use personal until approved |
+| twitter | `I478D32VOu4rm7a2utoS` | personal | @PeetStander |
+| bluesky | `rlyjv3dl2Wvdm33fVrpH` | personal | partnersinbiz.bsky.social |
+| pinterest | `uTV7yaJEaRyU4GFTJZqR` | business | peetstander0223 |
+| youtube | `aGqyvID6ub8nOu8J7owY` | personal | AI Daily Clips — confirm with Peet before scheduling here |
+
+**Stale / wrong-org accounts to ignore:**
+- `9UILwCn9bUtiyJbFScAP` (twitter, disconnected)
+- `BbxrEsnmq4GGVphenm3l` (facebook "Omni Platform", wrong org)
+- `Kod7W9yQ6h6QStYtKcKc` (facebook "Petrus Stander", personal — not for marketing)
+
+### Default campaign platform coverage
+
+When creating a new campaign for Partners in Biz, include **all 6 active marketing platforms** unless a platform is explicitly excluded:
+
+```
+platforms: ["facebook", "instagram", "linkedin", "twitter", "bluesky", "pinterest"]
+accountIds: [
+  "l0DPTxi8xGFX4oLwOK8c",  // Facebook PIB page
+  "kZFWPdCXR7HiZgTJrmJF",  // Instagram
+  "z6jekgWOpRJs229kbd4I",   // LinkedIn personal (company page pending)
+  "I478D32VOu4rm7a2utoS",   // Twitter
+  "rlyjv3dl2Wvdm33fVrpH",   // Bluesky
+  "uTV7yaJEaRyU4GFTJZqR"   // Pinterest
+]
+```
+
+### Platform-specific content guidelines (PiB campaigns)
+
+- **Facebook** → business page posts, can be longer form, link previews work well
+- **Instagram** → visual-first, captions up to 2200 chars, hashtags important (10–20)
+- **LinkedIn** → professional tone, thought leadership, personal Peet voice, max 3000 chars
+- **Twitter/X** → punchy, max 280 chars, 1–2 hashtags
+- **Bluesky** → conversational, max 300 chars, no algorithm — early-adopter tech audience
+- **Pinterest** → image required, keyword-rich description, link to site content
+
+### LinkedIn company page (pending)
+
+LinkedIn company page posting requires `w_organization_social` scope. A dedicated LinkedIn app was created and Community Management API access submitted (2026-05-15). When approved:
+1. Update `LINKEDIN_CLIENT_ID` + `LINKEDIN_CLIENT_SECRET` in Vercel with new app credentials
+2. Reconnect LinkedIn via OAuth — company page appears in picker
+3. Add company page accountId to campaigns and update the 21 May 2026 standalone posts
 
 ---
 
@@ -124,7 +194,8 @@ Returns queue and account connectivity health for the org.
 
 ```bash
 curl -H "Authorization: Bearer $AI_API_KEY" \
-  "https://partnersinbiz.online/api/v1/social/health/?orgId=org_abc123"
+  -H "X-Org-Id: org_abc123" \
+  "https://partnersinbiz.online/api/v1/social/health?orgId=org_abc123"
 ```
 
 Response:
@@ -142,7 +213,9 @@ Response:
 
 ### Accounts
 
-#### `GET /accounts/` — auth: client
+#### `GET /accounts` — auth: client
+
+> **No trailing slash** — `GET /accounts/` returns a 308 redirect; use `GET /accounts` (no slash).
 
 List connected social accounts for an org.
 
@@ -354,6 +427,8 @@ Query params: `limit` (default 5, max 100)
 Response: Array of `{ id, content (120 chars), platform, orgId, orgName, scheduledAt }`.
 
 #### `POST /campaigns/[id]/schedule` — auth: client (NEW — bulk schedule)
+
+> **Route is NOT under `/social`** — full URL is `https://partnersinbiz.online/api/v1/campaigns/{id}/schedule`, not `/api/v1/social/campaigns/{id}/schedule`. The base URL for this endpoint is `/api/v1/campaigns/`, same as `GET /api/v1/campaigns`.
 
 Bulk-schedule every `approved` social_post + video on a content-engine
 campaign across the campaign's `calendar` (preferred) or a cadence. Use
