@@ -570,6 +570,7 @@ export default function ProjectDetailPage() {
         orgId={project?.orgId}
         members={members}
         agents={agents}
+        hideAgentSection
         onClose={() => setShowNewTask(null)}
         onCreated={handleTaskCreated}
       />

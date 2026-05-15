@@ -10,6 +10,7 @@ interface TaskComposerProps {
   orgId?: string
   members: TeamMember[]
   agents?: AgentMember[]
+  hideAgentSection?: boolean
   onClose: () => void
   onCreated: (task: Task) => void
 }
@@ -74,7 +75,7 @@ export async function uploadTaskFile(file: File, projectId: string, orgId?: stri
   }
 }
 
-export function TaskComposer({ open, column, projectId, orgId, members, agents = [], onClose, onCreated }: TaskComposerProps) {
+export function TaskComposer({ open, column, projectId, orgId, members, agents = [], hideAgentSection = false, onClose, onCreated }: TaskComposerProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<(typeof PRIORITIES)[number]>('medium')
@@ -401,6 +402,7 @@ export function TaskComposer({ open, column, projectId, orgId, members, agents =
               )}
             </div>
 
+            {!hideAgentSection && (
             <div>
               <p className="mb-2 text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Agent</p>
               <div className="space-y-1 rounded-md border border-[var(--color-card-border)] bg-[var(--color-card)] p-2">
@@ -438,6 +440,7 @@ export function TaskComposer({ open, column, projectId, orgId, members, agents =
                 )}
               </div>
             </div>
+            )}
           </aside>
         </div>
 
