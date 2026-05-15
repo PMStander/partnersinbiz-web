@@ -1,6 +1,6 @@
 'use client'
 
-import type { CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
 import type { ClientDocument, ClientDocumentVersion, DocumentBlock } from '@/lib/client-documents/types'
 
@@ -32,7 +32,7 @@ function renderBlock(block: DocumentBlock) {
 }
 
 export function DocumentRenderer({
-  document,
+  document: clientDoc,
   version,
 }: {
   document: ClientDocument
@@ -47,28 +47,124 @@ export function DocumentRenderer({
     color: text,
   } as CSSProperties
 
-  return (
-    <article className="min-h-screen" style={style}>
-      <div className="mx-auto max-w-5xl px-5 py-12 md:px-10 md:py-16">
-        <header className="flex min-h-[42vh] flex-col justify-end border-b border-white/10 pb-10">
-          <p className="text-xs uppercase tracking-[0.2em] text-white/50">{readableType(document.type)}</p>
-          <h1 className="mt-4 max-w-4xl text-5xl font-semibold leading-none md:text-7xl">{document.title}</h1>
-          <p className="mt-6 text-sm text-white/50">Version {version.versionNumber}</p>
-        </header>
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
+  const [progress, setProgress] = useState(0)
+  const articleRef = useRef<HTMLElement>(null)
 
-        <div className="grid gap-10 md:grid-cols-[1fr_180px]">
-          <div>{version.blocks.map(renderBlock)}</div>
-          <aside className="hidden pt-10 md:block">
-            <nav className="sticky top-24 space-y-2 text-xs text-white/50">
-              {version.blocks.map((block) => (
-                <a key={block.id} href={`#block-${block.id}`} className="block hover:text-[var(--doc-accent)]">
-                  {block.title ?? readableType(block.type)}
-                </a>
-              ))}
-            </nav>
-          </aside>
+  // Scroll-driven reveal animations
+  useEffect(() => {
+    const els = globalThis.document.querySelectorAll('[data-motion]') as NodeListOf<HTMLElement>
+    const toReveal = new Set<HTMLElement>()
+
+    els.forEach((el) => {
+      if (el.dataset.motion && el.dataset.motion !== 'none') {
+        el.style.opacity = '0'
+        el.style.transform = 'translateY(24px)'
+        toReveal.add(el)
+      }
+    })
+
+    if (toReveal.size === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const el = entry.target as HTMLElement
+            el.style.opacity = '1'
+            el.style.transform = 'translateY(0)'
+            el.style.transition = 'opacity 0.55s ease, transform 0.55s ease'
+            toReveal.delete(el)
+            observer.unobserve(el)
+            if (toReveal.size === 0) observer.disconnect()
+          }
+        })
+      },
+      { threshold: 0.15 },
+    )
+
+    toReveal.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [clientDoc, version.id])
+
+  // Active nav block tracking
+  useEffect(() => {
+    const sections = version.blocks
+      .map((b) => globalThis.document?.getElementById(`block-${b.id}`))
+      .filter(Boolean) as HTMLElement[]
+
+    if (sections.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const blockId = entry.target.id.replace('block-', '')
+            setActiveBlockId(blockId)
+          }
+        })
+      },
+      { rootMargin: '-30% 0px -60% 0px', threshold: 0 },
+    )
+
+    sections.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [version.blocks])
+
+  // Reading progress bar
+  useEffect(() => {
+    function onScroll() {
+      const scrolled = window.scrollY
+      const total = globalThis.document.body.scrollHeight - window.innerHeight
+      setProgress(total > 0 ? (scrolled / total) * 100 : 0)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  return (
+    <>
+      {/* Reading progress bar */}
+      <div
+        className="fixed top-0 left-0 z-50 h-[2px] transition-[width] duration-100"
+        style={{ width: `${progress}%`, background: accent }}
+        aria-hidden
+      />
+
+      <article ref={articleRef} className="min-h-screen" style={style}>
+        <div className="mx-auto max-w-5xl px-5 py-12 md:px-10 md:py-16">
+          <header className="flex min-h-[42vh] flex-col justify-end border-b border-white/10 pb-10">
+            <p className="text-xs uppercase tracking-[0.2em] text-white/50">{readableType(clientDoc.type)}</p>
+            <h1 className="mt-4 max-w-4xl text-5xl font-semibold leading-none md:text-7xl">{clientDoc.title}</h1>
+            <p className="mt-6 text-sm text-white/50">Version {version.versionNumber}</p>
+          </header>
+
+          <div className="grid gap-10 md:grid-cols-[1fr_180px]">
+            <div>{version.blocks.map(renderBlock)}</div>
+            <aside className="hidden pt-10 md:block">
+              <nav className="sticky top-24 space-y-1 text-xs text-white/50">
+                {version.blocks.map((block) => {
+                  const isActive = activeBlockId === block.id
+                  return (
+                    <a
+                      key={block.id}
+                      href={`#block-${block.id}`}
+                      className={[
+                        'block border-l-2 pl-3 py-0.5 transition-colors duration-200',
+                        isActive
+                          ? 'border-[var(--doc-accent)] text-[var(--doc-accent)]'
+                          : 'border-transparent hover:text-[var(--doc-accent)]',
+                      ].join(' ')}
+                    >
+                      {block.title ?? readableType(block.type)}
+                    </a>
+                  )
+                })}
+              </nav>
+            </aside>
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+    </>
   )
 }
