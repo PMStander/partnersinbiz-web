@@ -55,19 +55,22 @@ export default function DocumentEditorPage() {
 
       if (!docRes.ok) throw new Error(`Failed to load document: ${docRes.status}`)
 
-      const docData: ClientDocument = await docRes.json()
+      const docBody = await docRes.json()
+      const docData: ClientDocument = docBody.data ?? docBody
       setDocument(docData)
       setTitleValue(docData.title)
 
       if (versionsRes.ok) {
-        const versionsData: ClientDocumentVersion[] = await versionsRes.json()
+        const versionsBody = await versionsRes.json()
+        const versionsData: ClientDocumentVersion[] = versionsBody.data ?? versionsBody ?? []
         const current =
           versionsData.find((v) => v.id === docData.currentVersionId) ?? versionsData[0] ?? null
         setVersion(current)
       }
 
       if (commentsRes.ok) {
-        const commentsData: DocumentComment[] = await commentsRes.json()
+        const commentsBody = await commentsRes.json()
+        const commentsData: DocumentComment[] = commentsBody.data ?? commentsBody ?? []
         setComments(commentsData)
       }
     } catch (err) {
