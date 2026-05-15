@@ -296,3 +296,7 @@ All writes include `createdBy`, `createdByType` (`user|agent|system`), `updatedB
 If the cron has been failing or GSC tokens expired, sprint health will show
 `integrations.gsc.tokenStatus = 'expired'`. Surface this as: "GSC connection expired
 for [client] — needs reconnect at /admin/seo/sprints/[id]/settings".
+
+## Client Document Handoff
+
+When an SEO sprint needs client strategy sign-off, create or link a client document through the `client-documents` skill. Use a strategy/spec-style document, link it with `linked.seoSprintId`, and keep implementation work in the SEO sprint tasks.

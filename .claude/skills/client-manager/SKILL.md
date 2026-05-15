@@ -649,3 +649,7 @@ POST /onboarding
 3. **Idempotency on client creation** — pass `Idempotency-Key: <uuid>` on `POST /organizations` to avoid duplicates.
 4. **Leave a comment after you do something** — `POST /comments resourceType=client_org` so the human sees what the agent did.
 5. **Subscribe webhooks** — for notifications on client creation/updates, point an outbound webhook at `contact.created` / `client.created` (see `platform-ops` skill).
+
+## Client Document Handoff
+
+During handoff, account review, or client check-in work, check outstanding `client_documents` for the org. Surface documents in `client_review`, `changes_requested`, `approved`, or `accepted` states, and use the `client-documents` skill when a proposal, spec, report, sign-off, or approval pack is needed.

@@ -378,3 +378,7 @@ After the final phase, print the **campaign cockpit URL**, the **client portal U
 When in doubt about blog format: read an existing `seo_content` row + its `seo_drafts` body via the API.  
 When in doubt about social format: read an existing `social_post` row via the API.  
 When in doubt about video format: read [`references/05-video-production.md`](references/05-video-production.md).
+
+## Client Document Handoff
+
+For major client-facing runs, create or link a Content Campaign Plan document through the `client-documents` skill. Link it with `linked.campaignId` and use the document for strategy, assumptions, comments, and client approval; keep individual post approval in the social campaign workflow.

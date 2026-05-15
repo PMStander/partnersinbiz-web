@@ -417,3 +417,7 @@ GET /reports/team-utilization?orgId=org_abc&from=2026-04-07&to=2026-04-13
 5. **Relate calendar events** — set `relatedTo` so meetings show up in the contact/deal activity feed.
 6. **Webhooks** — subscribe to `task.completed` to close loops (e.g., trigger review requests).
 7. **Idempotency on creates** — pass `Idempotency-Key` on `POST /projects`, `/tasks`, `/time-entries`, `/calendar/events`.
+
+## Client Document Handoff
+
+Use the `client-documents` skill for specs, change requests, launch sign-offs, and handover packs. Link these documents with `linked.projectId` so Projects/Kanban remains the operational source of truth while `client_documents` handles presentation, comments, versions, and approvals.

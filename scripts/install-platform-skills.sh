@@ -27,6 +27,7 @@ PLATFORM_SKILLS=(
   analytics
   billing-finance
   client-manager
+  client-documents
   content-engine
   crm-sales
   email-outreach

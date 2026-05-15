@@ -1605,3 +1605,7 @@ Always confirm the `orgId` before performing actions. Include it as a query para
 - Always review AI output before scheduling
 - Use `/ai/image-templates` to build prompts, then `/ai/image` to generate
 - After image generation, register via `POST /media/` before attaching to posts
+
+## Client Document Handoff
+
+Use the `client-documents` skill for broader Social Media Strategy documents and client-facing campaign plans. Link broad strategy docs with `linked.campaignId` or `linked.socialPostIds`; keep individual post approval in the social post workflow unless Peet asks for a formal strategy sign-off.

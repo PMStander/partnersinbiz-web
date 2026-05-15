@@ -37,6 +37,10 @@ Authorization: Bearer <AI_API_KEY>
 
 Except for `POST /forms/[slug]/submit` which is **public** (no auth required).
 
+## Client Document Handoff
+
+Sales opportunities that need client review should produce Sales Proposal documents through the `client-documents` skill. Link them with `linked.dealId`, keep pricing/legal/scope assumptions as `blocks_publish` until resolved, and use formal acceptance for proposal approval.
+
 ## orgId conventions
 
 - `contacts`, `deals`, `activities`, `quotes`, `forms`, `form_submissions` all carry `orgId` as a field.
