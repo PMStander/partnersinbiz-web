@@ -85,10 +85,17 @@ export const POST = withAuth('admin', async (req: NextRequest, user, ctx) => {
     updatedAt: FieldValue.serverTimestamp(),
   })
 
-  // Generate a password-setup link (same mechanism as password reset)
+  // Generate a password-setup link wrapped in a proxy page.
+  // The proxy page (/auth/reset?link=...) shows a button the user must click,
+  // preventing email scanners from pre-fetching and invalidating the one-time token.
+  // continueUrl sends the client to the login page after they set their password.
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://partnersinbiz.online'
   let setupLink: string | null = null
   try {
-    setupLink = await adminAuth.generatePasswordResetLink(email)
+    const firebaseLink = await adminAuth.generatePasswordResetLink(email, {
+      url: `${BASE_URL}/login`,
+    })
+    setupLink = `${BASE_URL}/auth/reset?link=${encodeURIComponent(firebaseLink)}`
   } catch {
     // Non-fatal — admin can trigger reset manually from login page
   }
