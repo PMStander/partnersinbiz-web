@@ -5,12 +5,15 @@ const mockBatchSet = jest.fn()
 const mockBatchCommit = jest.fn()
 const mockTransactionGet = jest.fn()
 const mockTransactionUpdate = jest.fn()
+const mockTransactionSet = jest.fn()
 const mockDocGet = jest.fn()
 const mockDocUpdate = jest.fn()
 const mockWhere = jest.fn()
 const mockQueryGet = jest.fn()
 const mockVersionDoc = jest.fn()
 const mockVersionUpdate = jest.fn()
+const mockVersionSet = jest.fn()
+const mockVersionsGet = jest.fn()
 
 jest.mock('firebase-admin/firestore', () => ({
   FieldValue: {
@@ -29,6 +32,7 @@ jest.mock('@/lib/firebase/admin', () => ({
       handler({
         get: mockTransactionGet,
         update: mockTransactionUpdate,
+        set: mockTransactionSet,
       }),
     ),
   },
@@ -67,9 +71,11 @@ function makeDocumentRef(id = 'doc-1') {
   const versionRef = {
     id: 'version-1',
     update: mockVersionUpdate,
+    set: mockVersionSet,
   }
   const versions = {
     doc: mockVersionDoc.mockReturnValue(versionRef),
+    get: mockVersionsGet,
   }
 
   return {
@@ -85,6 +91,9 @@ beforeEach(() => {
   mockBatchCommit.mockResolvedValue(undefined)
   mockDocUpdate.mockResolvedValue(undefined)
   mockTransactionUpdate.mockReturnValue(undefined)
+  mockTransactionSet.mockReturnValue(undefined)
+  mockVersionSet.mockResolvedValue(undefined)
+  mockVersionsGet.mockResolvedValue({ docs: [] })
   mockTransactionGet.mockReset()
   mockDocGet.mockReset()
 
@@ -531,6 +540,141 @@ describe('client documents API', () => {
     expect(res.status).toBe(403)
     expect(mockTransactionGet).not.toHaveBeenCalled()
     expect(mockTransactionUpdate).not.toHaveBeenCalled()
+  })
+
+  it('lists document versions for an accessible document', async () => {
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: 'doc-1',
+      data: () => ({ orgId: 'org-1', title: 'Proposal', deleted: false }),
+    })
+    mockVersionsGet.mockResolvedValueOnce({
+      docs: [{ id: 'version-1', data: () => ({ versionNumber: 1, status: 'draft' }) }],
+    })
+
+    const { GET } = await import('@/app/api/v1/client-documents/[id]/versions/route')
+    const req = new NextRequest('http://localhost/api/v1/client-documents/doc-1/versions')
+    const res = await GET(req, clientUser, { params: Promise.resolve({ id: 'doc-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.data).toEqual([{ id: 'version-1', versionNumber: 1, status: 'draft' }])
+  })
+
+  it('blocks clients from listing standalone internal document versions', async () => {
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: 'doc-1',
+      data: () => ({ title: 'Internal draft', deleted: false }),
+    })
+
+    const { GET } = await import('@/app/api/v1/client-documents/[id]/versions/route')
+    const req = new NextRequest('http://localhost/api/v1/client-documents/doc-1/versions')
+    const res = await GET(req, clientUser, { params: Promise.resolve({ id: 'doc-1' }) })
+
+    expect(res.status).toBe(403)
+    expect(mockVersionsGet).not.toHaveBeenCalled()
+  })
+
+  it('creates a draft version and points the document head at it', async () => {
+    mockTransactionGet.mockResolvedValueOnce({
+      exists: true,
+      id: 'doc-1',
+      data: () => ({ orgId: 'org-1', title: 'Proposal', deleted: false }),
+    })
+
+    const { POST } = await import('@/app/api/v1/client-documents/[id]/versions/route')
+    const req = jsonRequest('http://localhost/api/v1/client-documents/doc-1/versions', {
+      blocks: [
+        {
+          id: 'summary',
+          type: 'summary',
+          title: 'Summary',
+          content: { body: 'Updated scope' },
+          required: true,
+          display: { motion: 'reveal' },
+        },
+      ],
+      versionNumber: 2,
+      theme: {
+        palette: { bg: '#0A0A0B', text: '#F7F4EE', accent: '#F5A623' },
+        typography: { heading: 'Instrument Serif', body: 'Geist' },
+      },
+      changeSummary: 'Updated scope',
+    })
+
+    const res = await POST(req, user, { params: Promise.resolve({ id: 'doc-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.data).toEqual({ id: 'version-1' })
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'version-1' }),
+      expect.objectContaining({
+        documentId: 'doc-1',
+        versionNumber: 2,
+        status: 'draft',
+        createdBy: 'ai-agent',
+        createdByType: 'agent',
+        changeSummary: 'Updated scope',
+      }),
+    )
+    expect(mockTransactionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'doc-1' }),
+      expect.objectContaining({
+        currentVersionId: 'version-1',
+        updatedBy: 'ai-agent',
+        updatedByType: 'agent',
+      }),
+    )
+  })
+
+  it('blocks clients from creating document versions', async () => {
+    const { POST } = await import('@/app/api/v1/client-documents/[id]/versions/route')
+    const req = jsonRequest('http://localhost/api/v1/client-documents/doc-1/versions', { blocks: [] })
+    const res = await POST(req, clientUser, { params: Promise.resolve({ id: 'doc-1' }) })
+
+    expect(res.status).toBe(403)
+    expect(mockTransactionGet).not.toHaveBeenCalled()
+    expect(mockTransactionSet).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid draft version blocks before transaction writes', async () => {
+    const { POST } = await import('@/app/api/v1/client-documents/[id]/versions/route')
+    const req = jsonRequest('http://localhost/api/v1/client-documents/doc-1/versions', {
+      blocks: [{ id: 'bad', type: 'not_real', content: {}, required: true, display: {} }],
+    })
+
+    const res = await POST(req, user, { params: Promise.resolve({ id: 'doc-1' }) })
+
+    expect(res.status).toBe(400)
+    expect(mockTransactionGet).not.toHaveBeenCalled()
+    expect(mockTransactionSet).not.toHaveBeenCalled()
+  })
+
+  it('fetches one document version for an accessible document', async () => {
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: 'doc-1',
+      data: () => ({ orgId: 'org-1', title: 'Proposal', deleted: false }),
+    })
+    mockVersionSet.mockResolvedValue(undefined)
+    mockVersionDoc.mockReturnValueOnce({
+      id: 'version-1',
+      get: jest.fn().mockResolvedValue({
+        exists: true,
+        id: 'version-1',
+        data: () => ({ versionNumber: 1, status: 'draft' }),
+      }),
+    })
+
+    const { GET } = await import('@/app/api/v1/client-documents/[id]/versions/[versionId]/route')
+    const req = new NextRequest('http://localhost/api/v1/client-documents/doc-1/versions/version-1')
+    const res = await GET(req, clientUser, { params: Promise.resolve({ id: 'doc-1', versionId: 'version-1' }) })
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.data).toEqual({ id: 'version-1', versionNumber: 1, status: 'draft' })
   })
 })
 
