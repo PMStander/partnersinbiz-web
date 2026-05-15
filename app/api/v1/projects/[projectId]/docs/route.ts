@@ -7,6 +7,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { CLIENT_DOCUMENTS_COLLECTION } from '@/lib/client-documents/store'
 import { getProjectForUser } from '@/lib/projects/access'
 
 export const dynamic = 'force-dynamic'
@@ -18,15 +19,23 @@ export const GET = withAuth('client', async (req: NextRequest, user, ctx) => {
   const access = await getProjectForUser(projectId, user)
   if (!access.ok) return apiError(access.error, access.status)
 
-  const snapshot = await adminDb
+  const legacySnapshot = await adminDb
     .collection('projects')
     .doc(projectId)
     .collection('docs')
     .orderBy('createdAt', 'desc')
     .get()
+  const linkedSnapshot = await adminDb
+    .collection(CLIENT_DOCUMENTS_COLLECTION)
+    .where('linked.projectId', '==', projectId)
+    .get()
 
-  const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-  return apiSuccess(docs)
+  const legacyDocs = legacySnapshot.docs.map(doc => ({ id: doc.id, source: 'legacy_project_docs', ...doc.data() }))
+  const clientDocuments = linkedSnapshot.docs
+    .map(doc => ({ id: doc.id, source: 'client_documents', ...doc.data() }))
+    .filter(doc => doc.deleted !== true)
+
+  return apiSuccess([...clientDocuments, ...legacyDocs])
 })
 
 export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
@@ -56,5 +65,5 @@ export const POST = withAuth('client', async (req: NextRequest, user, ctx) => {
     .collection('docs')
     .add(doc)
 
-  return apiSuccess({ id: ref.id, ...doc }, 201)
+  return apiSuccess({ id: ref.id, ...doc, migrationTarget: 'client_documents' }, 201)
 })

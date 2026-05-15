@@ -8,6 +8,9 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
+import { documentLinksTo } from '@/lib/client-documents/links'
+import { CLIENT_DOCUMENTS_COLLECTION } from '@/lib/client-documents/store'
+import type { ClientDocument } from '@/lib/client-documents/types'
 import { getProjectForUser } from '@/lib/projects/access'
 
 export const dynamic = 'force-dynamic'
@@ -26,8 +29,15 @@ export const GET = withAuth('client', async (req: NextRequest, user, ctx) => {
     .doc(docId)
     .get()
 
-  if (!doc.exists) return apiError('Document not found', 404)
-  return apiSuccess({ id: doc.id, ...doc.data() })
+  if (doc.exists) return apiSuccess({ id: doc.id, source: 'legacy_project_docs', ...doc.data() })
+
+  const clientDocument = await adminDb.collection(CLIENT_DOCUMENTS_COLLECTION).doc(docId).get()
+  if (!clientDocument.exists || clientDocument.data()?.deleted === true) return apiError('Document not found', 404)
+
+  const data = clientDocument.data() as ClientDocument
+  if (!documentLinksTo('projectId', projectId, data)) return apiError('Document not found', 404)
+
+  return apiSuccess({ id: clientDocument.id, source: 'client_documents', ...data })
 })
 
 export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
@@ -36,7 +46,7 @@ export const PATCH = withAuth('client', async (req: NextRequest, user, ctx) => {
   const access = await getProjectForUser(projectId, user)
   if (!access.ok) return apiError(access.error, access.status)
 
-  const updates: Record<string, any> = { updatedAt: FieldValue.serverTimestamp(), updatedBy: user.uid }
+  const updates: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp(), updatedBy: user.uid }
 
   if (body.title !== undefined) {
     if (!body.title.trim()) return apiError('title cannot be empty', 400)
