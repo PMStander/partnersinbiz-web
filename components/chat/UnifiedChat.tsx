@@ -31,6 +31,7 @@ export interface UnifiedChatProps {
   projectId?: string
   scope?: 'general' | 'project' | 'task' | 'campaign'
   scopeRefId?: string
+  initialConvId?: string
 }
 
 const POLL_INTERVAL = 1500
@@ -50,6 +51,7 @@ export default function UnifiedChat({
   projectId,
   scope,
   scopeRefId,
+  initialConvId,
 }: UnifiedChatProps) {
   // ── State ─────────────────────────────────────────────────────────────────
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -142,7 +144,10 @@ export default function UnifiedChat({
       const body = await res.json()
       const list: Conversation[] = body.data?.conversations ?? []
       setConversations(list)
-      if (!activeId && list.length) setActiveId(list[0].id)
+      if (!activeId && list.length) {
+        const preferred = initialConvId && list.find((c) => c.id === initialConvId)
+        setActiveId(preferred ? initialConvId! : list[0].id)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load conversations')
     }

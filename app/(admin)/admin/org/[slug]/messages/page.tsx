@@ -5,10 +5,13 @@ import MessagesClient from './MessagesClient'
 
 interface PageProps {
   params: Promise<{ slug: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
-export default async function MessagesPage({ params }: PageProps) {
+export default async function MessagesPage({ params, searchParams }: PageProps) {
   const { slug } = await params
+  const sp = await searchParams
+  const initialConvId = typeof sp.convId === 'string' ? sp.convId : undefined
 
   // Auth — same pattern as WorkspaceLayout
   const cookieStore = await cookies()
@@ -39,6 +42,7 @@ export default async function MessagesPage({ params }: PageProps) {
       orgId={orgId}
       uid={uid}
       displayName={displayName}
+      initialConvId={initialConvId}
     />
   )
 }

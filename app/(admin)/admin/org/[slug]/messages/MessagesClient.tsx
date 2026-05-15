@@ -6,9 +6,10 @@ interface MessagesClientProps {
   orgId: string
   uid: string
   displayName: string
+  initialConvId?: string
 }
 
-export default function MessagesClient({ orgId, uid, displayName }: MessagesClientProps) {
+export default function MessagesClient({ orgId, uid, displayName, initialConvId }: MessagesClientProps) {
   // Mobile: edge-to-edge, fills viewport below the 56px admin topbar.
   // Desktop: keeps the page header and respects main's py-8 (64px) + topbar (56px).
   return (
@@ -29,6 +30,7 @@ export default function MessagesClient({ orgId, uid, displayName }: MessagesClie
         orgId={orgId}
         currentUserUid={uid}
         currentUserDisplayName={displayName}
+        initialConvId={initialConvId}
       />
     </div>
   )

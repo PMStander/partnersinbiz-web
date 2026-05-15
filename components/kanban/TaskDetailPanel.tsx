@@ -679,11 +679,17 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
                       {orgSlug && task.assigneeAgentId && (
                         <button
                           type="button"
-                          onClick={() => router.push(`/admin/org/${orgSlug}/messages?agent=${task.assigneeAgentId}&taskId=${task.id}&taskTitle=${encodeURIComponent(String(task.title ?? ''))}`)}
+                          onClick={() => {
+                            const base = `/admin/org/${orgSlug}/messages`
+                            const qs = new URLSearchParams({ agent: task.assigneeAgentId! })
+                            if (task.agentConversationId) qs.set('convId', task.agentConversationId)
+                            else { qs.set('taskId', task.id); qs.set('taskTitle', String(task.title ?? '')) }
+                            router.push(`${base}?${qs.toString()}`)
+                          }}
                           className="inline-flex items-center gap-1 text-[10px] font-label uppercase tracking-wide px-2 py-1 rounded bg-[var(--color-accent-v2)]/10 text-[var(--color-accent-v2)] hover:bg-[var(--color-accent-v2)]/20 transition-colors"
                         >
                           <span className="material-symbols-outlined text-[12px]">forum</span>
-                          Chat with {agentName}
+                          {task.agentConversationId ? 'View session' : `Chat with ${agentName}`}
                         </button>
                       )}
                     </div>
@@ -731,6 +737,18 @@ export function TaskDetailPanel({ task, columnName, projectId, orgId, members = 
               <div className="mt-2 rounded border border-[var(--color-card-border)] bg-[var(--color-surface-container)] p-2 text-xs text-on-surface-variant">
                 <p className="text-[9px] font-label uppercase tracking-widest text-on-surface-variant mb-1">Agent output</p>
                 {task.agentOutput.summary}
+              </div>
+            )}
+            {task.agentConversationId && orgSlug && (
+              <div className="mt-2 flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+                <button
+                  type="button"
+                  onClick={() => router.push(`/admin/org/${orgSlug}/messages?convId=${task.agentConversationId}`)}
+                  className="text-[10px] text-sky-400 hover:underline"
+                >
+                  Live session →
+                </button>
               </div>
             )}
           </div>
