@@ -23,6 +23,9 @@ function normalizeStatus(code?: number): AdAccount['status'] {
       return 'PENDING_RISK_REVIEW'
     case 9:
       return 'IN_GRACE_PERIOD'
+    // TODO: Meta documents additional codes that currently collapse to UNKNOWN
+    // here: 4=PENDING_SETTLEMENT, 8=PENDING_REVIEW, 10=PENDING_CLOSURE, 11=CLOSED.
+    // Expand AdAccount['status'] in lib/ads/types.ts + add cases here when needed.
     default:
       return 'UNKNOWN'
   }

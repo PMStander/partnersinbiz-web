@@ -47,7 +47,9 @@ export async function exchangeCode(args: {
 
   let userId: string | undefined
   try {
-    const meRes = await fetch(`${META_GRAPH_BASE}/me?access_token=${body.access_token}`)
+    const meUrl = new URL(`${META_GRAPH_BASE}/me`)
+    meUrl.searchParams.set('access_token', body.access_token)
+    const meRes = await fetch(meUrl.toString())
     if (meRes.ok) {
       const me = (await meRes.json()) as { id?: string }
       userId = me.id
