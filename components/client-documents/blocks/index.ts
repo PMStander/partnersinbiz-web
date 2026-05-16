@@ -10,6 +10,8 @@ import { ProblemBlock } from './ProblemBlock'
 import { ProblemEditor } from './editors/ProblemEditor'
 import { ScopeBlock } from './ScopeBlock'
 import { ScopeEditor } from './editors/ScopeEditor'
+import { DeliverablesBlock } from './DeliverablesBlock'
+import { DeliverablesEditor } from './editors/DeliverablesEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -19,6 +21,7 @@ export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps
   summary: SummaryBlock,
   problem: ProblemBlock,
   scope: ScopeBlock,
+  deliverables: DeliverablesBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
@@ -26,6 +29,7 @@ export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> 
   summary: SummaryEditor,
   problem: ProblemEditor,
   scope: ScopeEditor,
+  deliverables: DeliverablesEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
