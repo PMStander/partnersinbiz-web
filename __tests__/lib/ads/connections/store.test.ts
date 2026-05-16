@@ -9,6 +9,26 @@ import {
 // Mock the firebase admin module to avoid live Firestore in tests
 jest.mock('@/lib/firebase/admin', () => {
   const docs = new Map<string, Record<string, unknown>>()
+
+  function makeQuery(path: string, filters: Array<[string, string, unknown]> = []) {
+    return {
+      where: (field: string, op: string, value: unknown) =>
+        makeQuery(path, [...filters, [field, op, value]]),
+      get: async () => ({
+        docs: Array.from(docs.entries())
+          .filter(([k]) => k.startsWith(`${path}/`))
+          .filter(([, data]) =>
+            filters.every(([field, op, value]) => {
+              if (op !== '==') return true
+              // Tolerate dot paths if ever used (not needed for store today)
+              return (data as Record<string, unknown>)[field] === value
+            }),
+          )
+          .map(([k, v]) => ({ id: k.replace(`${path}/`, ''), data: () => v })),
+      }),
+    }
+  }
+
   const collection = (path: string) => ({
     doc: (id: string) => ({
       get: async () => ({
@@ -27,18 +47,9 @@ jest.mock('@/lib/firebase/admin', () => {
         docs.delete(`${path}/${id}`)
       },
     }),
-    where: function chainableWhere() {
-      const queryObj: { where: typeof chainableWhere; get: () => Promise<{ docs: Array<{ id: string; data: () => Record<string, unknown> }> }> } = {
-        where: chainableWhere,
-        get: async () => ({
-          docs: Array.from(docs.entries())
-            .filter(([k]) => k.startsWith(`${path}/`))
-            .map(([k, v]) => ({ id: k.replace(`${path}/`, ''), data: () => v as Record<string, unknown> })),
-        }),
-      }
-      return queryObj
-    },
+    where: (field: string, op: string, value: unknown) => makeQuery(path, [[field, op, value]]),
   })
+
   return {
     adminDb: { collection },
     _docs: docs,
@@ -117,5 +128,36 @@ describe('connections store', () => {
     await deleteConnection(c.id)
     const fetched = await getConnection({ orgId: 'org_1', platform: 'meta' })
     expect(fetched).toBeNull()
+  })
+
+  it('isolates connections by orgId — does not leak across tenants', async () => {
+    await createConnection({
+      orgId: 'org_1',
+      platform: 'meta',
+      userId: 'u1',
+      scopes: [],
+      accessToken: 'token_1',
+      expiresInSeconds: 3600,
+      adAccounts: [{ id: 'act_1', name: 'Org 1 Account', currency: 'USD', timezone: 'UTC' }],
+    })
+    await createConnection({
+      orgId: 'org_2',
+      platform: 'meta',
+      userId: 'u2',
+      scopes: [],
+      accessToken: 'token_2',
+      expiresInSeconds: 3600,
+      adAccounts: [{ id: 'act_2', name: 'Org 2 Account', currency: 'USD', timezone: 'UTC' }],
+    })
+
+    const conn1 = await getConnection({ orgId: 'org_1', platform: 'meta' })
+    const conn2 = await getConnection({ orgId: 'org_2', platform: 'meta' })
+
+    expect(conn1?.adAccounts[0].id).toBe('act_1')
+    expect(conn2?.adAccounts[0].id).toBe('act_2')
+
+    const list1 = await listConnections({ orgId: 'org_1' })
+    expect(list1).toHaveLength(1)
+    expect(list1[0].userId).toBe('u1')
   })
 })
