@@ -93,7 +93,7 @@ export function InvestmentBlock({ block, index }: { block: DocumentBlock; index:
                     background: 'var(--doc-bg)',
                     border: '1px solid var(--doc-border)',
                   }}
-                  formatter={(v: number) => formatMoney(v, currency)}
+                  formatter={(v) => formatMoney(Number(v) || 0, currency)}
                 />
                 <Bar dataKey="value">
                   {items.map((_, i) => (

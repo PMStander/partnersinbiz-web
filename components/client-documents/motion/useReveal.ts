@@ -9,7 +9,7 @@ import { useEffect, type RefObject } from 'react'
  * viewport. Re-runs whenever `dependencyKey` changes (typically the
  * document version id).
  */
-export function useReveal(rootRef: RefObject<HTMLElement>, dependencyKey: unknown) {
+export function useReveal(rootRef: RefObject<HTMLElement | null>, dependencyKey: unknown) {
   useEffect(() => {
     const root = rootRef.current
     if (!root) return

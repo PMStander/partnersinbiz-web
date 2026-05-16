@@ -13,8 +13,8 @@ import { useEffect, type RefObject } from 'react'
  *   - sectionRect.bottom > 200 (section is still occupying viewport)
  */
 export function useStickyNumber(
-  sectionRef: RefObject<HTMLElement>,
-  numberRef: RefObject<HTMLElement>,
+  sectionRef: RefObject<HTMLElement | null>,
+  numberRef: RefObject<HTMLElement | null>,
 ) {
   useEffect(() => {
     const section = sectionRef.current

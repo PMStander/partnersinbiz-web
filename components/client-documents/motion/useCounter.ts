@@ -12,7 +12,7 @@ import { useEffect, type RefObject } from 'react'
  * Re-runs whenever `dependencyKey` changes (typically the document
  * version id).
  */
-export function useCounter(rootRef: RefObject<HTMLElement>, dependencyKey: unknown) {
+export function useCounter(rootRef: RefObject<HTMLElement | null>, dependencyKey: unknown) {
   useEffect(() => {
     const root = rootRef.current
     if (!root) return

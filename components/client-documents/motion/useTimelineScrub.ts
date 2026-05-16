@@ -13,8 +13,8 @@ import { useEffect, type RefObject } from 'react'
  * and call this without further plumbing.
  */
 export function useTimelineScrub(
-  sectionRef: RefObject<HTMLElement>,
-  fillRef: RefObject<HTMLElement>,
+  sectionRef: RefObject<HTMLElement | null>,
+  fillRef: RefObject<HTMLElement | null>,
 ) {
   useEffect(() => {
     const section = sectionRef.current
