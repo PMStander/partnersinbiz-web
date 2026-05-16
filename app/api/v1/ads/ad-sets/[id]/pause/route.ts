@@ -1,0 +1,48 @@
+// app/api/v1/ads/ad-sets/[id]/pause/route.ts
+import { NextRequest } from 'next/server'
+import { withAuth } from '@/lib/api/auth'
+import { apiSuccess, apiError } from '@/lib/api/response'
+import { getAdSet, updateAdSet } from '@/lib/ads/adsets/store'
+import { getCampaign } from '@/lib/ads/campaigns/store'
+import { requireMetaContext } from '@/lib/ads/api-helpers'
+import { metaProvider } from '@/lib/ads/providers/meta'
+
+export const POST = withAuth(
+  'admin',
+  async (req: NextRequest, _user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
+    const orgId = req.headers.get('X-Org-Id')
+    if (!orgId) return apiError('Missing X-Org-Id header', 400)
+
+    const { id } = await ctxParams.params
+    const adSet = await getAdSet(id)
+    if (!adSet || adSet.orgId !== orgId) return apiError('Ad set not found', 404)
+
+    await updateAdSet(id, { status: 'PAUSED' })
+
+    // Best-effort Meta sync — only if ad set is already pushed to Meta
+    const metaId = (adSet.providerData?.meta as { id?: string } | undefined)?.id
+    if (metaId) {
+      const ctx = await requireMetaContext(req)
+      if (!(ctx instanceof Response)) {
+        try {
+          // Resolve parent campaign's metaCampaignId for the upsert call
+          const campaign = await getCampaign(adSet.campaignId)
+          const metaCampaignId =
+            (campaign?.providerData?.meta as { id?: string } | undefined)?.id ?? ''
+
+          await metaProvider.upsertAdSet!({
+            accessToken: ctx.accessToken,
+            adAccountId: ctx.adAccountId,
+            adSet: { ...adSet, status: 'PAUSED' } as any,
+            metaCampaignId,
+          })
+        } catch {
+          // Status already updated locally; Meta sync failure is non-blocking
+        }
+      }
+    }
+
+    const updated = await getAdSet(id)
+    return apiSuccess(updated)
+  },
+)
