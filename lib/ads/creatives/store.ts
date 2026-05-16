@@ -17,8 +17,10 @@ export async function createCreative(args: {
   orgId: string
   createdBy: string
   input: CreateAdCreativeInput
+  /** Optional explicit ID — used by upload-url flow so the signed URL and Firestore doc share the same ID. */
+  id?: string
 }): Promise<AdCreative> {
-  const id = `crv_${crypto.randomBytes(8).toString('hex')}`
+  const id = args.id ?? `crv_${crypto.randomBytes(8).toString('hex')}`
   const now = Timestamp.now()
 
   const doc: AdCreative = {
