@@ -1,5 +1,3 @@
-import { Timestamp } from 'firebase-admin/firestore'
-
 jest.mock('@/lib/firebase/admin', () => ({
   adminDb: {
     collection: jest.fn(),
