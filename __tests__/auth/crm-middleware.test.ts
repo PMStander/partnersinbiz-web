@@ -197,6 +197,15 @@ describe('withCrmAuth — Bearer path', () => {
     )
     expect(res.status).toBe(401)
   })
+
+  it('404s when Bearer call targets a non-existent org', async () => {
+    setupCollections({ user: null, member: null, org: null })
+    const route = withCrmAuth('viewer', jest.fn())
+    const res = await route(
+      makeReq({ authorization: `Bearer ${AI_API_KEY}`, 'x-org-id': 'ghost-org' }),
+    )
+    expect(res.status).toBe(404)
+  })
 })
 
 describe('withCrmAuth — no auth at all', () => {
@@ -204,5 +213,26 @@ describe('withCrmAuth — no auth at all', () => {
     const route = withCrmAuth('viewer', jest.fn())
     const res = await route(makeReq({}))
     expect(res.status).toBe(401)
+  })
+})
+
+describe('withCrmAuth — route context forwarding', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('forwards Next.js App Router route context as 3rd handler arg', async () => {
+    setupCollections({
+      user: null,
+      member: null,
+      org: { settings: { permissions: {} } },
+    })
+    const handler = jest.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    const route = withCrmAuth<{ params: Promise<{ id: string }> }>('viewer', handler)
+    const fakeRouteCtx = { params: Promise.resolve({ id: 'contact-123' }) }
+    await route(
+      makeReq({ authorization: `Bearer ${AI_API_KEY}`, 'x-org-id': ORG_ID }),
+      fakeRouteCtx,
+    )
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler.mock.calls[0][2]).toBe(fakeRouteCtx)
   })
 })

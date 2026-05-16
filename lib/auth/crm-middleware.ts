@@ -28,7 +28,11 @@ export interface CrmAuthContext {
   permissions: OrgPermissions
 }
 
-export type CrmRouteHandler = (req: NextRequest, ctx: CrmAuthContext) => Promise<Response>
+export type CrmRouteHandler<RouteCtx = unknown> = (
+  req: NextRequest,
+  ctx: CrmAuthContext,
+  routeCtx?: RouteCtx,
+) => Promise<Response>
 
 function apiError(message: string, status: number): Response {
   return NextResponse.json({ success: false, error: message }, { status })
@@ -37,22 +41,24 @@ function apiError(message: string, status: number): Response {
 async function loadOrgPermissions(orgId: string): Promise<{
   permissions: OrgPermissions
   members: Array<{ userId: string; role: OrgRole }> | null
+  exists: boolean
 }> {
   const orgDoc = await adminDb.collection('organizations').doc(orgId).get()
-  if (!orgDoc.exists) return { permissions: {}, members: null }
+  if (!orgDoc.exists) return { permissions: {}, members: null, exists: false }
   const data = orgDoc.data() ?? {}
   return {
     permissions:
       ((data.settings as Record<string, unknown> | undefined)?.permissions as OrgPermissions) ?? {},
     members: (data.members as Array<{ userId: string; role: OrgRole }> | undefined) ?? null,
+    exists: true,
   }
 }
 
-export function withCrmAuth(
+export function withCrmAuth<RouteCtx = unknown>(
   minRole: Exclude<CrmRole, 'system'>,
-  handler: CrmRouteHandler,
+  handler: CrmRouteHandler<RouteCtx>,
 ) {
-  return async (req: NextRequest, ..._rest: unknown[]): Promise<Response> => {
+  return async (req: NextRequest, routeCtx?: RouteCtx): Promise<Response> => {
     const authHeader = req.headers.get('authorization') ?? ''
 
     // Bearer path
@@ -66,7 +72,8 @@ export function withCrmAuth(
       if (!orgId) {
         return apiError('Missing X-Org-Id header', 400)
       }
-      const { permissions } = await loadOrgPermissions(orgId)
+      const { permissions, exists: orgExists } = await loadOrgPermissions(orgId)
+      if (!orgExists) return apiError('Organization not found', 404)
       const ctx: CrmAuthContext = {
         orgId,
         actor: AGENT_PIP_REF,
@@ -74,7 +81,7 @@ export function withCrmAuth(
         isAgent: true,
         permissions,
       }
-      return handler(req, ctx)
+      return handler(req, ctx, routeCtx)
     }
 
     // Cookie path
@@ -84,7 +91,7 @@ export function withCrmAuth(
 
     let uid: string
     try {
-      const decoded = await adminAuth.verifySessionCookie(cookie)
+      const decoded = await adminAuth.verifySessionCookie(cookie, true)
       uid = decoded.uid
     } catch {
       return apiError('Invalid session', 401)
@@ -108,7 +115,7 @@ export function withCrmAuth(
       actor = buildHumanRef(uid, m)
     }
 
-    const { permissions, members } = await loadOrgPermissions(orgId)
+    const { permissions, members, exists: _orgExists } = await loadOrgPermissions(orgId)
 
     if (!role) {
       const fallback = members?.find((m) => m.userId === uid)
@@ -122,6 +129,6 @@ export function withCrmAuth(
     if (rankOf(role) < rankOf(minRole)) return apiError('Insufficient permissions', 403)
 
     const ctx: CrmAuthContext = { orgId, actor, role, isAgent: false, permissions }
-    return handler(req, ctx)
+    return handler(req, ctx, routeCtx)
   }
 }
