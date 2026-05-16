@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import type { ClientDocument, ClientDocumentVersion, DocumentComment } from '@/lib/client-documents/types'
 import { DocumentEditorShell } from '@/components/client-documents/DocumentEditorShell'
+import { ShareSettingsPanel } from '@/components/client-documents/share/ShareSettingsPanel'
 
 const STATUS_PILL: Record<string, string> = {
   internal_draft: 'bg-gray-700 text-gray-100',
@@ -182,6 +183,20 @@ export default function DocumentEditorPage() {
           </button>
         )}
       </div>
+
+      {/* Share settings — collapsible under the top bar so it's near the existing Share button */}
+      <details className="border-b border-[var(--color-outline)] bg-[var(--color-pib-surface)] px-4 py-3">
+        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-[var(--color-pib-text-muted)]">
+          Share settings
+        </summary>
+        <div className="mt-3">
+          <ShareSettingsPanel
+            document={document}
+            baseUrl={process.env.NEXT_PUBLIC_APP_URL ?? ''}
+            onChange={setDocument}
+          />
+        </div>
+      </details>
 
       {/* Editor shell */}
       <div className="flex-1">
