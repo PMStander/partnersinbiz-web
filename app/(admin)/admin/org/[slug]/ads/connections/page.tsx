@@ -1,20 +1,10 @@
 // app/(admin)/admin/org/[slug]/ads/connections/page.tsx
 import { ConnectionsPanel } from '@/components/ads/ConnectionsPanel'
 import { listConnections } from '@/lib/ads/connections/store'
-import { adminDb } from '@/lib/firebase/admin'
+import { resolveOrgIdBySlug } from '@/lib/organizations/resolve-by-slug'
 
 interface Params {
   slug: string
-}
-
-async function resolveOrgIdBySlug(slug: string): Promise<string | null> {
-  const snap = await adminDb
-    .collection('organizations')
-    .where('slug', '==', slug)
-    .limit(1)
-    .get()
-  if (snap.docs.length === 0) return null
-  return snap.docs[0].id
 }
 
 export default async function ConnectionsPage({
