@@ -197,7 +197,7 @@ describe('POST /api/v1/email/webhook', () => {
       mockEmail('email-doc-1', { campaignId: 'camp-1', contactId: 'contact-1' })
       const res = await POST(
         makeReq(
-          { type: 'email.bounced', data: { email_id: 'resend-1' } },
+          { type: 'email.bounced', data: { email_id: 'resend-1', bounce_type: 'permanent' } },
           { 'svix-id': 'm', 'svix-timestamp': '1', 'svix-signature': 's' },
         ),
       )

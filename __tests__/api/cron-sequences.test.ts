@@ -23,6 +23,16 @@ jest.mock('@/lib/email/resend', () => ({
 jest.mock('@/lib/email/resolveFrom', () => ({
   resolveFrom: (...args: unknown[]) => mockResolveFrom(...args),
 }))
+jest.mock('@/lib/email/suppressions', () => ({
+  isSuppressed: jest.fn().mockResolvedValue(false),
+}))
+jest.mock('@/lib/preferences/store', () => ({
+  shouldSendToContact: jest.fn().mockResolvedValue({ allowed: true }),
+}))
+jest.mock('@/lib/email/frequency', () => ({
+  isWithinFrequencyCap: jest.fn().mockResolvedValue({ allowed: true }),
+  logFrequencySkip: jest.fn().mockResolvedValue(undefined),
+}))
 
 process.env.CRON_SECRET = 'cron-secret'
 
