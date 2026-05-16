@@ -216,7 +216,11 @@ export interface Ad {
   format: AdFormat
   /** Phase 3+: references ad_creatives. Phase 2: empty array; image lives on inlineImageUrl. */
   creativeIds: string[]
-  /** Phase 2 only: direct URL until creative library lands in Phase 3. */
+  /**
+   * Phase 2 only — DEPRECATED in Phase 3. New ads should use creativeIds[].
+   * Kept for backward compat: existing Phase-2 ads continue to launch via this URL
+   * through the legacy single-image path in metaProvider.upsertAd.
+   */
   inlineImageUrl?: string
   /** For CAROUSEL format in Phase 2: array of inline image URLs (Phase 3 swaps to creative IDs). */
   inlineCarouselUrls?: string[]
@@ -241,4 +245,78 @@ export type CreateAdInput = Omit<
 
 export type UpdateAdInput = Partial<
   Omit<Ad, 'id' | 'orgId' | 'platform' | 'adSetId' | 'campaignId' | 'createdAt'>
+>
+
+// ─── Creatives (Phase 3) ─────────────────────────────────────────────────────
+
+export type AdCreativeType = 'image' | 'video' | 'carousel_card'
+
+export type AdCreativeStatus =
+  | 'UPLOADING'   // signed URL issued, browser hasn't finalized yet
+  | 'PROCESSING'  // finalize started — probing + preview gen
+  | 'READY'       // metadata complete, ready to use in ads
+  | 'FAILED'      // probe/preview failed
+  | 'ARCHIVED'    // soft-deleted
+
+export interface PlatformCreativeRef {
+  /** Platform-side creative id. For Meta images this is the image_hash. For videos, video_id. */
+  creativeId: string
+  /** Optional content hash for change detection. */
+  hash?: string
+  syncedAt: Timestamp
+}
+
+export interface AdCreative {
+  id: string
+  orgId: string
+  type: AdCreativeType
+  name: string
+  /** Firebase Storage path of the canonical asset (the source file the user uploaded). */
+  storagePath: string
+  /** Signed public-read URL of the canonical asset (for browser preview). */
+  sourceUrl: string
+  /** Auto-generated 360p preview URL (for fast UI loads). */
+  previewUrl?: string
+  width?: number
+  height?: number
+  /** For videos: duration in seconds. */
+  duration?: number
+  fileSize: number
+  mimeType: string
+  status: AdCreativeStatus
+  /** Brand copy attached to the creative — optional, can be overridden per-ad. */
+  copy?: Partial<AdCopy>
+  /** Cross-platform sync state. Each provider gets a slot; Meta is the only one populated in Phase 3. */
+  platformRefs: {
+    meta?: PlatformCreativeRef
+    google?: PlatformCreativeRef
+    linkedin?: PlatformCreativeRef
+    tiktok?: PlatformCreativeRef
+  }
+  /** For carousel parents (type !== 'carousel_card'), the ordered list of card creative IDs. */
+  carouselCardIds?: string[]
+  /** Set when archived; ad_creatives table is append-only otherwise. */
+  archivedAt?: Timestamp
+  /** Error message if status === 'FAILED' (e.g. probe error). */
+  lastError?: string
+  createdBy: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type CreateAdCreativeInput = Omit<
+  AdCreative,
+  | 'id'
+  | 'orgId'
+  | 'platformRefs'
+  | 'createdBy'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'archivedAt'
+  | 'previewUrl'
+  | 'lastError'
+>
+
+export type UpdateAdCreativeInput = Partial<
+  Pick<AdCreative, 'name' | 'copy' | 'status' | 'previewUrl' | 'width' | 'height' | 'duration' | 'lastError'>
 >

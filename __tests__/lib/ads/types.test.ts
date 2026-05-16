@@ -152,3 +152,55 @@ describe('Ad shape', () => {
     expect(a.format).toBe('SINGLE_IMAGE')
   })
 })
+
+import type {
+  AdCreative,
+  CreateAdCreativeInput,
+  AdCreativeType,
+  PlatformCreativeRef,
+} from '@/lib/ads/types'
+
+describe('AdCreative shape', () => {
+  it('matches the documented shape', () => {
+    const c: AdCreative = {
+      id: 'crv_1',
+      orgId: 'org_1',
+      type: 'image',
+      name: 'Hero image',
+      storagePath: 'orgs/org_1/ad_creatives/crv_1/source.jpg',
+      sourceUrl: 'https://storage.googleapis.com/.../source.jpg',
+      previewUrl: 'https://storage.googleapis.com/.../preview.jpg',
+      width: 1200,
+      height: 1200,
+      fileSize: 250000,
+      mimeType: 'image/jpeg',
+      status: 'READY',
+      platformRefs: {
+        meta: { creativeId: 'imgh_abc', syncedAt: { seconds: 1, nanoseconds: 0 } as any },
+      },
+      createdBy: 'user_1',
+      createdAt: { seconds: 1, nanoseconds: 0 } as any,
+      updatedAt: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    expect(c.type).toBe('image')
+    expect(c.platformRefs.meta?.creativeId).toBe('imgh_abc')
+  })
+})
+
+describe('AdCreativeType enum', () => {
+  it('includes image, video, carousel_card', () => {
+    const ts: AdCreativeType[] = ['image', 'video', 'carousel_card']
+    expect(ts).toHaveLength(3)
+  })
+})
+
+describe('PlatformCreativeRef', () => {
+  it('has creativeId + optional hash + syncedAt', () => {
+    const r: PlatformCreativeRef = {
+      creativeId: 'h1',
+      hash: 'sha256',
+      syncedAt: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    expect(r.creativeId).toBe('h1')
+  })
+})
