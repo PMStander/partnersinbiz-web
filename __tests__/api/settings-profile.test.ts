@@ -60,7 +60,10 @@ describe('GET /api/v1/portal/settings/profile', () => {
 
 describe('PATCH /api/v1/portal/settings/profile', () => {
   it('upserts profile and returns updated fields', async () => {
-    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ activeOrgId: 'org-1' }) })
+    mockGet
+      .mockResolvedValueOnce({ exists: true, data: () => ({ activeOrgId: 'org-1' }) })
+      // existingDoc read for role
+      .mockResolvedValueOnce({ exists: true, data: () => ({ role: 'owner' }) })
     mockSet.mockResolvedValue(undefined)
 
     const { PATCH } = await import('@/app/api/v1/portal/settings/profile/route')
@@ -91,7 +94,10 @@ describe('PATCH /api/v1/portal/settings/profile', () => {
   })
 
   it('allows empty firstName when profileBannerDismissed is true', async () => {
-    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ activeOrgId: 'org-1' }) })
+    mockGet
+      .mockResolvedValueOnce({ exists: true, data: () => ({ activeOrgId: 'org-1' }) })
+      // existingDoc read for role
+      .mockResolvedValueOnce({ exists: true, data: () => ({ role: 'member' }) })
     mockSet.mockResolvedValue(undefined)
 
     const { PATCH } = await import('@/app/api/v1/portal/settings/profile/route')
