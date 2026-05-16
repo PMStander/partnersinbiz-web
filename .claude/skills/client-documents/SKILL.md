@@ -19,6 +19,27 @@ Projects, campaigns, CRM deals, reports, SEO sprints, and social posts remain th
 
 ---
 
+## Share modes
+
+A document supports two independent shares — view-only and edit. They are independently revocable.
+
+### View-only share (`/d/[shareToken]`)
+
+Public, no authentication required. Anyone with the link can see the document. Enable by publishing the document. Use for: pitch decks, signed-off proposals, final reports anyone can read.
+
+### Edit share (`/d/[editShareToken]/edit`)
+
+Code-gated + authenticated. Recipients must:
+1. Enter the 6-character access code admin generated
+2. Sign in via magic-link email OR Google OAuth
+3. (Their identity is captured so every comment, suggestion, or edit is recorded against a verified email)
+
+What they can do once authenticated is controlled by `document.clientPermissions` (comments, suggestions, direct edits, approvals — independently toggleable).
+
+Use for: client review cycles, collaborative editing with external stakeholders, anyone whose feedback you need to attribute.
+
+---
+
 ## Document Types & Templates
 
 | `type` / `templateId` | Label | Approval mode | Use for |
@@ -107,6 +128,15 @@ All responses: `{ success: boolean, data: ... }` — always unwrap `body.data ??
 | `DELETE` | `/api/v1/client-documents/[id]` | — | Archive (soft delete) |
 | `POST` | `/api/v1/client-documents/[id]/publish` | `{}` | Move to `client_review`, generate shareToken |
 
+### Edit share
+
+| Method | Route | Body | Notes |
+|---|---|---|---|
+| `POST` | `/api/v1/client-documents/[id]/edit-share/enable` | `{}` | Generates editShareToken + 6-char editAccessCode. Sets editShareEnabled=true |
+| `POST` | `/api/v1/client-documents/[id]/edit-share/regenerate-code` | `{}` | Rotates only the access code. Token preserved |
+| `POST` | `/api/v1/client-documents/[id]/edit-share/disable` | `{}` | Sets editShareEnabled=false. Token + code preserved for re-enable |
+| `GET` | `/api/v1/client-documents/[id]/access-log?limit=N` | — | Last N access events (code attempts + auth events). Default 20, max 100 |
+
 ### Versions
 
 | Method | Route | Body | Notes |
@@ -143,6 +173,21 @@ All responses: `{ success: boolean, data: ... }` — always unwrap `body.data ??
 | Method | Route | Notes |
 |---|---|---|
 | `GET` | `/api/v1/public/client-documents/[shareToken]` | Public share page data (status must be `client_review`+) |
+
+### Public edit share (no auth wrapper — handles its own)
+
+| Method | Route | Body | Notes |
+|---|---|---|---|
+| `POST` | `/api/v1/public/client-documents/edit/[editShareToken]/verify-code` | `{ code }` | Rate-limited 5/15min/IP. Sets `eds_{token}` cookie if code matches |
+| `GET` | `/api/v1/public/client-documents/edit/[editShareToken]` | — | Returns doc if both code cookie + Firebase session cookie are present |
+
+### Auth (for guest sign-in via magic link or Google)
+
+| Method | Route | Body | Notes |
+|---|---|---|---|
+| `POST` | `/api/v1/auth/magic-link/send` | `{ email, redirectUrl?, context?, docTitle? }` | Rate-limited 3/15min/email. Sends branded sign-in email |
+| `GET` | `/api/v1/auth/magic-link/verify?token=X` | — | Consumes magic link, redirects to /auth/magic-link/verify with customToken |
+| `POST` | `/api/v1/auth/session` | `{ idToken }` | Exchanges Firebase ID token (from Google OAuth or magic-link landing) for session cookie |
 
 ---
 
@@ -682,3 +727,19 @@ Default proposals are fine. *Standout* proposals close. When generating a `sales
 - **project-management** skill links documents to projects via `linked.projectId`
 - **crm-sales** skill links proposals to deals via `linked.dealId`
 - **seo-sprint-manager** skill can link sprint reports via `linked.seoSprintId`
+
+---
+
+## Sharing a document with a client (recommended flow)
+
+After creating a proposal/spec/report draft:
+
+1. If the client just needs to read: publish the document. Share `https://partnersinbiz.online/d/<shareToken>` — public, no friction.
+2. If you want them to comment / approve / suggest changes:
+   - Enable edit share: `POST /api/v1/client-documents/[id]/edit-share/enable`
+   - Copy the URL (`/d/<editShareToken>/edit`) and the access code from the response
+   - Send them both — typically the URL in your message and the code in a separate channel for some belt-and-braces security
+   - They sign in via magic link or Google, then have whatever permissions the document allows
+3. Watch the access log (`GET /api/v1/client-documents/[id]/access-log`) to see who's viewed + when
+4. Comments + suggestions show up in the document's review rail in admin
+5. Revoke at any time: regenerate the code, or disable the share entirely
