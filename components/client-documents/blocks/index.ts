@@ -46,6 +46,8 @@ import { PricingToggleBlock } from './PricingToggleBlock'
 import { PricingToggleEditor } from './editors/PricingToggleEditor'
 import { FaqBlock } from './FaqBlock'
 import { FaqEditor } from './editors/FaqEditor'
+import { ComparisonBlock } from './ComparisonBlock'
+import { ComparisonEditor } from './editors/ComparisonEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -73,6 +75,7 @@ export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps
   chart: ChartBlock,
   pricing_toggle: PricingToggleBlock,
   faq: FaqBlock,
+  comparison: ComparisonBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
@@ -98,6 +101,7 @@ export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> 
   chart: ChartEditor,
   pricing_toggle: PricingToggleEditor,
   faq: FaqEditor,
+  comparison: ComparisonEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
