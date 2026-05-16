@@ -38,6 +38,8 @@ import { VideoBlock } from './VideoBlock'
 import { VideoEditor } from './editors/VideoEditor'
 import { EmbedBlock } from './EmbedBlock'
 import { EmbedEditor } from './editors/EmbedEditor'
+import { LinkCardBlock } from './LinkCardBlock'
+import { LinkCardEditor } from './editors/LinkCardEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -61,6 +63,7 @@ export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps
   image: ImageBlock,
   video: VideoBlock,
   embed: EmbedBlock,
+  link_card: LinkCardBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
@@ -82,6 +85,7 @@ export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> 
   image: ImageEditor,
   video: VideoEditor,
   embed: EmbedEditor,
+  link_card: LinkCardEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
