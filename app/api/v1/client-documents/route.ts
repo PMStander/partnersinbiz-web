@@ -5,13 +5,16 @@ import { resolveOrgScope } from '@/lib/api/orgScope'
 import { apiError, apiSuccess } from '@/lib/api/response'
 import type { ApiUser } from '@/lib/api/types'
 import { CLIENT_DOCUMENTS_COLLECTION, createClientDocument } from '@/lib/client-documents/store'
+import { themeFromOrg } from '@/lib/client-documents/themeFromOrg'
 import type {
   ClientDocumentLinkSet,
   ClientDocumentStatus,
   ClientDocumentType,
   DocumentAssumption,
+  DocumentTheme,
 } from '@/lib/client-documents/types'
 import { adminDb } from '@/lib/firebase/admin'
+import type { Organization } from '@/lib/organizations/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -184,6 +187,21 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
     assumptions = assumptionsResult.value
   }
 
+  // Auto-populate the first version's theme from the org's brand colors. If
+  // the request body supplied its own theme, that wins. If there is no orgId
+  // (internal-only drafts) or the org has no brand colors yet, the store falls
+  // back to the PiB default theme.
+  let autoTheme: DocumentTheme | null = null
+  if (orgId) {
+    const orgSnap = await adminDb.collection('organizations').doc(orgId).get()
+    if (orgSnap?.exists) {
+      const orgData = { id: orgSnap.id, ...orgSnap.data() } as Organization
+      autoTheme = themeFromOrg(orgData)
+    }
+  }
+  const bodyTheme = (body as { theme?: DocumentTheme }).theme
+  const versionTheme: DocumentTheme | undefined = bodyTheme ?? autoTheme ?? undefined
+
   const created = await createClientDocument({
     title,
     type: body.type,
@@ -191,6 +209,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user: ApiUser) =>
     linked,
     assumptions,
     user,
+    theme: versionTheme,
   })
 
   return apiSuccess({ ...created, orgId, status: 'internal_draft', actorType: actorType(user) }, 201)

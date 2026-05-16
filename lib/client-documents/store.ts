@@ -74,6 +74,7 @@ export async function createClientDocument(input: {
   linked?: ClientDocumentLinkSet
   assumptions?: AssumptionInput[]
   user: ApiUser
+  theme?: DocumentTheme
 }): Promise<{ id: string; versionId: string; shareToken: string }> {
   const title = input.title.trim()
 
@@ -116,7 +117,7 @@ export async function createClientDocument(input: {
     versionNumber: 1,
     status: 'draft',
     blocks: createBlocksFromTemplate(input.type),
-    theme: DEFAULT_THEME,
+    theme: input.theme ?? DEFAULT_THEME,
     createdAt: FieldValue.serverTimestamp(),
     createdBy: input.user.uid,
     createdByType: inputActorType,
