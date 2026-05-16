@@ -4,6 +4,11 @@ import type { MemberRef } from '@/lib/orgMembers/memberRef'
 
 // ── Attribution ──────────────────────────────────────────────────────────────
 
+/**
+ * Embedded identity snapshot fields written on every CRM write.
+ * Routes spread these into records via `snapshotForWrite()` (see PR 2+).
+ * NB: `createdBy` is required on Activity, so Activity cannot directly extend this.
+ */
 export interface Attribution {
   createdAt: Timestamp | null
   createdBy?: string
