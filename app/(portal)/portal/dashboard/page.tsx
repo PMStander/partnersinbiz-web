@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PropertiesLaunchBanner } from '@/components/portal/PropertiesLaunchBanner'
+import { ProfileCompleteBanner } from '@/components/settings/ProfileCompleteBanner'
 
 interface Kpis {
   total_revenue: number
@@ -173,6 +174,7 @@ export default function PortalDashboard() {
 
   return (
     <div className="space-y-12">
+      <ProfileCompleteBanner />
       <PropertiesLaunchBanner />
       {/* Hero */}
       <section className="relative overflow-hidden rounded-2xl border border-[var(--color-pib-line)] bg-[var(--color-pib-surface)] p-8 md:p-10">
