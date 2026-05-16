@@ -5,7 +5,12 @@
 // email failures block API responses.
 
 import { sendEmail } from '@/lib/email/send'
-import type { ClientDocument, DocumentApproval, DocumentComment } from '@/lib/client-documents/types'
+import type {
+  ClientDocument,
+  DocumentApproval,
+  DocumentComment,
+  DocumentCommentReply,
+} from '@/lib/client-documents/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://partnersinbiz.online'
 const BRAND_COLOR = '#F5A623'
@@ -118,6 +123,38 @@ export async function sendDocumentCommentEmail(
   await sendEmail({
     to: recipientEmail,
     subject: `New comment on ${document.title}`,
+    html,
+  })
+}
+
+export async function sendDocumentReplyEmail(
+  document: ClientDocument,
+  parentComment: DocumentComment,
+  reply: DocumentCommentReply,
+  recipientEmail: string,
+  recipientName: string,
+): Promise<void> {
+  const href = `${BASE_URL}/d/${document.shareToken}`
+  const html = emailWrapper(`
+    <h1 style="margin:0 0 20px;font-size:22px;font-weight:700;color:#0A0A0B;">New reply on ${document.title}</h1>
+    <p style="margin:0 0 16px;">Hi ${recipientName},</p>
+    <p style="margin:0 0 16px;">
+      <strong>${reply.userName}</strong> replied to a comment by <strong>${parentComment.userName}</strong>
+      on <strong>${document.title}</strong>:
+    </p>
+    <blockquote style="margin:0 0 12px;padding:14px 18px;background:#f9fafb;border-left:4px solid #d1d5db;border-radius:4px;color:#6b7280;font-size:13px;">
+      ${parentComment.userName}: "${parentComment.text}"
+    </blockquote>
+    <blockquote style="margin:0 0 20px;padding:14px 18px;background:#f9fafb;border-left:4px solid ${BRAND_COLOR};border-radius:4px;font-style:italic;color:#374151;">
+      "${reply.text}"
+    </blockquote>
+    <p style="margin:0 0 16px;">Open the document to continue the conversation.</p>
+    ${ctaButton(href, 'View Document')}
+  `)
+
+  await sendEmail({
+    to: recipientEmail,
+    subject: `New reply on ${document.title}`,
     html,
   })
 }

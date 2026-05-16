@@ -151,6 +151,15 @@ export interface ClientDocumentVersion {
   changeSummary?: string
 }
 
+export interface DocumentCommentReply {
+  id: string
+  text: string
+  userId: string
+  userName: string
+  userRole: DocumentParticipantRole
+  createdAt?: unknown
+}
+
 export interface DocumentComment {
   id: string
   documentId: string
@@ -166,6 +175,7 @@ export interface DocumentComment {
   createdAt?: unknown
   resolvedAt?: unknown
   resolvedBy?: string
+  replies?: DocumentCommentReply[]
 }
 
 export interface DocumentSuggestion {

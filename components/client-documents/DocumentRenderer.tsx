@@ -1,34 +1,42 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { ClientDocument, ClientDocumentVersion } from '@/lib/client-documents/types'
+import type { ClientDocument, ClientDocumentVersion, DocumentComment } from '@/lib/client-documents/types'
 import { DocumentTheme } from './theme/DocumentTheme'
 import { getRenderer } from './blocks'
 import { useReveal } from './motion/useReveal'
 import { useCounter } from './motion/useCounter'
+import { SelectionPopover } from '@/components/inline-comments/SelectionPopover'
+import { applyInlineMarkers, clearInlineMarkers, findBlockIdForNode } from '@/lib/client-documents/inlineMarkers'
 
 function readableType(type: string) {
   return type.replaceAll('_', ' ')
 }
 
+export interface DocumentRendererProps {
+  document: ClientDocument
+  version: ClientDocumentVersion
+  comments?: DocumentComment[]
+  onRequestTextComment?: (anchor: { text: string; blockId: string | null }) => void
+  onRequestImageComment?: (anchor: { mediaUrl: string; blockId: string | null }) => void
+  onMarkerClick?: (commentId: string) => void
+}
+
 export function DocumentRenderer({
   document: clientDoc,
   version,
-}: {
-  document: ClientDocument
-  version: ClientDocumentVersion
-}) {
+  comments = [],
+  onRequestTextComment,
+  onRequestImageComment,
+  onMarkerClick,
+}: DocumentRendererProps) {
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const articleRef = useRef<HTMLElement>(null)
 
-  // Fade-and-slide reveal on scroll into view for [data-motion="reveal"] elements.
   useReveal(articleRef, version.id)
-
-  // Animate numeric values up from 0 for every [data-counter] element.
   useCounter(articleRef, version.id)
 
-  // Active sticky-nav tracking
   useEffect(() => {
     const root = articleRef.current
     if (!root) return
@@ -53,7 +61,6 @@ export function DocumentRenderer({
     return () => observer.disconnect()
   }, [version.blocks])
 
-  // Reading progress
   useEffect(() => {
     function onScroll() {
       const scrolled = window.scrollY
@@ -63,6 +70,77 @@ export function DocumentRenderer({
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  useEffect(() => {
+    const root = articleRef.current
+    if (!root) return
+    const timer = window.setTimeout(() => {
+      applyInlineMarkers(root, comments)
+    }, 60)
+    return () => {
+      window.clearTimeout(timer)
+      if (root) clearInlineMarkers(root)
+    }
+  }, [comments, version.id])
+
+  useEffect(() => {
+    const root = articleRef.current
+    if (!root) return
+
+    function onClick(e: MouseEvent) {
+      const target = e.target as HTMLElement | null
+      if (!target) return
+
+      const mark = target.closest<HTMLElement>('mark[data-doc-comment-id]')
+      if (mark) {
+        e.preventDefault()
+        const id = mark.getAttribute('data-doc-comment-id')
+        if (id && onMarkerClick) onMarkerClick(id)
+        return
+      }
+
+      const imgBadge = target.closest<HTMLElement>('[data-doc-comment-image-badge]')
+      if (imgBadge) {
+        e.preventDefault()
+        const id = imgBadge.getAttribute('data-doc-comment-image-badge')
+        if (id && onMarkerClick) onMarkerClick(id)
+        return
+      }
+
+      const blockBadge = target.closest<HTMLElement>('[data-doc-comment-block-badge]')
+      if (blockBadge) {
+        const block = blockBadge.closest<HTMLElement>('[id^="block-"]')
+        if (block) {
+          const blockComments = comments.filter((c) => c.blockId === block.id.slice('block-'.length))
+          const firstOpen = blockComments.find((c) => c.status !== 'resolved') ?? blockComments[0]
+          if (firstOpen && onMarkerClick) onMarkerClick(firstOpen.id)
+        }
+        return
+      }
+
+      if (onRequestImageComment && target.tagName === 'IMG') {
+        const img = target as HTMLImageElement
+        const blockId = findBlockIdForNode(img)
+        const mediaUrl = img.currentSrc || img.src || img.getAttribute('src') || ''
+        if (mediaUrl) {
+          e.preventDefault()
+          onRequestImageComment({ mediaUrl, blockId })
+        }
+      }
+    }
+
+    root.addEventListener('click', onClick)
+    return () => root.removeEventListener('click', onClick)
+  }, [comments, onMarkerClick, onRequestImageComment])
+
+  function handleSelectionComment(text: string) {
+    if (!onRequestTextComment) return
+    const sel = window.getSelection()
+    const node = sel && !sel.isCollapsed ? sel.getRangeAt(0).startContainer : null
+    const blockId = findBlockIdForNode(node)
+    onRequestTextComment({ text, blockId })
+    sel?.removeAllRanges()
+  }
 
   return (
     <DocumentTheme palette={version.theme?.palette}>
@@ -117,6 +195,10 @@ export function DocumentRenderer({
           </div>
         </div>
       </article>
+
+      {onRequestTextComment && (
+        <SelectionPopover containerRef={articleRef} onComment={handleSelectionComment} />
+      )}
     </DocumentTheme>
   )
 }

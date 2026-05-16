@@ -10,6 +10,7 @@ import { auth, getClientAuth } from '@/lib/firebase/config'
 import { logout } from '@/lib/firebase/auth'
 import { LastPathTracker } from '@/components/pwa/LastPathTracker'
 import { clearLastPath } from '@/lib/pwa/lastPath'
+import { WelcomeFlashHandler } from '@/components/ui/WelcomeFlashHandler'
 
 interface NavItem {
   href: string
@@ -17,11 +18,13 @@ interface NavItem {
   icon: string
   group: 'work' | 'data' | 'comms'
   activePatterns?: string[]
+  badge?: number
 }
 
 const NAV_LINKS: NavItem[] = [
   { href: '/portal/dashboard', label: 'Overview',  icon: 'space_dashboard', group: 'work' },
   { href: '/portal/projects',  label: 'Projects',  icon: 'rocket_launch',   group: 'work' },
+  { href: '/portal/documents', label: 'Documents', icon: 'description',     group: 'work' },
   {
     href: '/portal/marketing',
     label: 'Marketing',
@@ -73,12 +76,13 @@ function active(pathname: string, item: NavItem) {
 
 function NavLink({ item, pathname, collapsed }: { item: NavItem; pathname: string; collapsed?: boolean }) {
   const on = active(pathname, item)
+  const badge = item.badge && item.badge > 0 ? item.badge : null
   return (
     <Link
       href={item.href}
-      title={collapsed ? item.label : undefined}
+      title={collapsed && badge ? `${item.label} — ${badge} unread` : collapsed ? item.label : undefined}
       className={[
-        'flex items-center rounded-lg text-sm transition-all duration-150',
+        'relative flex items-center rounded-lg text-sm transition-all duration-150',
         collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2',
         on
           ? 'bg-[var(--color-pib-accent-soft)] text-[var(--color-pib-accent-hover)]'
@@ -88,7 +92,15 @@ function NavLink({ item, pathname, collapsed }: { item: NavItem; pathname: strin
       <span className={['material-symbols-outlined text-[20px] shrink-0', on ? 'text-[var(--color-pib-accent)]' : 'opacity-70'].join(' ')}>
         {item.icon}
       </span>
-      {!collapsed && <span className="font-medium">{item.label}</span>}
+      {!collapsed && <span className="font-medium flex-1">{item.label}</span>}
+      {badge !== null && !collapsed && (
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[var(--color-pib-accent)] text-black font-semibold leading-none">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+      {badge !== null && collapsed && (
+        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[var(--color-pib-accent)]" />
+      )}
     </Link>
   )
 }
@@ -104,6 +116,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [collapsed, setCollapsed]   = useState(false)
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('sidebar')
+  const [unresolvedDocs, setUnresolvedDocs] = useState(0)
 
   // Restore persisted preferences
   useEffect(() => {
@@ -145,6 +158,24 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     setDrawerOpen(false)
   }, [pathname])
 
+  // Unresolved comments badge — refresh on mount, on route change, and every 60s
+  useEffect(() => {
+    if (checking) return
+    let cancelled = false
+    async function refresh() {
+      try {
+        const res = await fetch('/api/v1/portal/documents/unresolved-count')
+        if (!res.ok) return
+        const body = await res.json()
+        const count = body?.data?.count ?? 0
+        if (!cancelled) setUnresolvedDocs(typeof count === 'number' ? count : 0)
+      } catch {}
+    }
+    refresh()
+    const id = window.setInterval(refresh, 60_000)
+    return () => { cancelled = true; window.clearInterval(id) }
+  }, [checking, pathname])
+
   function toggleCollapsed() {
     setCollapsed(prev => {
       localStorage.setItem('portal_sidebar_collapsed', String(!prev))
@@ -178,17 +209,24 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     )
   }
 
+  const navWithBadges: NavItem[] = NAV_LINKS.map((item) =>
+    item.href === '/portal/documents' ? { ...item, badge: unresolvedDocs } : item,
+  )
+
   const grouped = (['work', 'data', 'comms'] as const).map(g => ({
     group: g,
-    items: NAV_LINKS.filter(n => n.group === g),
+    items: navWithBadges.filter(n => n.group === g),
   }))
 
   const initials = (name || email).split(/[.\s@]/).filter(Boolean).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')
 
   const tracker = (
-    <Suspense fallback={null}>
-      <LastPathTracker />
-    </Suspense>
+    <>
+      <Suspense fallback={null}>
+        <LastPathTracker />
+      </Suspense>
+      <WelcomeFlashHandler />
+    </>
   )
 
   // ── Topbar mode ────────────────────────────────────────────────────────────
@@ -209,7 +247,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
             {/* Nav — scrollable */}
             <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto scrollbar-none flex-1 min-w-0">
-              {NAV_LINKS.map(item => {
+              {navWithBadges.map(item => {
                 const on = active(pathname, item)
                 return (
                   <Link
@@ -226,6 +264,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                       {item.icon}
                     </span>
                     <span className="hidden lg:inline font-medium">{item.label}</span>
+                    {item.badge && item.badge > 0 && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[var(--color-pib-accent)] text-black font-semibold leading-none">
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    )}
                   </Link>
                 )
               })}
@@ -276,7 +319,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           <div className="md:hidden fixed inset-0 z-40 flex flex-col">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
             <div className="relative z-10 mt-14 bg-[var(--color-pib-bg)] border-b border-[var(--color-pib-line)] p-4 flex flex-col gap-1 max-h-[80vh] overflow-y-auto">
-              {NAV_LINKS.map(item => {
+              {navWithBadges.map(item => {
                 const on = active(pathname, item)
                 return (
                   <Link
@@ -290,7 +333,12 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                     ].join(' ')}
                   >
                     <span className="material-symbols-outlined text-[18px] opacity-70">{item.icon}</span>
-                    {item.label}
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && item.badge > 0 && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[var(--color-pib-accent)] text-black font-semibold leading-none">
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    )}
                   </Link>
                 )
               })}
@@ -377,7 +425,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         {/* Nav groups */}
         <nav className={['flex-1 overflow-y-auto py-4', collapsed ? 'px-2 space-y-1' : 'px-3 space-y-5'].join(' ')}>
           {collapsed
-            ? NAV_LINKS.map(item => <NavLink key={item.href} item={item} pathname={pathname} collapsed />)
+            ? navWithBadges.map(item => <NavLink key={item.href} item={item} pathname={pathname} collapsed />)
             : grouped.map(({ group, items }) => (
                 <div key={group} className="space-y-1">
                   <p className="eyebrow !text-[10px] px-3 mb-2">{GROUP_LABELS[group]}</p>

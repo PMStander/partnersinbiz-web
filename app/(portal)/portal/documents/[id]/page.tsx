@@ -1,31 +1,49 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useRef, useState } from 'react'
+import { use, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { DocumentRenderer } from '@/components/client-documents/DocumentRenderer'
 import { DocumentReviewRail } from '@/components/client-documents/DocumentReviewRail'
+import { CommentComposer } from '@/components/inline-comments/CommentComposer'
+import type { AnchorTarget } from '@/components/inline-comments/types'
 import type { ClientDocument, ClientDocumentVersion, DocumentComment } from '@/lib/client-documents/types'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
+type PendingAnchor =
+  | { kind: 'text'; text: string; blockId: string | null }
+  | { kind: 'image'; mediaUrl: string; blockId: string | null }
+  | { kind: 'general' }
+
 export default function PortalDocumentDetail({ params }: Props) {
-  const { id } = params
+  const { id } = use(params)
   const [doc, setDoc] = useState<ClientDocument | null>(null)
   const [version, setVersion] = useState<ClientDocumentVersion | null>(null)
   const [comments, setComments] = useState<DocumentComment[]>([])
   const [loading, setLoading] = useState(true)
-  const [newComment, setNewComment] = useState('')
-  const [submitting, setSubmitting] = useState(false)
   const [showApproveModal, setShowApproveModal] = useState(false)
   const [typedName, setTypedName] = useState('')
   const [agreed, setAgreed] = useState(false)
   const [approving, setApproving] = useState(false)
   const [approved, setApproved] = useState(false)
 
-  const commentInputRef = useRef<HTMLTextAreaElement>(null)
+  const [pendingAnchor, setPendingAnchor] = useState<PendingAnchor | null>(null)
+  const [composerBusy, setComposerBusy] = useState(false)
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null)
+
+  const articleScrollRef = useRef<HTMLDivElement>(null)
+
+  const refreshComments = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/v1/client-documents/${id}/comments`)
+      if (!res.ok) return
+      const body = await res.json()
+      setComments((body.data ?? []) as DocumentComment[])
+    } catch {}
+  }, [id])
 
   useEffect(() => {
     async function load() {
@@ -42,7 +60,7 @@ export default function PortalDocumentDetail({ params }: Props) {
 
         const document: ClientDocument = docData.data ?? docData
         setDoc(document)
-        setComments(commentsData.data ?? [])
+        setComments((commentsData.data ?? []) as DocumentComment[])
 
         const versions: ClientDocumentVersion[] = versionsData.data ?? []
         const current =
@@ -52,7 +70,7 @@ export default function PortalDocumentDetail({ params }: Props) {
           null
         setVersion(current)
       } catch {
-        // silently fail — show empty state
+        // silent
       } finally {
         setLoading(false)
       }
@@ -60,24 +78,69 @@ export default function PortalDocumentDetail({ params }: Props) {
     load()
   }, [id])
 
-  async function submitComment() {
-    if (!newComment.trim() || submitting) return
-    setSubmitting(true)
+  const handleRequestTextComment = useCallback((anchor: { text: string; blockId: string | null }) => {
+    setPendingAnchor({ kind: 'text', text: anchor.text, blockId: anchor.blockId })
+  }, [])
+
+  const handleRequestImageComment = useCallback((anchor: { mediaUrl: string; blockId: string | null }) => {
+    setPendingAnchor({ kind: 'image', mediaUrl: anchor.mediaUrl, blockId: anchor.blockId })
+  }, [])
+
+  const handleScrollToComment = useCallback((commentId: string) => {
+    const c = comments.find((x) => x.id === commentId)
+    if (!c) return
+    setActiveCommentId(commentId)
+    if (c.blockId) {
+      const el = globalThis.document.getElementById(`block-${c.blockId}`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    window.setTimeout(() => setActiveCommentId(null), 2500)
+  }, [comments])
+
+  async function submitComposer(text: string) {
+    if (!pendingAnchor) return
+    setComposerBusy(true)
     try {
+      const payload: Record<string, unknown> = { text }
+      if (pendingAnchor.kind === 'text') {
+        payload.anchor = { type: 'text', text: pendingAnchor.text }
+        if (pendingAnchor.blockId) payload.blockId = pendingAnchor.blockId
+      } else if (pendingAnchor.kind === 'image') {
+        payload.anchor = { type: 'image', mediaUrl: pendingAnchor.mediaUrl }
+        if (pendingAnchor.blockId) payload.blockId = pendingAnchor.blockId
+      }
+      if (version) payload.versionId = version.id
+
       const res = await fetch(`/api/v1/client-documents/${id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: newComment.trim() }),
+        body: JSON.stringify(payload),
       })
       if (res.ok) {
-        const body = await res.json()
-        const saved: DocumentComment = body.data ?? body
-        setComments((prev) => [...prev, saved])
-        setNewComment('')
+        setPendingAnchor(null)
+        await refreshComments()
       }
     } finally {
-      setSubmitting(false)
+      setComposerBusy(false)
     }
+  }
+
+  async function handleResolve(commentId: string, resolved: boolean) {
+    const res = await fetch(`/api/v1/client-documents/${id}/comments/${commentId}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolved }),
+    })
+    if (res.ok) await refreshComments()
+  }
+
+  async function handleReply(commentId: string, text: string) {
+    const res = await fetch(`/api/v1/client-documents/${id}/comments/${commentId}/replies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+    if (res.ok) await refreshComments()
   }
 
   async function handleApprove() {
@@ -86,7 +149,6 @@ export default function PortalDocumentDetail({ params }: Props) {
       setShowApproveModal(true)
       return
     }
-    // operational
     setApproving(true)
     try {
       await fetch(`/api/v1/client-documents/${id}/approve`, {
@@ -145,10 +207,16 @@ export default function PortalDocumentDetail({ params }: Props) {
     )
   }
 
-  const canApprove =
-    doc.clientPermissions.canApprove &&
-    doc.status === 'client_review' &&
-    !approved
+  const canComment = doc.clientPermissions.canComment
+  const canApprove = doc.clientPermissions.canApprove && doc.status === 'client_review' && !approved
+
+  const composerAnchor: AnchorTarget | null = !pendingAnchor
+    ? null
+    : pendingAnchor.kind === 'text'
+      ? { kind: 'text', text: pendingAnchor.text }
+      : pendingAnchor.kind === 'image'
+        ? { kind: 'image', mediaUrl: pendingAnchor.mediaUrl }
+        : { kind: 'general' }
 
   return (
     <div className="space-y-6">
@@ -160,39 +228,44 @@ export default function PortalDocumentDetail({ params }: Props) {
         Back to Documents
       </Link>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_280px]">
-        <div className="min-w-0 rounded-xl overflow-hidden">
-          <DocumentRenderer document={doc} version={version} />
+      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
+        <div ref={articleScrollRef} className="min-w-0 rounded-xl overflow-hidden">
+          <DocumentRenderer
+            document={doc}
+            version={version}
+            comments={comments}
+            onRequestTextComment={canComment ? handleRequestTextComment : undefined}
+            onRequestImageComment={canComment ? handleRequestImageComment : undefined}
+            onMarkerClick={(id) => {
+              setActiveCommentId(id)
+              window.setTimeout(() => setActiveCommentId(null), 2500)
+            }}
+          />
         </div>
 
-        <aside className="space-y-4">
-          <DocumentReviewRail document={doc} comments={comments} />
+        <div className="space-y-4">
+          <DocumentReviewRail
+            document={doc}
+            comments={comments}
+            activeCommentId={activeCommentId}
+            onResolve={handleResolve}
+            onReply={handleReply}
+            onScrollToComment={handleScrollToComment}
+          />
 
-          {/* Add comment */}
-          {doc.clientPermissions.canComment && (
+          {canComment && (
             <div className="pib-card p-4 space-y-3">
-              <p className="text-xs uppercase tracking-[0.18em] text-on-surface-variant">Leave a comment</p>
-              <textarea
-                ref={commentInputRef}
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                rows={3}
-                placeholder="Type your comment…"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-[var(--color-pib-accent)] resize-none"
-              />
+              <p className="text-xs uppercase tracking-[0.18em] text-on-surface-variant">General note</p>
               <button
                 type="button"
-                onClick={submitComment}
-                disabled={!newComment.trim() || submitting}
-                className="w-full rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50"
-                style={{ background: 'var(--color-pib-accent)', color: '#000' }}
+                onClick={() => setPendingAnchor({ kind: 'general' })}
+                className="w-full rounded-md border border-white/10 px-3 py-2 text-sm hover:bg-white/5"
               >
-                {submitting ? 'Sending…' : 'Send comment'}
+                Leave a general comment
               </button>
             </div>
           )}
 
-          {/* Approve button */}
           {canApprove && (
             <div className="pib-card p-4">
               <button
@@ -213,10 +286,18 @@ export default function PortalDocumentDetail({ params }: Props) {
               <p className="mt-1 text-sm font-medium">Document approved — thank you!</p>
             </div>
           )}
-        </aside>
+        </div>
       </div>
 
-      {/* Formal acceptance modal */}
+      {pendingAnchor && composerAnchor && (
+        <CommentComposer
+          anchor={composerAnchor}
+          onCancel={() => setPendingAnchor(null)}
+          onSubmit={submitComposer}
+          busy={composerBusy}
+        />
+      )}
+
       {showApproveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="pib-card w-full max-w-md space-y-4 p-6">
