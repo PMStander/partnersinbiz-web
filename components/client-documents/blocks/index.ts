@@ -6,6 +6,8 @@ import { HeroBlock } from './HeroBlock'
 import { HeroEditor } from './editors/HeroEditor'
 import { SummaryBlock } from './SummaryBlock'
 import { SummaryEditor } from './editors/SummaryEditor'
+import { ProblemBlock } from './ProblemBlock'
+import { ProblemEditor } from './editors/ProblemEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -13,11 +15,13 @@ type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void 
 export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps>>> = {
   hero: HeroBlock,
   summary: SummaryBlock,
+  problem: ProblemBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
   hero: HeroEditor,
   summary: SummaryEditor,
+  problem: ProblemEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
