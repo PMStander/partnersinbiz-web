@@ -64,12 +64,11 @@ describe('POST /api/v1/upload', () => {
     expect(mockSave).toHaveBeenCalledWith(
       expect.any(Buffer),
       expect.objectContaining({
-        metadata: { contentType: 'image/png' },
+        metadata: expect.objectContaining({ contentType: 'image/png' }),
       }),
     )
-    expect(mockMakePublic).toHaveBeenCalled()
 
     const body = await res.json()
-    expect(body.data.url).toMatch(/^https:\/\/storage\.googleapis\.com\/test-bucket\/brands\/logos\//)
+    expect(body.data.url).toMatch(/^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/test-bucket\/o\/brands%2Flogos%2F/)
   })
 })

@@ -18,7 +18,7 @@ describe('uploadMediaToStorage', () => {
   it('returns public URL and storagePath', async () => {
     const buffer = Buffer.from('fake-image-data')
     const result = await uploadMediaToStorage(buffer, 'image/jpeg', 'org-123', 'photo.jpg')
-    expect(result.publicUrl).toMatch(/^https:\/\/storage\.googleapis\.com\/test-bucket\/social-media\/org-123\//)
+    expect(result.publicUrl).toMatch(/^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/test-bucket\/o\/social-media%2Forg-123%2F/)
     expect(result.storagePath).toMatch(/^social-media\/org-123\//)
     expect(result.storagePath).toMatch(/\.jpg$/)
   })

@@ -11,6 +11,7 @@ const mockUserGet = jest.fn()
 const mockUserSet = jest.fn()
 const mockUserDelete = jest.fn()
 
+const mockGetUserByUid = jest.fn()
 const mockGetUserByEmail = jest.fn()
 const mockCreateUser = jest.fn()
 const mockUpdateUser = jest.fn()
@@ -22,6 +23,7 @@ let mockUser: MockUser = { uid: 'super-1', role: 'admin' }
 jest.mock('@/lib/firebase/admin', () => ({
   adminDb: { collection: mockCollection },
   adminAuth: {
+    getUser: (uid: string) => mockGetUserByUid(uid),
     getUserByEmail: (email: string) => mockGetUserByEmail(email),
     createUser: (data: unknown) => mockCreateUser(data),
     updateUser: (uid: string, data: unknown) => mockUpdateUser(uid, data),
@@ -61,6 +63,7 @@ beforeEach(() => {
   })
 
   mockGenerateLink.mockResolvedValue('https://example.com/setup?oobCode=abc')
+  mockGetUserByUid.mockResolvedValue({ metadata: { lastSignInTime: null } })
 })
 
 async function readJson(res: Response) {
