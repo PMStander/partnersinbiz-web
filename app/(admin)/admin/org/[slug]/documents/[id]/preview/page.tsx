@@ -4,6 +4,7 @@ import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { DocumentRenderer } from '@/components/client-documents/DocumentRenderer'
 import { PreviewFrame } from '@/components/client-documents/PreviewFrame'
 import { OrgThemedFrame } from '@/components/admin/OrgThemedFrame'
+import { serializeForClient } from '@/lib/client-documents/serialize'
 import type { ClientDocument, ClientDocumentVersion } from '@/lib/client-documents/types'
 
 export const dynamic = 'force-dynamic'
@@ -55,7 +56,7 @@ export default async function OrgPreviewPage({
         versionLabel={versionLabel}
         shareUrl={shareUrl}
       >
-        <DocumentRenderer document={doc} version={version} />
+        <DocumentRenderer document={serializeForClient(doc)} version={serializeForClient(version)} />
       </PreviewFrame>
     </OrgThemedFrame>
   )

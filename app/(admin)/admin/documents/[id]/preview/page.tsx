@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { DocumentRenderer } from '@/components/client-documents/DocumentRenderer'
 import { PreviewFrame } from '@/components/client-documents/PreviewFrame'
+import { serializeForClient } from '@/lib/client-documents/serialize'
 import type { ClientDocument, ClientDocumentVersion } from '@/lib/client-documents/types'
 
 export const dynamic = 'force-dynamic'
@@ -44,7 +45,7 @@ export default async function PreviewPage({ params }: { params: Promise<{ id: st
       versionLabel={versionLabel}
       shareUrl={shareUrl}
     >
-      <DocumentRenderer document={doc} version={version} />
+      <DocumentRenderer document={serializeForClient(doc)} version={serializeForClient(version)} />
     </PreviewFrame>
   )
 }
