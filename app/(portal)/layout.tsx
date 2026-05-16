@@ -11,6 +11,7 @@ import { logout } from '@/lib/firebase/auth'
 import { LastPathTracker } from '@/components/pwa/LastPathTracker'
 import { clearLastPath } from '@/lib/pwa/lastPath'
 import { WelcomeFlashHandler } from '@/components/ui/WelcomeFlashHandler'
+import { SettingsNav } from '@/components/settings/SettingsNav'
 
 interface NavItem {
   href: string
@@ -120,6 +121,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const [orgs, setOrgs] = useState<{ id: string; name: string; logoUrl: string }[]>([])
   const [activeOrgId, setActiveOrgId] = useState('')
   const [orgSwitching, setOrgSwitching] = useState(false)
+  const [memberRole, setMemberRole] = useState<string | null>(null)
+  const [profileName, setProfileName] = useState('')
 
   // Restore persisted preferences
   useEffect(() => {
@@ -153,6 +156,15 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             .then(d => {
               if (Array.isArray(d?.orgs)) setOrgs(d.orgs)
               if (d?.activeOrgId) setActiveOrgId(d.activeOrgId)
+            })
+            .catch(() => {})
+          fetch('/api/v1/portal/settings/profile')
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              if (d?.profile?.firstName) {
+                setProfileName(`${d.profile.firstName} ${d.profile.lastName ?? ''}`.trim())
+              }
+              if (d?.profile?.role) setMemberRole(d.profile.role)
             })
             .catch(() => {})
         }
@@ -450,18 +462,28 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           {!collapsed && <span className="ml-auto text-[10px] opacity-50">collapse</span>}
         </button>
 
-        {/* Nav groups */}
-        <nav className={['flex-1 overflow-y-auto py-4', collapsed ? 'px-2 space-y-1' : 'px-3 space-y-5'].join(' ')}>
-          {collapsed
-            ? navWithBadges.map(item => <NavLink key={item.href} item={item} pathname={pathname} collapsed />)
-            : grouped.map(({ group, items }) => (
-                <div key={group} className="space-y-1">
-                  <p className="eyebrow !text-[10px] px-3 mb-2">{GROUP_LABELS[group]}</p>
-                  {items.map(item => <NavLink key={item.href} item={item} pathname={pathname} />)}
-                </div>
-              ))
-          }
-        </nav>
+        {/* Nav — settings mode replaces normal nav */}
+        {pathname.startsWith('/portal/settings') ? (
+          <SettingsNav
+            name={profileName || name}
+            email={email}
+            initials={initials}
+            role={memberRole}
+            collapsed={collapsed}
+          />
+        ) : (
+          <nav className={['flex-1 overflow-y-auto py-4', collapsed ? 'px-2 space-y-1' : 'px-3 space-y-5'].join(' ')}>
+            {collapsed
+              ? navWithBadges.map(item => <NavLink key={item.href} item={item} pathname={pathname} collapsed />)
+              : grouped.map(({ group, items }) => (
+                  <div key={group} className="space-y-1">
+                    <p className="eyebrow !text-[10px] px-3 mb-2">{GROUP_LABELS[group]}</p>
+                    {items.map(item => <NavLink key={item.href} item={item} pathname={pathname} />)}
+                  </div>
+                ))
+            }
+          </nav>
+        )}
 
         {/* Org switcher — only when client belongs to multiple workspaces */}
         {orgs.length > 1 && (
@@ -523,20 +545,28 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         <div className="border-t border-[var(--color-pib-line)] p-3 shrink-0">
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-[var(--color-pib-accent-soft)] border border-[var(--color-pib-line-strong)] flex items-center justify-center text-xs font-medium text-[var(--color-pib-accent-hover)]">
+              <Link
+                href="/portal/settings/account"
+                title="Settings"
+                className="w-8 h-8 rounded-full bg-[var(--color-pib-accent-soft)] border border-[var(--color-pib-line-strong)] flex items-center justify-center text-xs font-medium text-[var(--color-pib-accent-hover)] hover:ring-2 hover:ring-[var(--color-pib-accent)]/40 transition-all"
+              >
                 {initials || '·'}
-              </div>
+              </Link>
               <button onClick={handleLogout} title="Sign out" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors p-1">
                 <span className="material-symbols-outlined text-[18px]">logout</span>
               </button>
             </div>
           ) : (
             <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-              <div className="w-8 h-8 rounded-full bg-[var(--color-pib-accent-soft)] border border-[var(--color-pib-line-strong)] flex items-center justify-center text-xs font-medium text-[var(--color-pib-accent-hover)] shrink-0">
+              <Link
+                href="/portal/settings/account"
+                title="Settings"
+                className="w-8 h-8 rounded-full bg-[var(--color-pib-accent-soft)] border border-[var(--color-pib-line-strong)] flex items-center justify-center text-xs font-medium text-[var(--color-pib-accent-hover)] hover:ring-2 hover:ring-[var(--color-pib-accent)]/40 transition-all shrink-0"
+              >
                 {initials || '·'}
-              </div>
+              </Link>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{name || 'Client'}</p>
+                <p className="text-xs font-medium truncate">{profileName || name || 'Client'}</p>
                 <p className="text-[11px] text-[var(--color-pib-text-muted)] truncate">{email}</p>
               </div>
               <button onClick={handleLogout} title="Sign out" className="text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] transition-colors p-1" aria-label="Sign out">
