@@ -182,7 +182,7 @@ export function CrossProjectBoard({ tasks: initialTasks, loading, onTaskUpdate }
         <TaskDetailPanel
           task={selectedTask}
           projectId={selectedTask.projectId}
-          columnName={BOARD_COLUMNS.find(c => c.id === selectedTask.columnId)?.name}
+          columnName={BOARD_COLUMNS.find(c => c.id === selectedTask.columnId)?.name ?? ''}
           onClose={() => setSelectedTask(null)}
           onUpdate={handleTaskUpdate}
           onDelete={handleTaskDelete}
