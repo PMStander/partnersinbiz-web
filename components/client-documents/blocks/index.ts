@@ -40,6 +40,8 @@ import { EmbedBlock } from './EmbedBlock'
 import { EmbedEditor } from './editors/EmbedEditor'
 import { LinkCardBlock } from './LinkCardBlock'
 import { LinkCardEditor } from './editors/LinkCardEditor'
+import { ChartBlock } from './ChartBlock'
+import { ChartEditor } from './editors/ChartEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -64,6 +66,7 @@ export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps
   video: VideoBlock,
   embed: EmbedBlock,
   link_card: LinkCardBlock,
+  chart: ChartBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
@@ -86,6 +89,7 @@ export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> 
   video: VideoEditor,
   embed: EmbedEditor,
   link_card: LinkCardEditor,
+  chart: ChartEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
