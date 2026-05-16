@@ -12,6 +12,7 @@ import type {
 import { BudgetEditor, type BudgetValue } from './BudgetEditor'
 import { TargetingEditorBasic } from './TargetingEditorBasic'
 import { DiffWarningDialog, type DiffWarning } from './DiffWarningDialog'
+import { CreativePicker } from './CreativePicker'
 
 interface Props {
   orgId: string
@@ -45,6 +46,7 @@ interface WizardState {
   adName: string
   format: AdFormat
   inlineImageUrl: string
+  creativeIds: string[]
   primaryText: string
   headline: string
   description: string
@@ -68,6 +70,7 @@ const DEFAULT_STATE: WizardState = {
   adName: '',
   format: 'SINGLE_IMAGE',
   inlineImageUrl: '',
+  creativeIds: [],
   primaryText: '',
   headline: '',
   description: '',
@@ -108,6 +111,7 @@ export function CampaignBuilder({
   const [submitting, setSubmitting] = useState(false)
   const [warnings, setWarnings] = useState<DiffWarning[]>([])
   const [showWarn, setShowWarn] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   function patch(p: Partial<WizardState>) {
     setState((s) => ({ ...s, ...p }))
@@ -169,8 +173,9 @@ export function CampaignBuilder({
         name: state.adName,
         status: 'DRAFT',
         format: state.format,
-        creativeIds: [],
-        inlineImageUrl: state.inlineImageUrl,
+        creativeIds: state.creativeIds,
+        // Phase 2 fallback — only sent when no creativeIds selected
+        inlineImageUrl: state.creativeIds.length === 0 ? state.inlineImageUrl : undefined,
         copy: {
           primaryText: state.primaryText,
           headline: state.headline,
@@ -374,18 +379,64 @@ export function CampaignBuilder({
             />
           </label>
 
-          <label className="block text-sm">
-            <span className="font-medium">Inline image URL</span>
-            <p className="text-xs text-white/40 mt-0.5">Phase 2 takes a public URL. Phase 3 adds the creative library.</p>
-            <input
-              type="url"
-              className="mt-1 w-full rounded border border-white/10 bg-white/5 px-3 py-2 text-sm"
-              value={state.inlineImageUrl}
-              onChange={(e) => patch({ inlineImageUrl: e.target.value })}
-              placeholder="https://example.com/ad-image.jpg"
-              aria-label="Inline image URL"
-            />
-          </label>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Creative</label>
+            {state.creativeIds.length > 0 ? (
+              <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-emerald-300">
+                    {state.creativeIds.length} creative{state.creativeIds.length === 1 ? '' : 's'} selected
+                  </span>
+                  <button
+                    type="button"
+                    className="text-xs text-white/60 underline"
+                    onClick={() => {
+                      patch({ creativeIds: [] })
+                      setPickerOpen(true)
+                    }}
+                  >
+                    Change
+                  </button>
+                </div>
+                <div className="mt-1 text-xs text-white/40">
+                  IDs: {state.creativeIds.join(', ')}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <button
+                  type="button"
+                  className="btn-pib-accent text-sm"
+                  onClick={() => setPickerOpen(true)}
+                >
+                  Pick from library
+                </button>
+                <p className="mt-2 text-xs text-white/40">
+                  Or paste an image URL below (Phase 2 fallback — soon-to-be-deprecated):
+                </p>
+                <input
+                  type="url"
+                  className="mt-1 w-full rounded border border-white/10 bg-white/5 px-3 py-2 text-sm"
+                  value={state.inlineImageUrl}
+                  onChange={(e) => patch({ inlineImageUrl: e.target.value })}
+                  placeholder="https://example.com/ad-image.jpg"
+                  aria-label="Inline image URL"
+                />
+              </div>
+            )}
+          </div>
+
+          <CreativePicker
+            open={pickerOpen}
+            orgId={orgId}
+            type="image"
+            mode={state.format === 'CAROUSEL' ? 'multi' : 'single'}
+            onClose={() => setPickerOpen(false)}
+            onSelect={(ids) => {
+              patch({ creativeIds: ids })
+              setPickerOpen(false)
+            }}
+          />
 
           <label className="block text-sm">
             <span className="font-medium">Primary text</span>
