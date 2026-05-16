@@ -8,6 +8,7 @@ import { Suspense } from 'react'
 import { PwaRegistrar } from '@/components/pwa/PwaRegistrar'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { PWAReturnGate } from '@/components/pwa/PWAReturnGate'
+import { ToastProvider } from '@/components/ui/Toast'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
@@ -142,7 +143,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense fallback={null}>
           <PWAReturnGate />
         </Suspense>
-        {children}
+        <ToastProvider>{children}</ToastProvider>
         <InstallPrompt />
         <Analytics />
       </body>

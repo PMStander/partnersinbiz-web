@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { AdminSidebar } from './AdminSidebar'
 import { AdminTopbar } from './AdminTopbar'
 import { AdminTopbarNav } from './AdminTopbarNav'
+import { WelcomeFlashHandler } from '@/components/ui/WelcomeFlashHandler'
 
 interface AdminShellProps {
   userEmail: string
@@ -42,6 +43,7 @@ export function AdminShell({ userEmail, children }: AdminShellProps) {
   if (layoutMode === 'topbar') {
     return (
       <div className="flex flex-col h-screen overflow-hidden bg-[var(--color-pib-bg)] text-[var(--color-pib-text)]">
+        <WelcomeFlashHandler />
         <AdminTopbarNav userEmail={userEmail} onToggleLayout={toggleLayout} />
         <main className="flex-1 overflow-y-auto px-4 md:px-8 py-8">
           <div className="max-w-[1400px] mx-auto w-full">
@@ -54,6 +56,7 @@ export function AdminShell({ userEmail, children }: AdminShellProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-pib-bg)] text-[var(--color-pib-text)]">
+      <WelcomeFlashHandler />
       <AdminSidebar open={open} onClose={() => setOpen(false)} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
         <AdminTopbar userEmail={userEmail} onMenuClick={() => setOpen(true)} onToggleLayout={toggleLayout} />

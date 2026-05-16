@@ -11,8 +11,10 @@ export async function GET(request: NextRequest) {
   try {
     const decoded = await adminAuth.verifySessionCookie(cookie, true)
     const userDoc = await adminDb.collection('users').doc(decoded.uid).get()
-    const role = userDoc.exists ? userDoc.data()?.role : 'client'
-    return NextResponse.json({ uid: decoded.uid, role })
+    const data = userDoc.exists ? userDoc.data() : null
+    const role = data?.role ?? 'client'
+    const name = typeof data?.name === 'string' ? data.name : null
+    return NextResponse.json({ uid: decoded.uid, role, name })
   } catch {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
@@ -26,8 +28,10 @@ export async function POST(request: NextRequest) {
   try {
     const decoded = await adminAuth.verifySessionCookie(sessionCookie, true)
     const userDoc = await adminDb.collection('users').doc(decoded.uid).get()
-    const role = userDoc.exists ? userDoc.data()?.role : 'client'
-    return NextResponse.json({ uid: decoded.uid, role })
+    const data = userDoc.exists ? userDoc.data() : null
+    const role = data?.role ?? 'client'
+    const name = typeof data?.name === 'string' ? data.name : null
+    return NextResponse.json({ uid: decoded.uid, role, name })
   } catch {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }

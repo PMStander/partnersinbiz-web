@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation'
 import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { AdminShell } from '@/components/admin/AdminShell'
 import { OrgProvider } from '@/lib/contexts/OrgContext'
-import { ToastProvider } from '@/components/ui/Toast'
 import { LastPathTracker } from '@/components/pwa/LastPathTracker'
 
 export default async function AdminLayout({
@@ -33,13 +32,11 @@ export default async function AdminLayout({
   if (role !== 'admin') redirect('/portal/dashboard')
 
   return (
-    <ToastProvider>
-      <OrgProvider>
-        <Suspense fallback={null}>
-          <LastPathTracker />
-        </Suspense>
-        <AdminShell userEmail={email}>{children}</AdminShell>
-      </OrgProvider>
-    </ToastProvider>
+    <OrgProvider>
+      <Suspense fallback={null}>
+        <LastPathTracker />
+      </Suspense>
+      <AdminShell userEmail={email}>{children}</AdminShell>
+    </OrgProvider>
   )
 }

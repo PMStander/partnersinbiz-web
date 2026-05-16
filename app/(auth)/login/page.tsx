@@ -7,6 +7,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { loginWithEmail, resetPassword } from '@/lib/firebase/auth'
 import { readLastPath } from '@/lib/pwa/lastPath'
+import { useToast } from '@/components/ui/Toast'
+import { setWelcomeFlash } from '@/lib/notifications/welcomeFlash'
 
 function EyeIcon() {
   return (
@@ -30,6 +32,7 @@ function EyeOffIcon() {
 
 export default function LoginPage() {
   const router = useRouter()
+  const { error: errorToast } = useToast()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -44,11 +47,17 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     const form = new FormData(e.currentTarget)
+    const email = form.get('email') as string
     try {
-      await loginWithEmail(form.get('email') as string, form.get('password') as string)
+      const user = await loginWithEmail(email, form.get('password') as string)
       const verifyRes = await fetch('/api/auth/verify')
       const verifyData = verifyRes.ok ? await verifyRes.json() : null
       const role = verifyData?.role
+      const rawName = user?.displayName?.trim() || verifyData?.name?.trim() || ''
+      const displayName =
+        rawName ||
+        (email.includes('@') ? email.split('@')[0] : email) ||
+        'friend'
       const fallback = role === 'admin' ? '/admin/dashboard' : '/portal/dashboard'
       const saved = readLastPath()
       const allowedPrefix = role === 'admin' ? '/admin' : '/portal'
@@ -56,22 +65,26 @@ export default function LoginPage() {
         saved && (saved === allowedPrefix || saved.startsWith(allowedPrefix + '/') || saved.startsWith(allowedPrefix + '?'))
           ? saved
           : fallback
+      setWelcomeFlash({ name: displayName, email })
       router.push(target)
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? ''
+      let message: string
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-        setError('Incorrect password.')
+        message = 'Incorrect password.'
       } else if (code === 'auth/user-not-found' || code === 'auth/invalid-email') {
-        setError('No account found with that email.')
+        message = 'No account found with that email.'
       } else if (code === 'auth/too-many-requests') {
-        setError('Too many attempts. Wait a few minutes and try again.')
+        message = 'Too many attempts. Wait a few minutes and try again.'
       } else if (code === 'auth/unauthorized-domain') {
-        setError('Sign-in is not authorised from this domain. Contact support.')
+        message = 'Sign-in is not authorised from this domain. Contact support.'
       } else if (code === 'auth/network-request-failed') {
-        setError('Network error. Check your connection.')
+        message = 'Network error. Check your connection.'
       } else {
-        setError(`Sign-in failed (${code || 'unknown error'}).`)
+        message = `Sign-in failed (${code || 'unknown error'}).`
       }
+      setError(message)
+      errorToast(message)
     } finally {
       setLoading(false)
     }
