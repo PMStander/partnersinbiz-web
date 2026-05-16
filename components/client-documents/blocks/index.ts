@@ -2,16 +2,18 @@ import type { FC } from 'react'
 import type { DocumentBlock, DocumentBlockType } from '@/lib/client-documents/types'
 import { UnknownBlock } from './UnknownBlock'
 import { UnknownEditor } from './editors/UnknownEditor'
+import { HeroBlock } from './HeroBlock'
+import { HeroEditor } from './editors/HeroEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
 
 export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps>>> = {
-  // populated by individual block tasks
+  hero: HeroBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
-  // populated by individual block tasks
+  hero: HeroEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
