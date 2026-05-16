@@ -5,6 +5,7 @@ import {
   indexedDBLocalPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
+  GoogleAuthProvider,
   Auth,
 } from 'firebase/auth'
 import { getFirestore, Firestore } from 'firebase/firestore'
@@ -55,3 +56,8 @@ export const db: Firestore = new Proxy({} as Firestore, {
     return Reflect.get(getClientDb(), prop)
   },
 })
+
+// Shared Google sign-in provider used by the document edit-share flow and any
+// future Google OAuth surfaces. Lives at module scope so a single instance is
+// reused across components.
+export const googleProvider = new GoogleAuthProvider()
