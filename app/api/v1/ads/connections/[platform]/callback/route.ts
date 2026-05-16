@@ -4,6 +4,7 @@ import { adminDb } from '@/lib/firebase/admin'
 import { getProvider } from '@/lib/ads/registry'
 import { isAdPlatform } from '@/lib/ads/types'
 import { createConnection } from '@/lib/ads/connections/store'
+import { META_ADS_SCOPES } from '@/lib/ads/providers/meta/constants'
 
 const STATE_COLLECTION = 'ad_oauth_states'
 
@@ -80,7 +81,7 @@ export async function GET(
       orgId: sd.orgId,
       platform,
       userId: short.userId ?? 'unknown',
-      scopes: [],
+      scopes: platform === 'meta' ? Array.from(META_ADS_SCOPES) : [],
       accessToken: long.accessToken,
       expiresInSeconds: long.expiresInSeconds,
       adAccounts,

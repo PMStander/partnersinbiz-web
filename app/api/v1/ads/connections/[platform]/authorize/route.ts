@@ -23,6 +23,7 @@ export const POST = withAuth(
     if (!isAdPlatform(platform)) return apiError(`Unsupported platform: ${platform}`, 400)
     const orgId = req.headers.get('X-Org-Id')
     if (!orgId) return apiError('Missing X-Org-Id header', 400)
+    const orgSlug = req.headers.get('X-Org-Slug') ?? undefined
 
     const provider = getProvider(platform)
     const state = crypto.randomBytes(16).toString('hex')
@@ -33,6 +34,7 @@ export const POST = withAuth(
       await adminDb.collection(STATE_COLLECTION).doc(state).set({
         state,
         orgId,
+        orgSlug,
         platform,
         redirectUri,
         createdAt: Timestamp.now(),

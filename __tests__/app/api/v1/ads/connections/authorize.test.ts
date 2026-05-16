@@ -2,15 +2,18 @@
 import { POST } from '@/app/api/v1/ads/connections/[platform]/authorize/route'
 
 jest.mock('@/lib/api/auth', () => ({ withAuth: (_r: string, h: any) => h }))
+
+const mockSet = jest.fn().mockResolvedValue(undefined)
 jest.mock('@/lib/firebase/admin', () => ({
   adminDb: {
     collection: () => ({
-      doc: () => ({ set: jest.fn().mockResolvedValue(undefined) }),
+      doc: () => ({ set: mockSet }),
     }),
   },
 }))
 
 beforeEach(() => {
+  mockSet.mockClear()
   process.env.FACEBOOK_CLIENT_ID = '133722058771742'
   process.env.NEXT_PUBLIC_APP_URL = 'https://partnersinbiz.online'
 })
@@ -51,5 +54,30 @@ describe('POST /api/v1/ads/connections/[platform]/authorize', () => {
       { params: Promise.resolve({ platform: 'google' }) } as any,
     )
     expect(res.status).toBe(501)
+  })
+
+  it('persists orgSlug from X-Org-Slug header into state doc', async () => {
+    const req = new Request('http://x', {
+      method: 'POST',
+      headers: {
+        'X-Org-Id': 'org_1',
+        'X-Org-Slug': 'acme',
+        'Content-Type': 'application/json',
+      },
+    })
+
+    await POST(
+      req as any,
+      { role: 'admin' } as any,
+      { params: Promise.resolve({ platform: 'meta' }) } as any,
+    )
+
+    expect(mockSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 'org_1',
+        orgSlug: 'acme',
+        platform: 'meta',
+      }),
+    )
   })
 })

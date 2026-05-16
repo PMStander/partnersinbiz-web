@@ -17,7 +17,7 @@ export function ConnectionsPanel({ orgSlug, orgId, connections }: Props) {
     try {
       const res = await fetch('/api/v1/ads/connections/meta/authorize', {
         method: 'POST',
-        headers: { 'X-Org-Id': orgId },
+        headers: { 'X-Org-Id': orgId, 'X-Org-Slug': orgSlug },
       })
       const body = await res.json()
       if (!body.success) throw new Error(body.error ?? 'Authorize failed')
