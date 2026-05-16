@@ -23,21 +23,26 @@ function getApp(): FirebaseApp {
   return getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
 }
 
-let persistenceConfigured = false
+// Tracks when persistence is fully configured. Must be awaited before sign-in
+// to prevent a brief null auth event during the localStorage→IndexedDB migration
+// that would cause the portal layout to redirect unauthenticated users to /login.
+let _persistenceReady: Promise<void> | null = null
 
 export function getClientAuth(): Auth {
-  const auth = getAuth(getApp())
-  // Keep the user signed in across PWA close / reopen. Try IndexedDB first
-  // (works inside installed PWAs and private windows on most browsers), then
-  // fall back to localStorage, then to session-only as a last resort.
-  if (!persistenceConfigured && typeof window !== 'undefined') {
-    persistenceConfigured = true
-    setPersistence(auth, indexedDBLocalPersistence)
-      .catch(() => setPersistence(auth, browserLocalPersistence))
-      .catch(() => setPersistence(auth, browserSessionPersistence))
+  const a = getAuth(getApp())
+  if (!_persistenceReady && typeof window !== 'undefined') {
+    _persistenceReady = setPersistence(a, indexedDBLocalPersistence)
+      .catch(() => setPersistence(a, browserLocalPersistence))
+      .catch(() => setPersistence(a, browserSessionPersistence))
       .catch(() => {})
   }
-  return auth
+  return a
+}
+
+export function waitForPersistence(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve()
+  getClientAuth() // ensure setup has started
+  return _persistenceReady ?? Promise.resolve()
 }
 
 export function getClientDb(): Firestore {

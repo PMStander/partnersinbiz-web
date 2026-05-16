@@ -5,9 +5,10 @@ import {
   sendPasswordResetEmail,
 } from 'firebase/auth'
 import { doc, setDoc } from 'firebase/firestore'
-import { auth, db } from './config'
+import { auth, db, waitForPersistence } from './config'
 
 export async function loginWithEmail(email: string, password: string) {
+  await waitForPersistence()
   const credential = await signInWithEmailAndPassword(auth, email, password)
   const idToken = await credential.user.getIdToken()
   await fetch('/api/auth/session', {
@@ -19,6 +20,7 @@ export async function loginWithEmail(email: string, password: string) {
 }
 
 export async function registerWithEmail(email: string, password: string, name: string) {
+  await waitForPersistence()
   const credential = await createUserWithEmailAndPassword(auth, email, password)
   // Use merge:true and omit role — the server-side session endpoint owns role assignment
   await setDoc(doc(db, 'users', credential.user.uid), {
