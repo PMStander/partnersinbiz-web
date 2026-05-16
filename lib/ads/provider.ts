@@ -1,5 +1,5 @@
 // lib/ads/provider.ts
-import type { AdAccount, AdConnection, AdPlatform } from './types'
+import type { AdAccount, AdPlatform } from './types'
 
 /**
  * The contract every ad platform implementation must fulfill.
