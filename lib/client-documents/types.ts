@@ -38,6 +38,14 @@ export type DocumentBlockType =
   | 'gallery'
   | 'callout'
   | 'rich_text'
+  | 'image'
+  | 'video'
+  | 'embed'
+  | 'link_card'
+  | 'chart'
+  | 'pricing_toggle'
+  | 'faq'
+  | 'comparison'
 
 export interface ClientDocumentLinkSet {
   projectId?: string
