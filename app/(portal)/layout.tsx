@@ -59,7 +59,6 @@ const NAV_LINKS: NavItem[] = [
     activePatterns: ['/portal/email-analytics', '/portal/properties', '/portal/data'],
   },
   { href: '/portal/payments', label: 'Billing', icon: 'payments', group: 'comms' },
-  { href: '/portal/settings', label: 'Account', icon: 'settings', group: 'comms' },
 ]
 
 const GROUP_LABELS: Record<NavItem['group'], string> = {

@@ -55,14 +55,23 @@ export const PATCH = withPortalAuth(async (req: NextRequest, uid: string) => {
       return apiError('firstName is required', 400)
     }
 
+    // Get existing doc for role + createdAt handling
+    const existingDoc = await adminDb.collection('orgMembers').doc(`${orgId}_${uid}`).get()
+    const existingRole = existingDoc.exists ? (existingDoc.data()!.role ?? null) : null
+
+    if (!firstName && profileBannerDismissed) {
+      // Dismiss-only — only write the flag, never touch profile fields
+      await adminDb
+        .collection('orgMembers')
+        .doc(`${orgId}_${uid}`)
+        .set({ profileBannerDismissed: true, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+      return NextResponse.json({ profile: { ...(existingDoc.data() ?? {}), profileBannerDismissed: true, role: existingRole } })
+    }
+
     const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : ''
     const jobTitle = typeof body.jobTitle === 'string' ? body.jobTitle.trim() : ''
     const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
     const avatarUrl = typeof body.avatarUrl === 'string' ? body.avatarUrl.trim() : ''
-
-    // Get existing role to include in response (PATCH doesn't change role)
-    const existingDoc = await adminDb.collection('orgMembers').doc(`${orgId}_${uid}`).get()
-    const existingRole = existingDoc.exists ? (existingDoc.data()!.role ?? null) : null
 
     await adminDb
       .collection('orgMembers')
@@ -77,6 +86,7 @@ export const PATCH = withPortalAuth(async (req: NextRequest, uid: string) => {
           phone,
           avatarUrl,
           ...(profileBannerDismissed ? { profileBannerDismissed: true } : {}),
+          ...(!existingDoc.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
