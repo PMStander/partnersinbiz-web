@@ -1,6 +1,13 @@
 // lib/ads/providers/meta/index.ts
 import type { AdProvider } from '@/lib/ads/provider'
-import { makeStubProvider } from '@/lib/ads/provider'
-// Note: This is TEMPORARILY a stub. Task 9 replaces this file's content with
-// the real Meta provider once `./oauth.ts` and `./client.ts` exist.
-export const metaProvider: AdProvider = makeStubProvider('meta')
+import { buildAuthorizeUrl, exchangeCode, exchangeForLongLived, refresh } from './oauth'
+import { listAdAccounts as listMetaAdAccounts } from './client'
+
+export const metaProvider: AdProvider = {
+  platform: 'meta',
+  getAuthorizeUrl: buildAuthorizeUrl,
+  exchangeCodeForToken: exchangeCode,
+  toLongLivedToken: exchangeForLongLived,
+  refreshToken: refresh,
+  listAdAccounts: listMetaAdAccounts,
+}

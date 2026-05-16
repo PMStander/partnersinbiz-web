@@ -3,8 +3,7 @@ import { getProvider } from '@/lib/ads/registry'
 import { NotImplementedError, UnknownProviderError } from '@/lib/ads/provider'
 
 describe('getProvider', () => {
-  // UNSKIP IN TASK 9 once Meta has real impl bound
-  it.skip('returns a Meta provider with the Phase 1 methods bound', () => {
+  it('returns a Meta provider with the Phase 1 methods bound', () => {
     const p = getProvider('meta')
     expect(p.platform).toBe('meta')
     expect(typeof p.getAuthorizeUrl).toBe('function')
