@@ -56,10 +56,22 @@ Each document version is an ordered array of `DocumentBlock` objects. Fill `cont
 | `risk` | `string[]` or `string` | Known risks, assumptions, limitations |
 | `table` | `{ headers: string[], rows: string[][] }` | Generic data table |
 | `gallery` | `string[]` (image URLs) | Image gallery |
-| `callout` | `{ title: string, body: string, variant?: 'info'|'warning'|'success' }` | Highlighted callout box |
+| `callout` | `{ title: string, body: string, variant?: 'info'\|'warning'\|'success' }` | Highlighted callout box |
 | `rich_text` | `string` (markdown) | Free-form markdown section |
+| `image` | `{ url, alt?, caption?, width?: 'normal'\|'wide'\|'full' }` | Lazy-loaded; `wide` breaks past prose column, `full` is edge-to-edge |
+| `video` | `{ url, provider?: 'youtube'\|'loom'\|'vimeo'\|'mux', caption? }` | Auto-detects provider from URL; lazy iframe |
+| `embed` | `{ url, height?: number, caption? }` | Sandboxed iframe; only allowed hosts (Calendly, Tally, Typeform, Figma, CodeSandbox, Google Docs/Forms) — others fall back to a plain link |
+| `link_card` | `{ url, title, description?, image?, favicon? }` | OG-style card with hover lift and hostname badge |
+| `chart` | `{ kind: 'bar'\|'pie'\|'line'\|'progress_ring', data, title?, options? }` | Recharts; auto-themed from accent palette |
+| `pricing_toggle` | `{ items: [{label, amount, required?, default?}], currency, note? }` | Interactive — client toggles add-ons, total updates live |
+| `faq` | `{ items: [{q, a}] }` | Native `<details>` accordion |
+| `comparison` | `{ headers: string[], rows: [{label, values: (string\|boolean)[]}], highlightCol?: number }` | Highlight column tinted accent; boolean cells render as check/cross icons |
 
 **Display motion options (optional):** `none` | `reveal` | `sticky` | `counter` | `timeline`
+- Use `reveal` on most prose/list blocks (fade-and-slide on scroll into view)
+- Use `counter` on `metrics` blocks (animates numeric values from 0 → target on scroll)
+- Use `sticky` on `hero` for parallax effect
+- Use `timeline` on `timeline` blocks for sequential phase reveal
 
 ---
 
@@ -153,7 +165,7 @@ All responses: `{ success: boolean, data: ... }` — always unwrap `body.data ??
      "linked": { "dealId": "<dealId if known>" }
    }
    ```
-5. **Create first version** with filled blocks:
+5. **Create first version** with filled blocks (you have all 23 block types available — see "Example Payloads" below):
    ```
    POST /api/v1/client-documents/[id]/versions
    X-Org-Id: <orgId>
@@ -168,6 +180,7 @@ All responses: `{ success: boolean, data: ... }` — always unwrap `body.data ??
    }
    ```
    Use brand colors from org profile if available.
+5b. **If this is a proposal**, also include a `video` block (Loom intro), a `comparison` block, a `pricing_toggle` block, and an `faq` block for maximum impact. See "Make a Standout Proposal" below.
 6. **Mark open assumptions:**
    ```
    PATCH /api/v1/client-documents/[id]
@@ -216,6 +229,450 @@ Always draft first. The document is safe to show Peet with open assumptions. Nev
 **terms:** Reference PiB standard: 50% upfront, 50% on launch. IP transfers on final payment. 30-day support post-launch.
 
 **metrics:** For strategy docs: reach, engagement rate, follower growth, leads generated. For build docs: Lighthouse scores, Core Web Vitals, uptime.
+
+---
+
+## Example Payloads
+
+Copy-paste-ready examples for every block type. Each block is one element of the `blocks` array sent to `POST /api/v1/client-documents/[id]/versions`.
+
+**hero**
+
+```json
+{
+  "id": "hero",
+  "type": "hero",
+  "title": "PROPOSAL",
+  "content": "A performance-first advertising strategy built to fill your pipeline.",
+  "required": true,
+  "display": { "motion": "reveal" }
+}
+```
+
+**summary**
+
+```json
+{
+  "id": "summary",
+  "type": "summary",
+  "title": "Executive summary",
+  "content": "Partners in Biz will run a 90-day Meta + Google Ads test designed to bring qualified leads into your pipeline at a target CPL of R220. We handle creative, copy, audiences, and reporting end-to-end so your team stays focused on closing.",
+  "required": true,
+  "display": { "motion": "reveal" }
+}
+```
+
+**problem**
+
+```json
+{
+  "id": "problem",
+  "type": "problem",
+  "title": "The problem",
+  "content": "Your current channel mix relies heavily on referral and word of mouth. That cuts off at the same ~30 conversations a month, no matter how good the close rate is. To grow past your current ceiling you need a predictable, paid acquisition channel — and one that doesn't burn the brand to do it.",
+  "required": true,
+  "display": { "motion": "reveal" }
+}
+```
+
+**scope**
+
+```json
+{
+  "id": "scope",
+  "type": "scope",
+  "title": "What's included",
+  "content": [
+    "Meta Ads (Facebook + Instagram) full-funnel setup",
+    "Google Ads search + Performance Max",
+    "Pixel + conversion API install and QA",
+    "5 ad creatives per month (static + 1 short-form video)",
+    "Weekly performance reports + monthly strategy call"
+  ],
+  "required": true,
+  "display": { "motion": "reveal" }
+}
+```
+
+**deliverables**
+
+```json
+{
+  "id": "deliverables",
+  "type": "deliverables",
+  "title": "Deliverables",
+  "content": [
+    "1 × Meta Ads Manager account setup",
+    "1 × Google Ads account setup",
+    "5 × creatives / month for 3 months",
+    "12 × weekly performance reports",
+    "3 × monthly strategy calls"
+  ],
+  "required": true,
+  "display": { "motion": "reveal" }
+}
+```
+
+**timeline**
+
+```json
+{
+  "id": "timeline",
+  "type": "timeline",
+  "title": "Launch timeline",
+  "content": {
+    "phases": [
+      { "label": "Week 1 — Setup", "duration": "7 days", "description": "Audience research, pixel install, creative briefs." },
+      { "label": "Week 2 — Creative", "duration": "7 days", "description": "Ad creatives + ad copy approved and uploaded." },
+      { "label": "Week 3 — Go live", "duration": "Day 1 of spend", "description": "Daily monitoring + budget pacing." }
+    ]
+  },
+  "required": true,
+  "display": { "motion": "timeline" }
+}
+```
+
+**investment**
+
+```json
+{
+  "id": "investment",
+  "type": "investment",
+  "title": "Investment",
+  "content": {
+    "items": [
+      { "label": "Strategy + setup (one-off)", "amount": 18000, "currency": "ZAR" },
+      { "label": "Monthly management fee", "amount": 12000, "currency": "ZAR" },
+      { "label": "Monthly ad spend (managed)", "amount": 25000, "currency": "ZAR" },
+      { "label": "Creative production", "amount": 6000, "currency": "ZAR" },
+      { "label": "Reporting + strategy calls", "amount": 3000, "currency": "ZAR" }
+    ],
+    "total": 64000,
+    "currency": "ZAR",
+    "notes": "50% on signing, 50% on go-live. Month 2 and 3 invoiced on the 1st."
+  },
+  "required": true,
+  "display": { "motion": "reveal" }
+}
+```
+
+**terms**
+
+```json
+{
+  "id": "terms",
+  "type": "terms",
+  "title": "Terms",
+  "content": "Engagement runs for 90 days from go-live. Either party may exit with 30 days' written notice. Ad spend is billed at cost — no markup. All creative IP transfers to the client on final payment. PiB provides 30-day post-engagement support for handover.",
+  "required": true,
+  "display": {}
+}
+```
+
+**approval**
+
+```json
+{
+  "id": "approval",
+  "type": "approval",
+  "title": "Approve and proceed",
+  "content": "By signing below, you accept this proposal and authorise Partners in Biz to begin work as scoped above.",
+  "required": true,
+  "display": {}
+}
+```
+
+**metrics**
+
+```json
+{
+  "id": "metrics",
+  "type": "metrics",
+  "title": "Success metrics — 90 days",
+  "content": {
+    "items": [
+      { "label": "Qualified leads", "value": 0, "target": 180, "description": "Form fills with valid contact details" },
+      { "label": "Cost per lead", "value": 0, "target": 220, "description": "Target CPL in ZAR" },
+      { "label": "ROAS", "value": 0, "target": 4, "description": "Revenue / ad spend" }
+    ]
+  },
+  "required": true,
+  "display": { "motion": "counter" }
+}
+```
+
+**risk**
+
+```json
+{
+  "id": "risk",
+  "type": "risk",
+  "title": "Known risks and assumptions",
+  "content": [
+    "Initial CPL may run higher in week 1–2 while creatives are tested.",
+    "Performance assumes the offer remains unchanged for the 90-day test.",
+    "Lead quality depends on the website's intake form completion rate."
+  ],
+  "required": false,
+  "display": { "motion": "reveal" }
+}
+```
+
+**table**
+
+```json
+{
+  "id": "table",
+  "type": "table",
+  "title": "Audience breakdown",
+  "content": {
+    "headers": ["Segment", "Size", "Channel"],
+    "rows": [
+      ["High-intent buyers", "120k", "Google Search"],
+      ["Lookalikes of past clients", "1.2M", "Meta"],
+      ["Re-engagement of warm list", "8k", "Meta + Email"]
+    ]
+  },
+  "required": false,
+  "display": {}
+}
+```
+
+**gallery**
+
+```json
+{
+  "id": "gallery",
+  "type": "gallery",
+  "title": "Sample creatives",
+  "content": [
+    "https://placehold.co/800x800/png?text=Creative+1",
+    "https://placehold.co/800x800/png?text=Creative+2",
+    "https://placehold.co/800x800/png?text=Creative+3"
+  ],
+  "required": false,
+  "display": {}
+}
+```
+
+**callout**
+
+```json
+{
+  "id": "callout-guarantee",
+  "type": "callout",
+  "title": "",
+  "content": {
+    "title": "Our guarantee",
+    "body": "If we don't hit your target CPL in 60 days, we work month 3 for free until we do.",
+    "variant": "success"
+  },
+  "required": false,
+  "display": { "motion": "reveal" }
+}
+```
+
+**rich_text**
+
+```json
+{
+  "id": "notes",
+  "type": "rich_text",
+  "title": "A note from Peet",
+  "content": "We've run this exact playbook for **5 SaaS clients** in the last 18 months. Every one hit the CPL target inside 60 days. The reason: we ship creative weekly, not monthly — so we kill bad ads fast and double down on what works.",
+  "required": false,
+  "display": {}
+}
+```
+
+**image**
+
+```json
+{
+  "id": "team-photo",
+  "type": "image",
+  "title": "",
+  "content": {
+    "url": "https://placehold.co/1600x900/png?text=PiB+Team",
+    "alt": "The Partners in Biz team",
+    "caption": "Your dedicated team: Peet (strategy), Sarah (creative), Tom (media buyer)",
+    "width": "wide"
+  },
+  "required": false,
+  "display": { "motion": "reveal" }
+}
+```
+
+**video**
+
+```json
+{
+  "id": "loom-intro",
+  "type": "video",
+  "title": "A quick hello from Peet",
+  "content": {
+    "url": "https://www.loom.com/share/abc123def456",
+    "provider": "loom",
+    "caption": "3 minutes — what we'll do and why we think it'll work."
+  },
+  "required": false,
+  "display": { "motion": "reveal" }
+}
+```
+
+**embed**
+
+```json
+{
+  "id": "book-call",
+  "type": "embed",
+  "title": "Book a kickoff call",
+  "content": {
+    "url": "https://calendly.com/peetstander/30min",
+    "height": 700,
+    "caption": "Pick a time that works — we'll lock in week 1."
+  },
+  "required": false,
+  "display": {}
+}
+```
+
+**link_card**
+
+```json
+{
+  "id": "case-study",
+  "type": "link_card",
+  "title": "Case study",
+  "content": {
+    "url": "https://partnersinbiz.online/case-studies/saas-x",
+    "title": "How SaaS X cut CPL by 47% in 60 days",
+    "description": "Same playbook, same team, same channels. Full write-up with the actual ad creatives that won.",
+    "image": "https://placehold.co/1200x630/png?text=Case+Study",
+    "favicon": "https://partnersinbiz.online/favicon.ico"
+  },
+  "required": false,
+  "display": { "motion": "reveal" }
+}
+```
+
+**chart**
+
+```json
+{
+  "id": "spend-allocation",
+  "type": "chart",
+  "title": "Proposed spend allocation",
+  "content": {
+    "kind": "pie",
+    "data": [
+      { "name": "Meta Ads", "value": 15000 },
+      { "name": "Google Search", "value": 7000 },
+      { "name": "Performance Max", "value": 3000 }
+    ],
+    "title": "Monthly ad spend by channel"
+  },
+  "required": false,
+  "display": { "motion": "reveal" }
+}
+```
+
+**pricing_toggle**
+
+```json
+{
+  "id": "addons",
+  "type": "pricing_toggle",
+  "title": "Optional add-ons",
+  "content": {
+    "items": [
+      { "label": "Base package (90 days)", "amount": 64000, "required": true, "default": true },
+      { "label": "Landing page design + build", "amount": 18000, "default": false },
+      { "label": "Email nurture sequence (7 emails)", "amount": 9000, "default": false },
+      { "label": "Sales call coaching (4 sessions)", "amount": 12000, "default": false }
+    ],
+    "currency": "ZAR",
+    "note": "Toggle any add-on above to see the new total. We'll lock the final scope on the kickoff call."
+  },
+  "required": false,
+  "display": {}
+}
+```
+
+**faq**
+
+```json
+{
+  "id": "faq",
+  "type": "faq",
+  "title": "Frequently asked questions",
+  "content": {
+    "items": [
+      { "q": "What if we don't hit the CPL target?", "a": "We work month 3 for free until we hit it. Locked in writing." },
+      { "q": "Who owns the ad accounts and creative?", "a": "You do — from day one. All accounts are on your billing, all creative IP transfers on payment." },
+      { "q": "Can we pause if it isn't working?", "a": "Yes. 30 days' written notice and we wrap up — no penalty, no clawback." },
+      { "q": "Why not in-house?", "a": "By month 6 you'll have learned everything you need and can hire in-house at lower cost. We're happy to brief your future hire." }
+    ]
+  },
+  "required": false,
+  "display": { "motion": "reveal" }
+}
+```
+
+**comparison**
+
+```json
+{
+  "id": "vs-alternatives",
+  "type": "comparison",
+  "title": "PiB vs the alternatives",
+  "content": {
+    "headers": ["", "PiB (this proposal)", "In-house hire", "Other agency"],
+    "rows": [
+      { "label": "Time to first leads", "values": ["Week 3", "Month 2-3", "Month 1-2"] },
+      { "label": "Monthly cost", "values": ["R12k mgmt + R25k spend", "R45k+ salary + tools", "R20k-R35k+"] },
+      { "label": "Weekly creative refresh", "values": [true, false, false] },
+      { "label": "Direct line to senior strategist", "values": [true, true, false] },
+      { "label": "Exit on 30 days' notice", "values": [true, false, false] },
+      { "label": "Guarantee on CPL", "values": [true, false, false] }
+    ],
+    "highlightCol": 1
+  },
+  "required": false,
+  "display": { "motion": "reveal" }
+}
+```
+
+---
+
+## Make a Standout Proposal
+
+Default proposals are fine. *Standout* proposals close. When generating a `sales_proposal`, layer in these blocks for outsized impact:
+
+1. **Lead with a video block** (Loom intro from Peet) — placed right after the hero. A 60–180s personal walkthrough is hugely differentiating. Use `provider: 'loom'` and put it before the `summary` block.
+2. **Use a comparison block** to anchor against alternatives. "PiB vs in-house hire vs other agency" or "DIY vs done-for-you." Highlight the PiB column with `highlightCol: 1` so it visually wins.
+3. **Use pricing_toggle for upsells / optional add-ons.** The client toggles add-ons live and watches the total update — it makes optional spend feel like a choice, not a push. Always mark the base package `required: true, default: true`.
+4. **Use an faq block** to pre-empt the top 3–5 objections **before** the approval block. Common ones: "what if it doesn't work?", "who owns the IP?", "can we pause?", "why not in-house?". Answering them in writing removes the last reason to delay.
+5. **Investment block auto-renders an allocation chart** when there are 2+ line items — so just put 5 line items in and it'll look great with no extra effort. Aim for: setup, monthly fee, ad spend, creative, reporting.
+6. **Metrics block auto-renders progress rings** when both `value` and `target` are numeric. Use this for "current vs target" stat displays (e.g. `value: 0, target: 180`) — perfect for the "what we'll hit" section.
+7. **Set `motion: 'counter'` on metrics blocks** so numbers animate from 0 → final value on scroll. Set `motion: 'reveal'` on prose blocks (summary, problem, scope, deliverables, callout, risk). Set `motion: 'timeline'` on the timeline block for sequential phase reveal.
+
+**Recommended order for a standout sales proposal:**
+1. `hero` (motion: reveal)
+2. `video` — Loom intro
+3. `summary` (motion: reveal)
+4. `problem` (motion: reveal)
+5. `scope` (motion: reveal)
+6. `deliverables` (motion: reveal)
+7. `comparison` — PiB vs alternatives
+8. `timeline` (motion: timeline)
+9. `metrics` (motion: counter) — what we'll hit
+10. `investment` — 5 line items so the chart auto-renders
+11. `pricing_toggle` — optional add-ons
+12. `callout` — guarantee / risk reversal
+13. `faq` — objections pre-empted
+14. `terms`
+15. `approval`
 
 ---
 
