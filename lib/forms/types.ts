@@ -4,6 +4,8 @@
 // their submissions. Forms live under `forms/` and submissions under
 // `form_submissions/`, both scoped by `orgId`.
 
+import type { MemberRef } from '@/lib/orgMembers/memberRef'
+
 export type FormFieldType =
   | 'text'
   | 'textarea'
@@ -57,7 +59,10 @@ export interface Form {
   turnstileEnabled: boolean
   turnstileSiteKey: string
   createdBy: string
+  createdByRef?: MemberRef
   createdByType: 'user' | 'agent' | 'system'
+  updatedBy?: string
+  updatedByRef?: MemberRef
   createdAt: unknown
   updatedAt: unknown
   deleted: boolean
@@ -74,6 +79,10 @@ export interface FormSubmission {
   status: 'new' | 'read' | 'archived'
   contactId: string | null
   source: string | null
+  createdBy?: string
+  createdByRef?: MemberRef
+  updatedBy?: string
+  updatedByRef?: MemberRef
 }
 
 // ── Inputs ──────────────────────────────────────────────────────────────────

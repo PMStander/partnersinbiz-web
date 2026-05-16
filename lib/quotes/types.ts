@@ -1,6 +1,7 @@
 // lib/quotes/types.ts
 import type { Timestamp } from 'firebase-admin/firestore'
 import type { Currency, LineItem, InvoiceFromDetails, InvoiceClientDetails } from '@/lib/invoices/types'
+import type { MemberRef } from '@/lib/orgMembers/memberRef'
 
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined' | 'expired' | 'converted'
 
@@ -25,6 +26,9 @@ export interface Quote {
   sentAt: Timestamp | null
   acceptedAt: Timestamp | null
   createdBy: string
+  createdByRef?: MemberRef
+  updatedBy?: string
+  updatedByRef?: MemberRef
   createdAt?: unknown
   updatedAt?: unknown
 }

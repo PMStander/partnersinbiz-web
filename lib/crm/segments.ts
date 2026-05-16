@@ -1,6 +1,7 @@
 // lib/crm/segments.ts
 import { Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
+import type { MemberRef } from '@/lib/orgMembers/memberRef'
 import type {
   Contact,
   ContactSource,
@@ -90,6 +91,10 @@ export interface Segment {
   filters: SegmentFilters
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
+  createdBy?: string
+  createdByRef?: MemberRef
+  updatedBy?: string
+  updatedByRef?: MemberRef
   deleted?: boolean
 }
 

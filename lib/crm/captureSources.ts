@@ -13,6 +13,7 @@
 // rotating the key effectively kills any forms / integrations using it.
 
 import type { Timestamp } from 'firebase-admin/firestore'
+import type { MemberRef } from '@/lib/orgMembers/memberRef'
 
 export type CaptureSourceType = 'form' | 'api' | 'csv' | 'integration' | 'manual'
 
@@ -36,6 +37,10 @@ export interface CaptureSource {
 
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
+  createdBy?: string
+  createdByRef?: MemberRef
+  updatedBy?: string
+  updatedByRef?: MemberRef
   deleted?: boolean
 }
 
