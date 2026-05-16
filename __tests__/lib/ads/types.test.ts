@@ -57,3 +57,98 @@ describe('AdAccount shape', () => {
     expect(a.businessId).toBe('biz_1')
   })
 })
+
+import type {
+  AdCampaign,
+  AdSet,
+  Ad,
+  CreateAdCampaignInput,
+  CreateAdSetInput,
+  CreateAdInput,
+} from '@/lib/ads/types'
+
+describe('AdCampaign shape', () => {
+  it('matches the documented shape', () => {
+    const c: AdCampaign = {
+      id: 'cmp_1',
+      orgId: 'org_1',
+      platform: 'meta',
+      adAccountId: 'act_42',
+      name: 'Test',
+      objective: 'TRAFFIC',
+      status: 'DRAFT',
+      cboEnabled: false,
+      specialAdCategories: [],
+      providerData: {},
+      createdBy: 'user_1',
+      createdAt: { seconds: 1, nanoseconds: 0 } as any,
+      updatedAt: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    expect(c.objective).toBe('TRAFFIC')
+  })
+})
+
+describe('CreateAdCampaignInput', () => {
+  it('requires name, objective, adAccountId; omits id/timestamps', () => {
+    const input: CreateAdCampaignInput = {
+      adAccountId: 'act_42',
+      name: 'New',
+      objective: 'LEADS',
+      status: 'DRAFT',
+      cboEnabled: false,
+      specialAdCategories: [],
+    }
+    expect(input.name).toBe('New')
+  })
+})
+
+describe('AdSet shape', () => {
+  it('matches the documented shape', () => {
+    const a: AdSet = {
+      id: 'ads_1',
+      orgId: 'org_1',
+      campaignId: 'cmp_1',
+      platform: 'meta',
+      name: 'Test',
+      status: 'DRAFT',
+      optimizationGoal: 'LINK_CLICKS',
+      billingEvent: 'IMPRESSIONS',
+      targeting: {
+        geo: { countries: ['US'] },
+        demographics: { ageMin: 18, ageMax: 65 },
+      },
+      placements: { feeds: true, stories: true, reels: false, marketplace: false },
+      providerData: {},
+      createdAt: { seconds: 1, nanoseconds: 0 } as any,
+      updatedAt: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    expect(a.optimizationGoal).toBe('LINK_CLICKS')
+  })
+})
+
+describe('Ad shape', () => {
+  it('matches the documented shape (SINGLE_IMAGE)', () => {
+    const a: Ad = {
+      id: 'ad_1',
+      orgId: 'org_1',
+      adSetId: 'ads_1',
+      campaignId: 'cmp_1',
+      platform: 'meta',
+      name: 'Test Ad',
+      status: 'DRAFT',
+      format: 'SINGLE_IMAGE',
+      creativeIds: [],
+      inlineImageUrl: 'https://example.com/img.jpg',
+      copy: {
+        primaryText: 'Buy now',
+        headline: 'Big sale',
+        description: 'Limited time',
+        callToAction: 'SHOP_NOW',
+      },
+      providerData: {},
+      createdAt: { seconds: 1, nanoseconds: 0 } as any,
+      updatedAt: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    expect(a.format).toBe('SINGLE_IMAGE')
+  })
+})

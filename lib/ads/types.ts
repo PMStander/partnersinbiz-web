@@ -88,3 +88,157 @@ export interface AdTargeting {
     lookalikeExpansion?: boolean
   }
 }
+
+// ─── Campaign ────────────────────────────────────────────────────────────────
+
+export type AdBidStrategy =
+  | 'LOWEST_COST'
+  | 'COST_CAP'
+  | 'BID_CAP'
+  | 'TARGET_COST'
+  | 'ROAS_GOAL'
+
+export interface AdCampaign {
+  id: string
+  orgId: string
+  platform: AdPlatform
+  adAccountId: string
+  name: string
+  objective: AdObjective
+  status: AdEntityStatus
+  dailyBudget?: number // cents in ad account currency
+  lifetimeBudget?: number // cents
+  cboEnabled: boolean
+  bidStrategy?: AdBidStrategy
+  startTime?: Timestamp
+  endTime?: Timestamp
+  specialAdCategories: string[] // [] | ['CREDIT'] | ['EMPLOYMENT'] | ['HOUSING'] | ['SOCIAL_ISSUES']
+  providerData: { meta?: Record<string, unknown> }
+  lastRefreshedAt?: Timestamp
+  createdBy: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type CreateAdCampaignInput = Omit<
+  AdCampaign,
+  'id' | 'orgId' | 'platform' | 'providerData' | 'createdBy' | 'createdAt' | 'updatedAt' | 'lastRefreshedAt'
+>
+
+export type UpdateAdCampaignInput = Partial<
+  Omit<AdCampaign, 'id' | 'orgId' | 'platform' | 'adAccountId' | 'createdBy' | 'createdAt'>
+>
+
+// ─── AdSet ───────────────────────────────────────────────────────────────────
+
+export type AdSetOptimizationGoal =
+  | 'LINK_CLICKS'
+  | 'IMPRESSIONS'
+  | 'REACH'
+  | 'POST_ENGAGEMENT'
+  | 'CONVERSIONS'
+  | 'LEAD_GENERATION'
+  | 'OFFSITE_CONVERSIONS'
+  | 'VIDEO_VIEWS'
+
+export type AdSetBillingEvent = 'IMPRESSIONS' | 'LINK_CLICKS' | 'THRUPLAY'
+
+export interface AdSetPlacements {
+  feeds: boolean
+  stories: boolean
+  reels: boolean
+  marketplace: boolean
+}
+
+export interface AdSet {
+  id: string
+  orgId: string
+  campaignId: string
+  platform: AdPlatform
+  name: string
+  status: AdEntityStatus
+  dailyBudget?: number
+  lifetimeBudget?: number
+  bidAmount?: number // cents
+  optimizationGoal: AdSetOptimizationGoal
+  billingEvent: AdSetBillingEvent
+  targeting: AdTargeting
+  placements: AdSetPlacements
+  startTime?: Timestamp
+  endTime?: Timestamp
+  providerData: { meta?: Record<string, unknown> }
+  lastRefreshedAt?: Timestamp
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type CreateAdSetInput = Omit<
+  AdSet,
+  'id' | 'orgId' | 'platform' | 'providerData' | 'createdAt' | 'updatedAt' | 'lastRefreshedAt'
+>
+
+export type UpdateAdSetInput = Partial<
+  Omit<AdSet, 'id' | 'orgId' | 'platform' | 'campaignId' | 'createdAt'>
+>
+
+// ─── Ad ──────────────────────────────────────────────────────────────────────
+
+export type AdFormat = 'SINGLE_IMAGE' | 'SINGLE_VIDEO' | 'CAROUSEL'
+
+export type AdCallToAction =
+  | 'SHOP_NOW'
+  | 'LEARN_MORE'
+  | 'SIGN_UP'
+  | 'CONTACT_US'
+  | 'GET_OFFER'
+  | 'SUBSCRIBE'
+  | 'DOWNLOAD'
+  | 'BOOK_NOW'
+  | 'APPLY_NOW'
+  | 'GET_QUOTE'
+
+export interface AdCopy {
+  primaryText: string
+  headline: string
+  description?: string
+  callToAction?: AdCallToAction
+  destinationUrl?: string
+}
+
+export interface Ad {
+  id: string
+  orgId: string
+  adSetId: string
+  campaignId: string
+  platform: AdPlatform
+  name: string
+  status: AdEntityStatus
+  format: AdFormat
+  /** Phase 3+: references ad_creatives. Phase 2: empty array; image lives on inlineImageUrl. */
+  creativeIds: string[]
+  /** Phase 2 only: direct URL until creative library lands in Phase 3. */
+  inlineImageUrl?: string
+  /** For CAROUSEL format in Phase 2: array of inline image URLs (Phase 3 swaps to creative IDs). */
+  inlineCarouselUrls?: string[]
+  copy: AdCopy
+  trackingUrls?: {
+    utm_source?: string
+    utm_medium?: string
+    utm_campaign?: string
+    utm_content?: string
+    utm_term?: string
+  }
+  providerData: { meta?: Record<string, unknown> }
+  lastRefreshedAt?: Timestamp
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type CreateAdInput = Omit<
+  Ad,
+  'id' | 'orgId' | 'platform' | 'providerData' | 'createdAt' | 'updatedAt' | 'lastRefreshedAt'
+>
+
+export type UpdateAdInput = Partial<
+  Omit<Ad, 'id' | 'orgId' | 'platform' | 'adSetId' | 'campaignId' | 'createdAt'>
+>
