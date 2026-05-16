@@ -24,6 +24,8 @@ import { InvestmentBlock } from './InvestmentBlock'
 import { InvestmentEditor } from './editors/InvestmentEditor'
 import { MetricsBlock } from './MetricsBlock'
 import { MetricsEditor } from './editors/MetricsEditor'
+import { RiskBlock } from './RiskBlock'
+import { RiskEditor } from './editors/RiskEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -40,6 +42,7 @@ export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps
   timeline: TimelineBlock,
   investment: InvestmentBlock,
   metrics: MetricsBlock,
+  risk: RiskBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
@@ -54,6 +57,7 @@ export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> 
   timeline: TimelineEditor,
   investment: InvestmentEditor,
   metrics: MetricsEditor,
+  risk: RiskEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
