@@ -72,5 +72,5 @@ export const PATCH = withPortalAuth(async (req: NextRequest, uid: string) => {
       { merge: true }
     )
 
-  return NextResponse.json({ profile: { firstName, lastName, jobTitle, phone, avatarUrl } })
+  return NextResponse.json({ profile: { firstName, lastName, jobTitle, phone, avatarUrl, profileBannerDismissed } })
 })
