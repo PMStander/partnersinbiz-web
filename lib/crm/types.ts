@@ -1,5 +1,17 @@
 // lib/crm/types.ts
 import type { Timestamp } from 'firebase-admin/firestore'
+import type { MemberRef } from '@/lib/orgMembers/memberRef'
+
+// ── Attribution ──────────────────────────────────────────────────────────────
+
+export interface Attribution {
+  createdAt: Timestamp | null
+  createdBy?: string
+  createdByRef?: MemberRef
+  updatedAt: Timestamp | null
+  updatedBy?: string
+  updatedByRef?: MemberRef
+}
 
 // ── Contacts ────────────────────────────────────────────────────────────────
 
@@ -17,6 +29,11 @@ export type ContactStage =
 export interface Contact {
   id: string
   orgId: string            // required after Phase 1 backfill
+  createdBy?: string
+  createdByRef?: MemberRef
+  updatedBy?: string
+  updatedByRef?: MemberRef
+  assignedToRef?: MemberRef
   convertedToOrgId?: string | null
   capturedFromId: string   // "" if not captured via a CaptureSource
   name: string
@@ -67,6 +84,12 @@ export type Currency = 'USD' | 'EUR' | 'ZAR'
 export interface Deal {
   id: string
   orgId: string
+  createdBy?: string
+  createdByRef?: MemberRef
+  updatedBy?: string
+  updatedByRef?: MemberRef
+  ownerUid?: string
+  ownerRef?: MemberRef
   contactId: string
   title: string
   value: number
@@ -107,6 +130,9 @@ export interface Activity {
   metadata: Record<string, unknown>
   createdAt: Timestamp | null
   createdBy: string
+  createdByRef?: MemberRef
+  updatedBy?: string
+  updatedByRef?: MemberRef
 }
 
 export type ActivityInput = Omit<Activity, 'id' | 'createdAt'>
