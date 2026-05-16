@@ -5,6 +5,7 @@ import type { ClientDocument, ClientDocumentVersion } from '@/lib/client-documen
 import { DocumentTheme } from './theme/DocumentTheme'
 import { getRenderer } from './blocks'
 import { useReveal } from './motion/useReveal'
+import { useCounter } from './motion/useCounter'
 
 function readableType(type: string) {
   return type.replaceAll('_', ' ')
@@ -23,6 +24,9 @@ export function DocumentRenderer({
 
   // Fade-and-slide reveal on scroll into view for [data-motion="reveal"] elements.
   useReveal(articleRef, version.id)
+
+  // Animate numeric values up from 0 for every [data-counter] element.
+  useCounter(articleRef, version.id)
 
   // Active sticky-nav tracking
   useEffect(() => {
