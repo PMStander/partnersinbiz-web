@@ -34,6 +34,8 @@ import { CalloutBlock } from './CalloutBlock'
 import { CalloutEditor } from './editors/CalloutEditor'
 import { ImageBlock } from './ImageBlock'
 import { ImageEditor } from './editors/ImageEditor'
+import { VideoBlock } from './VideoBlock'
+import { VideoEditor } from './editors/VideoEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -55,6 +57,7 @@ export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps
   gallery: GalleryBlock,
   callout: CalloutBlock,
   image: ImageBlock,
+  video: VideoBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
@@ -74,6 +77,7 @@ export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> 
   gallery: GalleryEditor,
   callout: CalloutEditor,
   image: ImageEditor,
+  video: VideoEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
