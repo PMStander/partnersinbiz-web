@@ -358,7 +358,7 @@ describe('POST /api/v1/organizations/[id]/create-login', () => {
     mockOrgUpdate.mockResolvedValue(undefined)
     mockOrgDoc.mockReturnValue({ get: mockOrgGet, update: mockOrgUpdate })
     mockUserSet.mockResolvedValue(undefined)
-    mockUserDoc.mockReturnValue({ set: mockUserSet })
+    mockUserDoc.mockReturnValue({ set: mockUserSet, get: jest.fn().mockResolvedValue({ exists: false, data: () => undefined }) })
 
     ;(adminAuth.getUserByEmail as jest.Mock).mockRejectedValue({ code: 'auth/user-not-found' })
     ;(adminAuth.createUser as jest.Mock).mockResolvedValue({ uid: 'new-client-uid' })
@@ -381,7 +381,7 @@ describe('POST /api/v1/organizations/[id]/create-login', () => {
     const body = await res.json()
     expect(body.data.uid).toBe('new-client-uid')
     expect(body.data.email).toBe('client@example.com')
-    expect(body.data.setupLink).toBe('https://reset.example.com/link')
+    expect(body.data.setupLink).toMatch(/\/auth\/reset\?link=/)
     expect(mockUserSet).toHaveBeenCalledWith(expect.objectContaining({
       email: 'client@example.com',
       displayName: 'Client User',

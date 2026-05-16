@@ -161,6 +161,27 @@ function setupMocks(opts: {
     if (name === 'social_audit_log') {
       return { add: jest.fn().mockResolvedValue({ id: 'audit-1' }) }
     }
+    if (name === 'notifications') {
+      return { add: jest.fn().mockResolvedValue({ id: 'notif-1' }) }
+    }
+    if (name === 'social_accounts') {
+      return {
+        doc: jest.fn().mockReturnValue({
+          get: jest.fn().mockResolvedValue({
+            exists: true,
+            data: () => ({ orgId: 'org-1', status: 'active' }),
+          }),
+        }),
+        where: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({ empty: false, docs: [{ id: 'acct-1', data: () => ({ orgId: 'org-1', status: 'active' }) }] }),
+          }),
+        }),
+      }
+    }
+    if (name === 'activity') {
+      return { add: jest.fn().mockResolvedValue({ id: 'activity-1' }) }
+    }
     throw new Error(`Unexpected collection: ${name}`)
   })
 }
@@ -363,6 +384,8 @@ describe('POST /api/v1/social/posts/:id/client-approve', () => {
         status: 'client_review',
         deliveryMode: 'auto_publish',
         scheduledAt: { seconds: 1234, nanoseconds: 0 },
+        platform: 'instagram',
+        accountIds: ['acct-1'],
       },
     })
 
@@ -379,6 +402,7 @@ describe('POST /api/v1/social/posts/:id/client-approve', () => {
         postId: 'p1',
         status: 'pending',
       }),
+      { merge: true },
     )
   })
 
