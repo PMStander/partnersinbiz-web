@@ -16,12 +16,18 @@
 // server can mint the session cookie. See the API route docstring at
 // app/api/v1/auth/magic-link/verify/route.ts.
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { signInWithCustomToken } from 'firebase/auth'
 import { auth } from '@/lib/firebase/client'
 
-export default function MagicLinkVerifyLandingPage() {
+// useSearchParams() must be inside a Suspense boundary in Next.js 15+,
+// otherwise the static prerender pass errors out. This page is fully dynamic
+// anyway — there is nothing to prerender — so we also opt out of static
+// rendering explicitly.
+export const dynamic = 'force-dynamic'
+
+function VerifyInner() {
   const searchParams = useSearchParams()
   const customToken = searchParams.get('customToken')
   const redirect = searchParams.get('redirect') || '/'
@@ -85,5 +91,19 @@ export default function MagicLinkVerifyLandingPage() {
     <div className="grid min-h-screen place-items-center text-[var(--doc-muted)]">
       Signing you in…
     </div>
+  )
+}
+
+export default function MagicLinkVerifyLandingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="grid min-h-screen place-items-center text-[var(--doc-muted)]">
+          Loading…
+        </div>
+      }
+    >
+      <VerifyInner />
+    </Suspense>
   )
 }
