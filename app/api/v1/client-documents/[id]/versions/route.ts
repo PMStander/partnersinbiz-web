@@ -29,6 +29,14 @@ const BLOCK_TYPES = new Set<DocumentBlockType>([
   'gallery',
   'callout',
   'rich_text',
+  'image',
+  'video',
+  'embed',
+  'link_card',
+  'chart',
+  'pricing_toggle',
+  'faq',
+  'comparison',
 ])
 const BLOCK_FIELDS = new Set(['id', 'type', 'title', 'content', 'required', 'locked', 'clientEditable', 'display'])
 const MOTIONS = new Set(['none', 'reveal', 'sticky', 'counter', 'timeline'])
