@@ -117,6 +117,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const [collapsed, setCollapsed]   = useState(false)
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('sidebar')
   const [unresolvedDocs, setUnresolvedDocs] = useState(0)
+  const [orgs, setOrgs] = useState<{ id: string; name: string; logoUrl: string }[]>([])
+  const [activeOrgId, setActiveOrgId] = useState('')
+  const [orgSwitching, setOrgSwitching] = useState(false)
 
   // Restore persisted preferences
   useEffect(() => {
@@ -144,6 +147,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           fetch('/api/v1/portal/org')
             .then(r => r.ok ? r.json() : null)
             .then(d => { if (d?.org?.name) setOrgName(d.org.name) })
+            .catch(() => {})
+          fetch('/api/v1/portal/orgs')
+            .then(r => r.ok ? r.json() : null)
+            .then(d => {
+              if (Array.isArray(d?.orgs)) setOrgs(d.orgs)
+              if (d?.activeOrgId) setActiveOrgId(d.activeOrgId)
+            })
             .catch(() => {})
         }
       })
@@ -189,6 +199,24 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       localStorage.setItem('portal_layout_mode', next)
       return next
     })
+  }
+
+  async function handleOrgSwitch(orgId: string) {
+    if (orgId === activeOrgId || orgSwitching) return
+    setOrgSwitching(true)
+    try {
+      await fetch('/api/v1/portal/active-org', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId }),
+      })
+      setActiveOrgId(orgId)
+      const switched = orgs.find(o => o.id === orgId)
+      if (switched) setOrgName(switched.name)
+      router.refresh()
+    } finally {
+      setOrgSwitching(false)
+    }
   }
 
   async function handleLogout() {
@@ -434,6 +462,62 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               ))
           }
         </nav>
+
+        {/* Org switcher — only when client belongs to multiple workspaces */}
+        {orgs.length > 1 && (
+          <div className="border-t border-[var(--color-pib-line)] shrink-0">
+            {collapsed ? (
+              <div className="flex flex-col items-center gap-1 py-2 px-2">
+                {orgs.map(org => (
+                  <button
+                    key={org.id}
+                    onClick={() => handleOrgSwitch(org.id)}
+                    disabled={orgSwitching}
+                    title={org.name}
+                    className={[
+                      'w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold transition-colors',
+                      org.id === activeOrgId
+                        ? 'bg-[var(--color-pib-accent-soft)] text-[var(--color-pib-accent-hover)] ring-1 ring-[var(--color-pib-accent)]/40'
+                        : 'text-[var(--color-pib-text-muted)] hover:bg-white/[0.06]',
+                    ].join(' ')}
+                  >
+                    {org.name[0]?.toUpperCase() ?? '·'}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="px-3 py-3">
+                <p className="eyebrow !text-[10px] px-1 mb-2">Workspace</p>
+                <div className="space-y-0.5">
+                  {orgs.map(org => (
+                    <button
+                      key={org.id}
+                      onClick={() => handleOrgSwitch(org.id)}
+                      disabled={orgSwitching}
+                      className={[
+                        'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left',
+                        org.id === activeOrgId
+                          ? 'bg-[var(--color-pib-accent-soft)] text-[var(--color-pib-accent-hover)]'
+                          : 'text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] hover:bg-white/[0.04]',
+                      ].join(' ')}
+                    >
+                      <span className={[
+                        'w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0',
+                        org.id === activeOrgId ? 'bg-[var(--color-pib-accent)]/20' : 'bg-[var(--color-pib-line-strong)]',
+                      ].join(' ')}>
+                        {org.name[0]?.toUpperCase() ?? '·'}
+                      </span>
+                      <span className="flex-1 truncate text-[13px]">{org.name}</span>
+                      {org.id === activeOrgId && (
+                        <span className="material-symbols-outlined text-[14px] text-[var(--color-pib-accent)]">check_circle</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* User chip */}
         <div className="border-t border-[var(--color-pib-line)] p-3 shrink-0">

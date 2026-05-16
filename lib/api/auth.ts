@@ -95,15 +95,18 @@ async function _resolveUser(req: NextRequest): Promise<ApiUser | null> {
 
 async function getUserExtrasFromFirestore(
   uid: string,
-): Promise<{ role: ApiRole; orgId?: string; allowedOrgIds?: string[] }> {
+): Promise<{ role: ApiRole; orgId?: string; orgIds?: string[]; allowedOrgIds?: string[] }> {
   const doc = await adminDb.collection('users').doc(uid).get()
   if (!doc.exists) return { role: 'client' }
   const data = doc.data() ?? {}
   const role = data.role
-  const orgId = typeof data.orgId === 'string' ? data.orgId : undefined
   const validRole: ApiRole = role === 'admin' || role === 'client' || role === 'ai' ? role : 'client'
+  const orgId = typeof data.orgId === 'string' ? data.orgId : undefined
+  const orgIds: string[] = Array.isArray(data.orgIds)
+    ? (data.orgIds.filter((v: unknown) => typeof v === 'string' && v.length > 0) as string[])
+    : (orgId ? [orgId] : [])
   const allowedOrgIds = Array.isArray(data.allowedOrgIds)
     ? (data.allowedOrgIds.filter((v: unknown) => typeof v === 'string' && v.length > 0) as string[])
     : undefined
-  return { role: validRole, orgId, allowedOrgIds }
+  return { role: validRole, orgId, orgIds: orgIds.length > 0 ? orgIds : undefined, allowedOrgIds }
 }

@@ -4,6 +4,8 @@ export interface ApiUser {
   uid: string
   role: ApiRole
   orgId?: string
+  // All orgs this client belongs to. Falls back to [orgId] for existing users.
+  orgIds?: string[]
   // Platform-admin org restriction. Only meaningful when role === 'admin'.
   // Empty/undefined = super admin (no restriction). Non-empty = restricted to
   // these org ids (plus their home orgId).

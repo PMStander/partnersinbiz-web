@@ -56,10 +56,11 @@ async function resolveOrgId(req: NextRequest, user: ApiUser): Promise<string | n
     }
 
     case 'client': {
-      // Client's orgId is derived from their user record
+      // Use activeOrgId if the client has switched workspaces, else fall back to orgId
       const userDoc = await adminDb.collection('users').doc(user.uid).get()
       if (!userDoc.exists) return DEFAULT_ORG_ID
-      return (userDoc.data()?.orgId as string) ?? DEFAULT_ORG_ID
+      const data = userDoc.data()!
+      return (data.activeOrgId as string | undefined) ?? (data.orgId as string | undefined) ?? DEFAULT_ORG_ID
     }
 
     default:

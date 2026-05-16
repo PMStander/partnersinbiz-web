@@ -53,25 +53,33 @@ export const POST = withAuth('admin', async (req: NextRequest, user, ctx) => {
     const created = await adminAuth.createUser({ email, displayName: name })
     uid = created.uid
 
-    // Store user profile in Firestore — orgId is set so resolveOrgScope finds
-    // it on every request without an extra org-membership query.
+    // New user — set orgId (primary) and orgIds array
     await adminDb.collection('users').doc(uid).set({
       email,
       displayName: name,
       role: 'client',
       orgId: id,
+      orgIds: [id],
       createdAt: FieldValue.serverTimestamp(),
     })
   }
 
-  // Always set / update orgId on the user doc so client-role reads scope
-  // correctly via resolveOrgScope. This is denormalised from the org's
-  // `members` array but trades one Firestore lookup per request for the
-  // need to keep it in sync.
-  await adminDb.collection('users').doc(uid).set(
-    { orgId: id, updatedAt: FieldValue.serverTimestamp() },
-    { merge: true },
-  )
+  // For existing users: add this org to their orgIds array without overwriting
+  // their primary orgId (so their active workspace is unchanged).
+  const existingUserDoc = await adminDb.collection('users').doc(uid).get()
+  const existingData = existingUserDoc.data() ?? {}
+  const existingOrgIds: string[] = Array.isArray(existingData.orgIds) ? existingData.orgIds : (existingData.orgId ? [existingData.orgId] : [])
+  if (!existingOrgIds.includes(id)) {
+    await adminDb.collection('users').doc(uid).set(
+      {
+        orgIds: [...existingOrgIds, id],
+        // Keep orgId as primary; set it only if the user had none before
+        ...(existingData.orgId ? {} : { orgId: id }),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    )
+  }
 
   // Add to organisation members
   const newMember: OrgMember = {

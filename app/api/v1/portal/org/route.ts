@@ -9,7 +9,8 @@ export const dynamic = 'force-dynamic'
 
 async function resolveOrgId(uid: string): Promise<string | null> {
   const userDoc = await adminDb.collection('users').doc(uid).get()
-  return (userDoc.data() as { orgId?: string } | undefined)?.orgId ?? null
+  const data = userDoc.data() as { orgId?: string; activeOrgId?: string } | undefined
+  return data?.activeOrgId ?? data?.orgId ?? null
 }
 
 export const GET = withPortalAuth(async (_req: NextRequest, uid: string) => {

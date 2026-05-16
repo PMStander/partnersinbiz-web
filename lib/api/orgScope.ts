@@ -52,17 +52,17 @@ export function resolveOrgScope(user: ApiUser, requestedOrgId: string | null): O
     return { ok: true, orgId: requestedOrgId }
   }
 
-  // Client: forced to their bound org. Ignore mismatches loudly.
-  const userOrgId = user.orgId ?? ''
-  if (!userOrgId) {
+  // Client: can access any org in their orgIds list.
+  const userOrgIds = user.orgIds?.length ? user.orgIds : (user.orgId ? [user.orgId] : [])
+  if (!userOrgIds.length) {
     return {
       ok: false,
       status: 403,
       error: 'No organisation membership — ask your account owner to invite you.',
     }
   }
-  if (requestedOrgId && requestedOrgId !== userOrgId) {
-    return { ok: false, status: 403, error: 'Cannot access a different organisation' }
+  if (requestedOrgId && !userOrgIds.includes(requestedOrgId)) {
+    return { ok: false, status: 403, error: 'You do not have access to this organisation' }
   }
-  return { ok: true, orgId: userOrgId }
+  return { ok: true, orgId: requestedOrgId || userOrgIds[0] }
 }
