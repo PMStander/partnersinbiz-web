@@ -121,6 +121,14 @@ export interface ClientDocument {
   assumptions: DocumentAssumption[]
   shareToken: string
   shareEnabled: boolean
+  /** Edit-share token (separate from shareToken). Allows code-gated comment/edit access. */
+  editShareToken?: string
+  /** Whether the edit share link is active. */
+  editShareEnabled: boolean
+  /** Six-character access code for the edit-share. Required to pass code gate. */
+  editAccessCode?: string
+  /** Last time the access code was generated/rotated. */
+  editAccessCodeRotatedAt?: unknown
   createdAt?: unknown
   createdBy: string
   createdByType: DocumentActorType
@@ -201,4 +209,27 @@ export interface ClientDocumentTemplate {
   clientPermissions: ClientDocumentPermissions
   requiredBlockTypes: DocumentBlockType[]
   defaultBlocks: DocumentBlock[]
+}
+
+export interface MagicLink {
+  id: string                      // random hex, also the token
+  email: string                   // lowercased
+  redirectUrl?: string
+  context?: {
+    type: 'edit_share'
+    documentId: string
+    editShareToken: string
+  }
+  used: boolean
+  createdAt?: unknown
+  expiresAt?: unknown
+}
+
+export interface DocumentAccessLog {
+  id: string
+  type: 'view' | 'code_entered' | 'code_failed' | 'auth_success' | 'auth_failed'
+  email?: string
+  ip?: string
+  userAgent?: string
+  createdAt?: unknown
 }

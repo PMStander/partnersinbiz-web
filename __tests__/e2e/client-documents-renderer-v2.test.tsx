@@ -114,6 +114,7 @@ test('renders every registered block type without errors', () => {
     assumptions: [],
     shareToken: 't',
     shareEnabled: true,
+    editShareEnabled: false,
     createdBy: 'u',
     createdByType: 'agent',
     updatedBy: 'u',
