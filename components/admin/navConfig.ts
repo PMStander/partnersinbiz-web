@@ -35,6 +35,7 @@ export const OPERATOR_NAV: NavItem[] = [
     icon: 'receipt_long',
     activePatterns: ['/admin/invoicing', '/admin/quotes'],
   },
+  { label: 'Documents', href: '/admin/documents', icon: 'description' },
   { label: 'Agents',   href: '/admin/agents',   icon: 'group_work' },
   { label: 'Settings', href: '/admin/settings', icon: 'settings', activePatterns: ['/admin/platform-users'] },
 ]
@@ -93,7 +94,8 @@ export const OPERATOR_NAV_TOPBAR: NavItem[] = [
 export function workspaceNav(slug: string): NavItem[] {
   return [
     { label: 'Overview', href: `/admin/org/${slug}/dashboard`, icon: 'space_dashboard' },
-    { label: 'Projects', href: `/admin/org/${slug}/projects`,  icon: 'rocket_launch' },
+    { label: 'Projects',  href: `/admin/org/${slug}/projects`,   icon: 'rocket_launch' },
+    { label: 'Documents', href: `/admin/org/${slug}/documents`, icon: 'description' },
     {
       label: 'Marketing',
       href: `/admin/org/${slug}/marketing`,

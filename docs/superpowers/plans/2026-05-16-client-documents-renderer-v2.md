@@ -1,0 +1,1 @@
+/Users/peetstander/Cowork/Cowork/agents/partners/wiki/2026-05-16-client-documents-renderer-v2-plan.md
