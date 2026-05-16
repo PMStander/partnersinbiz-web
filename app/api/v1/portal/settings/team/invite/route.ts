@@ -4,6 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { withPortalAuthAndRole } from '@/lib/auth/portal-middleware'
 import { adminDb, adminAuth } from '@/lib/firebase/admin'
 import { apiError, apiErrorFromException } from '@/lib/api/response'
+import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,7 +73,22 @@ export const POST = withPortalAuthAndRole('admin', async (req: NextRequest, _uid
       )
 
     if (isNew) {
-      await adminAuth.generatePasswordResetLink(email).catch(() => {})
+      try {
+        const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://partnersinbiz.online'
+        const firebaseLink = await adminAuth.generatePasswordResetLink(email, {
+          url: `${BASE_URL}/login`,
+        })
+        const setupLink = `${BASE_URL}/auth/reset?link=${encodeURIComponent(firebaseLink)}`
+        const resend = getResendClient()
+        await resend.emails.send({
+          from: FROM_ADDRESS,
+          to: email,
+          subject: 'You have been invited to a workspace on Partners in Biz',
+          html: `<p>You have been invited to join a workspace on Partners in Biz.</p><p><a href="${setupLink}">Set up your account →</a></p><p>This link expires after use. If you did not expect this email, you can ignore it.</p>`,
+        })
+      } catch {
+        // Non-fatal — user can request a password reset from the login page
+      }
     }
 
     return NextResponse.json({ uid: targetUid, isNew })
