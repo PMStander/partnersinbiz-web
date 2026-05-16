@@ -1,0 +1,208 @@
+import { NextRequest } from 'next/server'
+
+jest.mock('@/lib/firebase/admin', () => ({
+  adminAuth: {
+    verifySessionCookie: jest.fn(),
+  },
+  adminDb: {
+    collection: jest.fn(),
+  },
+}))
+
+import { adminAuth, adminDb } from '@/lib/firebase/admin'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
+
+const AI_API_KEY = 'test-ai-key-abc'
+process.env.AI_API_KEY = AI_API_KEY
+process.env.SESSION_COOKIE_NAME = '__session'
+
+const ORG_ID = 'org-test'
+const UID = 'uid-real'
+
+function makeReq(headers: Record<string, string> = {}, method = 'GET') {
+  return new NextRequest('http://localhost/api/v1/crm/contacts', {
+    method,
+    headers: new Headers(headers),
+  })
+}
+
+function setupCollections({
+  user,
+  member,
+  org,
+}: {
+  user: Record<string, unknown> | null
+  member: Record<string, unknown> | null
+  org: Record<string, unknown> | null
+}) {
+  ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
+    if (name === 'users') {
+      return {
+        doc: jest.fn().mockReturnValue({
+          get: jest.fn().mockResolvedValue({ exists: user !== null, data: () => user ?? undefined }),
+        }),
+      }
+    }
+    if (name === 'orgMembers') {
+      return {
+        doc: jest.fn().mockReturnValue({
+          get: jest.fn().mockResolvedValue({ exists: member !== null, data: () => member ?? undefined }),
+        }),
+      }
+    }
+    if (name === 'organizations') {
+      return {
+        doc: jest.fn().mockReturnValue({
+          get: jest.fn().mockResolvedValue({ exists: org !== null, data: () => org ?? undefined }),
+        }),
+      }
+    }
+    throw new Error(`Unexpected collection: ${name}`)
+  })
+}
+
+describe('withCrmAuth — cookie path', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('200s for a member with sufficient role', async () => {
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: UID })
+    setupCollections({
+      user: { activeOrgId: ORG_ID },
+      member: { orgId: ORG_ID, uid: UID, role: 'member', firstName: 'A', lastName: 'B' },
+      org: { settings: { permissions: { membersCanDeleteContacts: true } } },
+    })
+    const handler = jest.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    const route = withCrmAuth('member', handler)
+    const req = makeReq({ cookie: '__session=valid' })
+    const res = await route(req)
+    expect(res.status).toBe(200)
+    expect(handler).toHaveBeenCalledTimes(1)
+    const ctx = handler.mock.calls[0][1]
+    expect(ctx.orgId).toBe(ORG_ID)
+    expect(ctx.role).toBe('member')
+    expect(ctx.isAgent).toBe(false)
+    expect(ctx.actor.uid).toBe(UID)
+    expect(ctx.actor.kind).toBe('human')
+    expect(ctx.permissions.membersCanDeleteContacts).toBe(true)
+  })
+
+  it('403s when member role is below minRole', async () => {
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: UID })
+    setupCollections({
+      user: { activeOrgId: ORG_ID },
+      member: { orgId: ORG_ID, uid: UID, role: 'viewer', firstName: 'A', lastName: 'B' },
+      org: { settings: { permissions: {} } },
+    })
+    const handler = jest.fn()
+    const route = withCrmAuth('admin', handler)
+    const res = await route(makeReq({ cookie: '__session=valid' }))
+    expect(res.status).toBe(403)
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('falls back to organizations.members[] when orgMembers doc is missing', async () => {
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: UID })
+    setupCollections({
+      user: { activeOrgId: ORG_ID },
+      member: null,
+      org: {
+        settings: { permissions: {} },
+        members: [{ userId: UID, role: 'admin' }],
+      },
+    })
+    const handler = jest.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    const route = withCrmAuth('member', handler)
+    const res = await route(makeReq({ cookie: '__session=valid' }))
+    expect(res.status).toBe(200)
+    const ctx = handler.mock.calls[0][1]
+    expect(ctx.role).toBe('admin')
+    expect(ctx.actor.uid).toBe(UID)
+  })
+
+  it('403s when user has no membership in active org', async () => {
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: UID })
+    setupCollections({
+      user: { activeOrgId: ORG_ID },
+      member: null,
+      org: { settings: { permissions: {} }, members: [] },
+    })
+    const handler = jest.fn()
+    const route = withCrmAuth('viewer', handler)
+    const res = await route(makeReq({ cookie: '__session=valid' }))
+    expect(res.status).toBe(403)
+  })
+
+  it('400s when user has no activeOrgId or orgId', async () => {
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: UID })
+    setupCollections({ user: {}, member: null, org: null })
+    const route = withCrmAuth('viewer', jest.fn())
+    const res = await route(makeReq({ cookie: '__session=valid' }))
+    expect(res.status).toBe(400)
+  })
+
+  it('401s when session cookie verification fails', async () => {
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockRejectedValue(new Error('invalid'))
+    const route = withCrmAuth('viewer', jest.fn())
+    const res = await route(makeReq({ cookie: '__session=bad' }))
+    expect(res.status).toBe(401)
+  })
+})
+
+describe('withCrmAuth — Bearer path', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('200s with system role for valid AI_API_KEY + X-Org-Id', async () => {
+    setupCollections({
+      user: null,
+      member: null,
+      org: { settings: { permissions: { membersCanDeleteContacts: false } } },
+    })
+    const handler = jest.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    const route = withCrmAuth('admin', handler)
+    const res = await route(
+      makeReq({ authorization: `Bearer ${AI_API_KEY}`, 'x-org-id': ORG_ID }),
+    )
+    expect(res.status).toBe(200)
+    const ctx = handler.mock.calls[0][1]
+    expect(ctx.role).toBe('system')
+    expect(ctx.isAgent).toBe(true)
+    expect(ctx.orgId).toBe(ORG_ID)
+    expect(ctx.actor.uid).toBe('agent:pip')
+    expect(ctx.actor.kind).toBe('agent')
+    expect(ctx.permissions.membersCanDeleteContacts).toBe(false)
+  })
+
+  it('bypasses every minRole including owner', async () => {
+    setupCollections({ user: null, member: null, org: { settings: { permissions: {} } } })
+    const handler = jest.fn().mockResolvedValue(new Response('ok', { status: 200 }))
+    const route = withCrmAuth('owner', handler)
+    const res = await route(
+      makeReq({ authorization: `Bearer ${AI_API_KEY}`, 'x-org-id': ORG_ID }),
+    )
+    expect(res.status).toBe(200)
+  })
+
+  it('400s on Bearer call missing X-Org-Id header', async () => {
+    const route = withCrmAuth('viewer', jest.fn())
+    const res = await route(makeReq({ authorization: `Bearer ${AI_API_KEY}` }))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/X-Org-Id/i)
+  })
+
+  it('401s on Bearer call with wrong key', async () => {
+    const route = withCrmAuth('viewer', jest.fn())
+    const res = await route(
+      makeReq({ authorization: 'Bearer wrong-key', 'x-org-id': ORG_ID }),
+    )
+    expect(res.status).toBe(401)
+  })
+})
+
+describe('withCrmAuth — no auth at all', () => {
+  it('401s when neither cookie nor Bearer is present', async () => {
+    const route = withCrmAuth('viewer', jest.fn())
+    const res = await route(makeReq({}))
+    expect(res.status).toBe(401)
+  })
+})

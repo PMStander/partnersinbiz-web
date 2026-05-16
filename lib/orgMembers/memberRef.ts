@@ -40,7 +40,7 @@ export function formSubmissionRef(formId: string, formName: string): MemberRef {
   }
 }
 
-function buildHumanRef(uid: string, data: Record<string, unknown> | undefined): MemberRef {
+export function buildHumanRef(uid: string, data: Record<string, unknown> | undefined): MemberRef {
   if (!data) return FORMER_MEMBER_REF(uid)
   const firstName = (data.firstName as string | undefined) ?? ''
   const lastName = (data.lastName as string | undefined) ?? ''
