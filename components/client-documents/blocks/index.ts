@@ -44,6 +44,8 @@ import { ChartBlock } from './ChartBlock'
 import { ChartEditor } from './editors/ChartEditor'
 import { PricingToggleBlock } from './PricingToggleBlock'
 import { PricingToggleEditor } from './editors/PricingToggleEditor'
+import { FaqBlock } from './FaqBlock'
+import { FaqEditor } from './editors/FaqEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -70,6 +72,7 @@ export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps
   link_card: LinkCardBlock,
   chart: ChartBlock,
   pricing_toggle: PricingToggleBlock,
+  faq: FaqBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
@@ -94,6 +97,7 @@ export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> 
   link_card: LinkCardEditor,
   chart: ChartEditor,
   pricing_toggle: PricingToggleEditor,
+  faq: FaqEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
