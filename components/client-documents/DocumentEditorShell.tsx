@@ -20,7 +20,7 @@ export function DocumentEditorShell({
   onPublish?: () => void
   onVersionSaved?: () => void
 }) {
-  async function handleBlockSave(updated: DocumentBlock) {
+  async function handleBlockChange(updated: DocumentBlock) {
     if (!documentId) return
     const updatedBlocks = version.blocks.map((b) => (b.id === updated.id ? updated : b))
     await fetch(`/api/v1/client-documents/${documentId}/versions`, {
@@ -51,8 +51,7 @@ export function DocumentEditorShell({
               <DocumentBlockEditor
                 key={block.id}
                 block={block}
-                onSave={handleBlockSave}
-                readOnly={!documentId}
+                onChange={handleBlockChange}
               />
             ))}
           </div>
