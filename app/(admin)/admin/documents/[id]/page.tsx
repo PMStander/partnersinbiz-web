@@ -156,6 +156,13 @@ export default function DocumentEditorPage() {
           {readable(document.status)}
         </span>
 
+        <Link
+          href={`/admin/documents/${id}/preview`}
+          className="inline-flex items-center gap-2 rounded-md border border-[var(--color-pib-line)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--color-pib-text)] hover:bg-[var(--color-pib-surface-2)]"
+        >
+          Preview
+        </Link>
+
         {document.status === 'internal_review' && (
           <button
             onClick={handlePublish}
