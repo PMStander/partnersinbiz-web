@@ -24,11 +24,12 @@ type PortalRoleHandler = (
   req: NextRequest,
   uid: string,
   orgId: string,
-  role: OrgRole
+  role: OrgRole,
+  ...args: any[]
 ) => Promise<Response>
 
 export function withPortalAuthAndRole(minRole: OrgRole, handler: PortalRoleHandler) {
-  return withPortalAuth(async (req: NextRequest, uid: string) => {
+  return withPortalAuth(async (req: NextRequest, uid: string, ...args: any[]) => {
     const userDoc = await adminDb.collection('users').doc(uid).get()
     if (!userDoc.exists) return apiError('User not found', 404)
     const userData = userDoc.data()!
@@ -51,6 +52,6 @@ export function withPortalAuthAndRole(minRole: OrgRole, handler: PortalRoleHandl
     if (!role) return apiError('Workspace membership not found', 403)
     if (ROLE_RANK[role] < ROLE_RANK[minRole]) return apiError('Insufficient permissions', 403)
 
-    return handler(req, uid, orgId, role)
+    return handler(req, uid, orgId, role, ...args)
   })
 }

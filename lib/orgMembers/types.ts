@@ -16,8 +16,6 @@ export interface OrgMemberProfile {
   updatedAt: Timestamp
 }
 
-export type { OrgRole }
-
 export const ROLE_RANK: Record<OrgRole, number> = {
   owner: 4,
   admin: 3,

@@ -25,10 +25,19 @@ function makeReq() {
 beforeEach(() => {
   jest.clearAllMocks()
   mockVerifySessionCookie.mockResolvedValue({ uid: 'uid-1' })
+  mockDoc.mockReturnValue({ get: mockGet })
   mockCollection.mockReturnValue({ doc: mockDoc })
 })
 
 describe('withPortalAuthAndRole', () => {
+  it('returns 404 when user doc does not exist', async () => {
+    mockGet.mockResolvedValueOnce({ exists: false })
+
+    const handler = withPortalAuthAndRole('member', async () => new Response('ok', { status: 200 }))
+    const res = await handler(makeReq())
+    expect(res.status).toBe(404)
+  })
+
   it('returns 401 when no session cookie', async () => {
     const handler = withPortalAuthAndRole('admin', async () => new Response('ok', { status: 200 }))
     const req = new NextRequest('http://localhost/test')
