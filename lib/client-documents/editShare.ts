@@ -1,4 +1,6 @@
 import { randomBytes } from 'crypto'
+import { FieldValue } from 'firebase-admin/firestore'
+import { adminDb } from '@/lib/firebase/admin'
 
 const ACCESS_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no I, O, 0, 1
 
@@ -19,4 +21,22 @@ export function generateAccessCode(): string {
 export function verifyAccessCode(stored: string | undefined | null, provided: string | undefined | null): boolean {
   if (!stored || !provided) return false
   return stored.toUpperCase() === provided.toUpperCase()
+}
+
+export interface AccessLogEntry {
+  type: 'view' | 'code_entered' | 'code_failed' | 'auth_success' | 'auth_failed'
+  email?: string
+  ip?: string
+  userAgent?: string
+}
+
+export async function logDocumentAccess(documentId: string, entry: AccessLogEntry): Promise<void> {
+  await adminDb
+    .collection('client_documents')
+    .doc(documentId)
+    .collection('access_log')
+    .add({
+      ...entry,
+      createdAt: FieldValue.serverTimestamp(),
+    })
 }
