@@ -256,3 +256,30 @@ describe('validateAd', () => {
     expect(body.get('execution_options')).toBe('["VALIDATE"]')
   })
 })
+
+describe('createAd — preResolvedImageHashes', () => {
+  it('uses preResolvedImageHashes when provided, skipping inline upload', async () => {
+    ;(global.fetch as jest.Mock)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'creative_99' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'ad_99', success: true }) })
+
+    const r = await createAd({
+      adAccountId: 'act_1',
+      accessToken: 't',
+      ad: fakeAd({ creativeIds: ['crv_x'], inlineImageUrl: undefined }),
+      metaAdSetId: 'meta_as_1',
+      pageId: 'page_1',
+      preResolvedImageHashes: ['resolved_hash_abc'],
+    })
+
+    expect(r.metaAdId).toBe('ad_99')
+    expect(r.metaCreativeId).toBe('creative_99')
+    // uploadImageFromUrl must NOT have been called — pre-resolved hashes bypass it
+    expect(uploadImageFromUrl).not.toHaveBeenCalled()
+
+    // Verify the creative spec used the resolved hash
+    const creativeBody = (global.fetch as jest.Mock).mock.calls[0][1].body as URLSearchParams
+    const spec = JSON.parse(creativeBody.get('object_story_spec')!)
+    expect(spec.link_data.image_hash).toBe('resolved_hash_abc')
+  })
+})

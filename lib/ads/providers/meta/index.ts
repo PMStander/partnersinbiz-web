@@ -5,6 +5,7 @@ import { listAdAccounts as listMetaAdAccounts } from './client'
 import * as campaigns from './campaigns'
 import * as adsets from './adsets'
 import * as ads from './ads'
+import { ensureSynced } from './creative-sync'
 import type { AdCampaign, AdSet, Ad } from '@/lib/ads/types'
 
 export const metaProvider: AdProvider = {
@@ -75,23 +76,55 @@ export const metaProvider: AdProvider = {
     validateOnly?: boolean
   }) {
     const existingMetaId = (args.ad.providerData?.meta as { id?: string } | undefined)?.id
-    if (!existingMetaId) {
-      const r = await ads.createAd({
-        adAccountId: args.adAccountId,
+    if (existingMetaId) {
+      await ads.updateAd({
+        metaAdId: existingMetaId,
         accessToken: args.accessToken,
-        ad: args.ad,
-        metaAdSetId: args.metaAdSetId,
-        pageId: args.pageId,
+        patch: args.ad,
+        validateOnly: args.validateOnly,
       })
-      return { metaAdId: r.metaAdId, metaCreativeId: r.metaCreativeId, created: true }
+      return { metaAdId: existingMetaId, created: false }
     }
-    await ads.updateAd({
-      metaAdId: existingMetaId,
+
+    // Phase 3: if ad references canonical creatives, resolve them first via ensureSynced
+    let preResolvedImageHashes: string[] | undefined
+    if (args.ad.creativeIds.length > 0) {
+      const { getCreative } = await import('@/lib/ads/creatives/store')
+      const hashes: string[] = []
+      for (const creativeId of args.ad.creativeIds) {
+        const creative = await getCreative(creativeId)
+        if (!creative) throw new Error(`Creative ${creativeId} not found`)
+        if (creative.orgId !== args.ad.orgId) throw new Error(`Creative ${creativeId} not in org ${args.ad.orgId}`)
+        const synced = await ensureSynced({
+          orgId: args.ad.orgId,
+          adAccountId: args.adAccountId,
+          accessToken: args.accessToken,
+          creative,
+        })
+        hashes.push(synced.metaCreativeId)
+      }
+      preResolvedImageHashes = hashes
+    }
+
+    // Phase 2 fallback: if no creativeIds, ads.createAd handles inlineImageUrl
+    const r = await ads.createAd({
+      adAccountId: args.adAccountId,
       accessToken: args.accessToken,
-      patch: args.ad,
-      validateOnly: args.validateOnly,
+      ad: args.ad,
+      metaAdSetId: args.metaAdSetId,
+      pageId: args.pageId,
+      preResolvedImageHashes,
     })
-    return { metaAdId: existingMetaId, created: false }
+    return { metaAdId: r.metaAdId, metaCreativeId: r.metaCreativeId, created: true }
+  },
+
+  async syncCreative(args: {
+    orgId: string
+    adAccountId: string
+    accessToken: string
+    creative: import('@/lib/ads/types').AdCreative
+  }) {
+    return ensureSynced(args)
   },
 
   async validateBeforeLaunch(args: {

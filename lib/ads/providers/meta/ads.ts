@@ -39,12 +39,16 @@ export async function createAd(args: {
   ad: Ad
   metaAdSetId: string
   pageId: string
+  preResolvedImageHashes?: string[]  // ← Phase 3 — skip inline upload when provided
 }): Promise<{ metaAdId: string; metaCreativeId: string }> {
   const accountId = stripActPrefix(args.adAccountId)
 
-  // Step 1: upload image(s)
+  // Resolve image hash(es). Phase 3: pre-resolved (from canonical creatives library).
+  // Phase 2 fallback: upload inline URLs.
   let imageHashOrHashes: string | string[]
-  if (args.ad.format === 'CAROUSEL' && args.ad.inlineCarouselUrls?.length) {
+  if (args.preResolvedImageHashes && args.preResolvedImageHashes.length > 0) {
+    imageHashOrHashes = args.ad.format === 'CAROUSEL' ? args.preResolvedImageHashes : args.preResolvedImageHashes[0]
+  } else if (args.ad.format === 'CAROUSEL' && args.ad.inlineCarouselUrls?.length) {
     imageHashOrHashes = await Promise.all(
       args.ad.inlineCarouselUrls.map((sourceUrl) =>
         uploadImageFromUrl({ adAccountId: accountId, accessToken: args.accessToken, sourceUrl }),
@@ -57,8 +61,7 @@ export async function createAd(args: {
       sourceUrl: args.ad.inlineImageUrl,
     })
   } else {
-    // No image provided — pass an empty string (caller's responsibility to supply one)
-    imageHashOrHashes = ''
+    throw new Error('Ad has no creativeIds and no inlineImageUrl — cannot create')
   }
 
   // Step 2: build creative spec + POST /adcreatives
