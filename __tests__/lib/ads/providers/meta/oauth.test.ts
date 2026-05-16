@@ -1,5 +1,5 @@
 // __tests__/lib/ads/providers/meta/oauth.test.ts
-import { buildAuthorizeUrl } from '@/lib/ads/providers/meta/oauth'
+import { buildAuthorizeUrl, exchangeCode, exchangeForLongLived, refresh } from '@/lib/ads/providers/meta/oauth'
 
 const ORIGINAL_ENV = process.env
 
@@ -36,5 +36,95 @@ describe('buildAuthorizeUrl', () => {
     expect(() =>
       buildAuthorizeUrl({ redirectUri: 'x', state: 'y', orgId: 'z' }),
     ).toThrow(/FACEBOOK_CLIENT_ID/)
+  })
+})
+
+describe('exchangeCode', () => {
+  beforeEach(() => {
+    process.env = {
+      ...ORIGINAL_ENV,
+      FACEBOOK_CLIENT_ID: '133722058771742',
+      FACEBOOK_CLIENT_SECRET: 'secret',
+    }
+    global.fetch = jest.fn() as unknown as typeof fetch
+  })
+
+  it('hits v25.0/oauth/access_token and returns { accessToken, expiresInSeconds, userId? }', async () => {
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ access_token: 'EAAO_short', expires_in: 3600 }),
+    })
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'meta_user_123' }),
+    })
+
+    const r = await exchangeCode({ code: 'AUTH_CODE', redirectUri: 'https://cb/' })
+    expect(r.accessToken).toBe('EAAO_short')
+    expect(r.expiresInSeconds).toBe(3600)
+    expect(r.userId).toBe('meta_user_123')
+
+    const firstCall = (global.fetch as jest.Mock).mock.calls[0][0]
+    expect(firstCall).toContain('https://graph.facebook.com/v25.0/oauth/access_token')
+    expect(firstCall).toContain('code=AUTH_CODE')
+    expect(firstCall).toContain('client_id=133722058771742')
+    expect(firstCall).toContain('client_secret=secret')
+  })
+
+  it('throws with Meta error message on non-ok response', async () => {
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'Invalid verification code format.' } }),
+    })
+    await expect(
+      exchangeCode({ code: 'BAD', redirectUri: 'https://cb/' }),
+    ).rejects.toThrow(/Invalid verification code format/)
+  })
+})
+
+describe('exchangeForLongLived', () => {
+  beforeEach(() => {
+    process.env = {
+      ...ORIGINAL_ENV,
+      FACEBOOK_CLIENT_ID: '133722058771742',
+      FACEBOOK_CLIENT_SECRET: 'secret',
+    }
+    global.fetch = jest.fn() as unknown as typeof fetch
+  })
+
+  it('swaps short-lived for long-lived (~60d) token via grant_type=fb_exchange_token', async () => {
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ access_token: 'EAAO_long', expires_in: 5184000 }),
+    })
+    const r = await exchangeForLongLived({ accessToken: 'EAAO_short' })
+    expect(r.accessToken).toBe('EAAO_long')
+    expect(r.expiresInSeconds).toBe(5184000)
+    const url = (global.fetch as jest.Mock).mock.calls[0][0]
+    expect(url).toContain('grant_type=fb_exchange_token')
+    expect(url).toContain('fb_exchange_token=EAAO_short')
+  })
+})
+
+describe('refresh', () => {
+  beforeEach(() => {
+    process.env = {
+      ...ORIGINAL_ENV,
+      FACEBOOK_CLIENT_ID: '133722058771742',
+      FACEBOOK_CLIENT_SECRET: 'secret',
+    }
+    global.fetch = jest.fn() as unknown as typeof fetch
+  })
+
+  it('takes the current long-lived token as "refreshToken" arg, returns a fresh long-lived', async () => {
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ access_token: 'EAAO_long2', expires_in: 5184000 }),
+    })
+    const r = await refresh({ refreshToken: 'EAAO_long1' })
+    expect(r.accessToken).toBe('EAAO_long2')
+    expect(r.expiresInSeconds).toBe(5184000)
+    expect(r.refreshToken).toBeUndefined()
   })
 })
