@@ -20,6 +20,8 @@ import { RichTextBlock } from './RichTextBlock'
 import { RichTextEditor } from './editors/RichTextEditor'
 import { TimelineBlock } from './TimelineBlock'
 import { TimelineEditor } from './editors/TimelineEditor'
+import { InvestmentBlock } from './InvestmentBlock'
+import { InvestmentEditor } from './editors/InvestmentEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -34,6 +36,7 @@ export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps
   approval: ApprovalBlock,
   rich_text: RichTextBlock,
   timeline: TimelineBlock,
+  investment: InvestmentBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
@@ -46,6 +49,7 @@ export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> 
   approval: ApprovalEditor,
   rich_text: RichTextEditor,
   timeline: TimelineEditor,
+  investment: InvestmentEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
