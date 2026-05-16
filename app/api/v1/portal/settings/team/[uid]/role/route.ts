@@ -22,18 +22,31 @@ export const PATCH = withPortalAuthAndRole(
         return apiError('Invalid role. Allowed: admin, member, viewer', 400)
       }
 
-      await adminDb
-        .collection('orgMembers')
-        .doc(`${orgId}_${targetUid}`)
-        .set({ role: newRole, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+      // Cannot demote the current workspace owner
+      const targetMemberDoc = await adminDb.collection('orgMembers').doc(`${orgId}_${targetUid}`).get()
+      if (targetMemberDoc.exists && targetMemberDoc.data()!.role === 'owner') {
+        return apiError('Cannot change the role of the workspace owner', 403)
+      }
 
+      // Atomic batch: update orgMembers + org.members array together
       const orgRef = adminDb.collection('organizations').doc(orgId)
       const orgDoc = await orgRef.get()
+
+      const batch = adminDb.batch()
+
+      batch.set(
+        adminDb.collection('orgMembers').doc(`${orgId}_${targetUid}`),
+        { role: newRole, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      )
+
       if (orgDoc.exists) {
         const members: Array<{ userId: string; role: string }> = orgDoc.data()!.members ?? []
         const updated = members.map((m) => (m.userId === targetUid ? { ...m, role: newRole } : m))
-        await orgRef.update({ members: updated, updatedAt: FieldValue.serverTimestamp() })
+        batch.update(orgRef, { members: updated, updatedAt: FieldValue.serverTimestamp() })
       }
+
+      await batch.commit()
 
       return NextResponse.json({ uid: targetUid, role: newRole })
     } catch (err) {

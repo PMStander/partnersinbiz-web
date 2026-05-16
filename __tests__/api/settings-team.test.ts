@@ -99,6 +99,12 @@ describe('DELETE /api/v1/portal/settings/team/[uid]', () => {
 
 describe('PATCH /api/v1/portal/settings/team/[uid]/role', () => {
   it('updates the member role in orgMembers and org.members array', async () => {
+    // First get: targetMemberDoc (non-owner, so check passes)
+    mockGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ role: 'member' }),
+    })
+    // Second get: orgDoc for updating members array
     mockGet.mockResolvedValueOnce({
       exists: true,
       data: () => ({ members: [{ userId: 'uid-target', role: 'member' }] }),

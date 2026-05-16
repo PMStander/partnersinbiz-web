@@ -21,12 +21,22 @@ export const DELETE = withPortalAuthAndRole(
       const orgRef = adminDb.collection('organizations').doc(orgId)
       const orgDoc = await orgRef.get()
 
+      // Prevent removing the org owner
+      const targetMember = (orgDoc.exists ? orgDoc.data()!.members ?? [] : []).find((m: any) => m.userId === targetUid)
+      if (targetMember?.role === 'owner') {
+        return apiError('Cannot remove the workspace owner', 403)
+      }
+
       const batch = adminDb.batch()
 
-      batch.update(adminDb.collection('users').doc(targetUid), {
-        orgIds: FieldValue.arrayRemove(orgId),
-        updatedAt: FieldValue.serverTimestamp(),
-      })
+      batch.set(
+        adminDb.collection('users').doc(targetUid),
+        {
+          orgIds: FieldValue.arrayRemove(orgId),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
 
       if (orgDoc.exists) {
         const members: Array<{ userId: string; role: string }> = orgDoc.data()!.members ?? []

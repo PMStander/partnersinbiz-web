@@ -5,17 +5,31 @@ import { withPortalAuthAndRole } from '@/lib/auth/portal-middleware'
 import { adminDb, adminAuth } from '@/lib/firebase/admin'
 import { apiError, apiErrorFromException } from '@/lib/api/response'
 import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
+import { ROLE_RANK } from '@/lib/orgMembers/types'
+import type { OrgRole } from '@/lib/organizations/types'
 
 export const dynamic = 'force-dynamic'
 
-export const POST = withPortalAuthAndRole('admin', async (req: NextRequest, _uid: string, orgId: string) => {
+const INVITABLE_ROLES = ['admin', 'member', 'viewer'] as const
+type InvitableRole = typeof INVITABLE_ROLES[number]
+
+export const POST = withPortalAuthAndRole('admin', async (req: NextRequest, _uid: string, orgId: string, callerRole: OrgRole) => {
   try {
     const body = await req.json().catch(() => ({}))
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-    const role = body.role === 'admin' ? 'admin' : 'member'
 
     if (!email || !email.includes('@')) {
       return apiError('Valid email is required', 400)
+    }
+
+    if (body.role && !INVITABLE_ROLES.includes(body.role)) {
+      return apiError('Invalid role. Allowed: admin, member, viewer', 400)
+    }
+    const role: InvitableRole = INVITABLE_ROLES.includes(body.role) ? body.role : 'member'
+
+    // Callers cannot grant roles at or above their own level (owner-only privilege)
+    if (callerRole !== 'owner' && ROLE_RANK[role] >= ROLE_RANK[callerRole]) {
+      return apiError('You can only invite members at a lower role than your own', 403)
     }
 
     let targetUid: string
@@ -46,6 +60,14 @@ export const POST = withPortalAuthAndRole('admin', async (req: NextRequest, _uid
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       })
+    }
+
+    // Check for duplicate membership
+    const orgDoc = await adminDb.collection('organizations').doc(orgId).get()
+    const existingMembers: Array<{ userId: string }> = orgDoc.exists ? (orgDoc.data()!.members ?? []) : []
+    const alreadyMember = existingMembers.some((m) => m.userId === targetUid)
+    if (alreadyMember) {
+      return apiError('This user is already a member of this workspace', 409)
     }
 
     await adminDb.collection('organizations').doc(orgId).update({
