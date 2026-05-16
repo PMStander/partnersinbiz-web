@@ -14,6 +14,8 @@ import { DeliverablesBlock } from './DeliverablesBlock'
 import { DeliverablesEditor } from './editors/DeliverablesEditor'
 import { TermsBlock } from './TermsBlock'
 import { TermsEditor } from './editors/TermsEditor'
+import { ApprovalBlock } from './ApprovalBlock'
+import { ApprovalEditor } from './editors/ApprovalEditor'
 
 type RendererProps = { block: DocumentBlock; index: number }
 type EditorProps = { block: DocumentBlock; onChange: (b: DocumentBlock) => void }
@@ -25,6 +27,7 @@ export const BLOCK_RENDERERS: Partial<Record<DocumentBlockType, FC<RendererProps
   scope: ScopeBlock,
   deliverables: DeliverablesBlock,
   terms: TermsBlock,
+  approval: ApprovalBlock,
 }
 
 export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> = {
@@ -34,6 +37,7 @@ export const BLOCK_EDITORS: Partial<Record<DocumentBlockType, FC<EditorProps>>> 
   scope: ScopeEditor,
   deliverables: DeliverablesEditor,
   terms: TermsEditor,
+  approval: ApprovalEditor,
 }
 
 export function getRenderer(type: DocumentBlockType): FC<RendererProps> {
