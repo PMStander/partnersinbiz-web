@@ -1,48 +1,36 @@
 /**
- * GET  /api/v1/crm/segments?orgId=...  — list segments for an org
- * POST /api/v1/crm/segments            — create a new segment
+ * GET  /api/v1/crm/segments  — list segments for the authenticated org
+ * POST /api/v1/crm/segments  — create a new segment (admin+)
  *
- * Auth: admin or ai
+ * Auth: GET → viewer+, POST → admin+
  */
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { resolveOrgScope } from '@/lib/api/orgScope'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import {
-  sanitizeSegmentFilters as sanitizeFilters,
-} from '@/lib/crm/segments'
-import type { Segment, SegmentInput } from '@/lib/crm/segments'
+import { sanitizeSegmentFilters as sanitizeFilters } from '@/lib/crm/segments'
+import type { SegmentInput } from '@/lib/crm/segments'
 
 const ARRAY_CONTAINS_ANY_LIMIT = 10
 
-export const GET = withAuth('client', async (req, user) => {
-  const { searchParams } = new URL(req.url)
-  const scope = resolveOrgScope(user, searchParams.get('orgId'))
-  if (!scope.ok) return apiError(scope.error, scope.status)
-  const orgId = scope.orgId
-
+export const GET = withCrmAuth('viewer', async (_req, ctx) => {
   const snapshot = await adminDb
     .collection('segments')
-    .where('orgId', '==', orgId)
+    .where('orgId', '==', ctx.orgId)
     .orderBy('createdAt', 'desc')
     .get()
 
-  const segments: Segment[] = snapshot.docs
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // Filter deleted in-memory (avoids composite index requirement)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const segments = snapshot.docs
     .map((doc: any) => ({ id: doc.id, ...doc.data() }))
-    .filter((s: Segment) => s.deleted !== true)
+    .filter((s: any) => s.deleted !== true)
 
-  return apiSuccess(segments, 200, { total: segments.length, page: 1, limit: segments.length })
+  return apiSuccess({ segments })
 })
 
-export const POST = withAuth('client', async (req, user) => {
+export const POST = withCrmAuth('admin', async (req, ctx) => {
   const body = (await req.json()) as Partial<SegmentInput>
-
-  const requestedOrgId = typeof body.orgId === 'string' ? body.orgId.trim() : null
-  const scope = resolveOrgScope(user, requestedOrgId)
-  if (!scope.ok) return apiError(scope.error, scope.status)
-  const orgId = scope.orgId
 
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   if (!name) return apiError('Name is required', 400)
@@ -57,15 +45,27 @@ export const POST = withAuth('client', async (req, user) => {
     )
   }
 
-  const docRef = await adminDb.collection('segments').add({
-    orgId,
+  // PR 3 pattern 1: use ctx.actor directly (no snapshotForWrite)
+  const actorRef = ctx.actor
+
+  const segmentData = {
+    orgId: ctx.orgId,
     name,
     description,
     filters,
     deleted: false,
+    createdBy: ctx.isAgent ? undefined : ctx.actor.uid,
+    createdByRef: actorRef,
+    updatedBy: ctx.isAgent ? undefined : ctx.actor.uid,
+    updatedByRef: actorRef,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  })
+  }
 
-  return apiSuccess({ id: docRef.id }, 201)
+  // Firestore rejects undefined values — strip them before write
+  const sanitized = Object.fromEntries(Object.entries(segmentData).filter(([, v]) => v !== undefined))
+  const docRef = adminDb.collection('segments').doc()
+  await docRef.set(sanitized)
+
+  return apiSuccess({ id: docRef.id, ...sanitized }, 201)
 })
