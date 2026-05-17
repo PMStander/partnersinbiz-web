@@ -67,6 +67,69 @@ export function capiErrorEmail(eventName: string, error: string, url: string): s
 </body></html>`
 }
 
+export function campaignAwaitingReviewEmail(name: string, submittedBy: string, url: string): string {
+  return `<!DOCTYPE html>
+<html><body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,Inter,Segoe UI,sans-serif;background:#0A0A0B;color:#F7F4EE">
+<div style="max-width:560px;margin:0 auto;padding:48px 24px">
+  <div style="text-align:center;margin-bottom:32px">
+    <span style="font-size:24px;font-weight:600;letter-spacing:-0.02em">Partners in Biz</span>
+  </div>
+  <div style="background:#141416;border:1px solid #222;border-radius:12px;padding:40px 32px">
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:600;letter-spacing:-0.02em">Campaign awaiting your review</h1>
+    <p style="margin:0 0 24px;color:#aaa;font-size:14px;line-height:1.6">
+      <strong style="color:#F7F4EE">${escape(submittedBy)}</strong> submitted the campaign <strong style="color:#F7F4EE">${escape(name)}</strong> for your approval. It won&rsquo;t launch until you give the green light.
+    </p>
+    <a href="${url}" style="display:inline-block;background:#F5A623;color:#0A0A0B;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;letter-spacing:0.02em">Review campaign &rarr;</a>
+    <p style="margin:32px 0 0;color:#666;font-size:12px;line-height:1.5">You can approve or request changes from the campaign detail page.</p>
+  </div>
+  <p style="margin:24px 0 0;text-align:center;color:#444;font-size:12px">Partners in Biz · partnersinbiz.online</p>
+</div>
+</body></html>`
+}
+
+export function campaignApprovedEmail(name: string, approvedBy: string, url: string): string {
+  return `<!DOCTYPE html>
+<html><body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,Inter,Segoe UI,sans-serif;background:#0A0A0B;color:#F7F4EE">
+<div style="max-width:560px;margin:0 auto;padding:48px 24px">
+  <div style="text-align:center;margin-bottom:32px">
+    <span style="font-size:24px;font-weight:600;letter-spacing:-0.02em">Partners in Biz</span>
+  </div>
+  <div style="background:#141416;border:1px solid #222;border-radius:12px;padding:40px 32px">
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:600;letter-spacing:-0.02em">Campaign approved</h1>
+    <p style="margin:0 0 24px;color:#aaa;font-size:14px;line-height:1.6">
+      <strong style="color:#F7F4EE">${escape(approvedBy)}</strong> approved the campaign <strong style="color:#F7F4EE">${escape(name)}</strong>. You can now launch it to Meta.
+    </p>
+    <a href="${url}" style="display:inline-block;background:#F5A623;color:#0A0A0B;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;letter-spacing:0.02em">Open campaign &rarr;</a>
+    <p style="margin:32px 0 0;color:#666;font-size:12px;line-height:1.5">Head to the campaign dashboard to launch or schedule the campaign.</p>
+  </div>
+  <p style="margin:24px 0 0;text-align:center;color:#444;font-size:12px">Partners in Biz · partnersinbiz.online</p>
+</div>
+</body></html>`
+}
+
+export function campaignRejectedEmail(name: string, rejectedBy: string, reason: string, url: string): string {
+  return `<!DOCTYPE html>
+<html><body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,Inter,Segoe UI,sans-serif;background:#0A0A0B;color:#F7F4EE">
+<div style="max-width:560px;margin:0 auto;padding:48px 24px">
+  <div style="text-align:center;margin-bottom:32px">
+    <span style="font-size:24px;font-weight:600;letter-spacing:-0.02em">Partners in Biz</span>
+  </div>
+  <div style="background:#141416;border:1px solid #222;border-radius:12px;padding:40px 32px">
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:600;letter-spacing:-0.02em">Campaign rejected</h1>
+    <p style="margin:0 0 16px;color:#aaa;font-size:14px;line-height:1.6">
+      <strong style="color:#F7F4EE">${escape(rejectedBy)}</strong> requested changes on the campaign <strong style="color:#F7F4EE">${escape(name)}</strong>.
+    </p>
+    <div style="background:rgba(245,166,35,0.1);border-left:3px solid #F5A623;padding:12px 16px;border-radius:4px;margin-bottom:24px">
+      <p style="margin:0;color:#aaa;font-size:13px;line-height:1.6">${escape(reason)}</p>
+    </div>
+    <a href="${url}" style="display:inline-block;background:#F5A623;color:#0A0A0B;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;letter-spacing:0.02em">Iterate &amp; re-submit &rarr;</a>
+    <p style="margin:32px 0 0;color:#666;font-size:12px;line-height:1.5">Address the feedback above and re-submit the campaign for review.</p>
+  </div>
+  <p style="margin:24px 0 0;text-align:center;color:#444;font-size:12px">Partners in Biz · partnersinbiz.online</p>
+</div>
+</body></html>`
+}
+
 /**
  * HTML-escape a string to prevent XSS.
  * Used for user-supplied content in email templates.

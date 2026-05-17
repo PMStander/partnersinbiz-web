@@ -6,6 +6,9 @@ import {
   campaignLaunchedEmail,
   campaignPausedEmail,
   capiErrorEmail,
+  campaignAwaitingReviewEmail,
+  campaignApprovedEmail,
+  campaignRejectedEmail,
 } from '@/lib/email/templates/ad-events'
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://partnersinbiz.online'
@@ -92,5 +95,92 @@ export async function notifyCapiError(args: {
     )
   } catch (err) {
     console.error('[Notify Ads] CAPI error email failed:', err)
+  }
+}
+
+export async function notifyAwaitingReview(args: {
+  orgId: string
+  orgSlug: string
+  campaignId: string
+  campaignName: string
+  submittedByName: string
+}): Promise<void> {
+  try {
+    const orgDoc = await adminDb.collection('organizations').doc(args.orgId).get()
+    if (!orgDoc.exists) return
+    const notifEmail = orgDoc.data()?.settings?.notificationEmail
+    if (!notifEmail) return
+    const html = campaignAwaitingReviewEmail(
+      args.campaignName,
+      args.submittedByName,
+      `${BASE_URL}/portal/ads/campaigns/${args.campaignId}`,
+    )
+    await sendEmail({
+      to: notifEmail,
+      subject: `[PIB] Review needed: ${args.campaignName}`,
+      html,
+    })
+  } catch (err) {
+    console.error('[Notify Ads] Awaiting-review email failed:', err)
+  }
+}
+
+export async function notifyCampaignApproved(args: {
+  orgId: string
+  orgSlug: string
+  campaignId: string
+  campaignName: string
+  approvedByName: string
+}): Promise<void> {
+  try {
+    const managerEmails = await getOrgManagerEmails(args.orgId)
+    if (managerEmails.length === 0) return
+    const html = campaignApprovedEmail(
+      args.campaignName,
+      args.approvedByName,
+      `${BASE_URL}/admin/org/${args.orgSlug}/ads/campaigns/${args.campaignId}`,
+    )
+    await Promise.all(
+      managerEmails.map((email) =>
+        sendEmail({
+          to: email,
+          subject: `[PIB] Approved: ${args.campaignName}`,
+          html,
+        }),
+      ),
+    )
+  } catch (err) {
+    console.error('[Notify Ads] Approved email failed:', err)
+  }
+}
+
+export async function notifyCampaignRejected(args: {
+  orgId: string
+  orgSlug: string
+  campaignId: string
+  campaignName: string
+  rejectedByName: string
+  reason: string
+}): Promise<void> {
+  try {
+    const managerEmails = await getOrgManagerEmails(args.orgId)
+    if (managerEmails.length === 0) return
+    const html = campaignRejectedEmail(
+      args.campaignName,
+      args.rejectedByName,
+      args.reason,
+      `${BASE_URL}/admin/org/${args.orgSlug}/ads/campaigns/${args.campaignId}`,
+    )
+    await Promise.all(
+      managerEmails.map((email) =>
+        sendEmail({
+          to: email,
+          subject: `[PIB] Rejected: ${args.campaignName}`,
+          html,
+        }),
+      ),
+    )
+  } catch (err) {
+    console.error('[Notify Ads] Rejected email failed:', err)
   }
 }
