@@ -10,7 +10,7 @@ import type {
   AdCallToAction,
 } from '@/lib/ads/types'
 import { BudgetEditor, type BudgetValue } from './BudgetEditor'
-import { TargetingEditorBasic } from './TargetingEditorBasic'
+import { TargetingEditor } from './TargetingEditor'
 import { DiffWarningDialog, type DiffWarning } from './DiffWarningDialog'
 import { CreativePicker } from './CreativePicker'
 
@@ -63,7 +63,11 @@ const DEFAULT_STATE: WizardState = {
   adSetName: '',
   optimizationGoal: 'LINK_CLICKS',
   billingEvent: 'IMPRESSIONS',
-  targeting: { geo: { countries: ['US'] }, demographics: { ageMin: 18, ageMax: 65 } },
+  targeting: {
+    geo: { countries: ['US'] },
+    demographics: { ageMin: 18, ageMax: 65 },
+    customAudiences: { include: [], exclude: [] },
+  },
   placements: { feeds: true, stories: true, reels: false, marketplace: false },
   adSetBudget: { shape: 'daily', amount: 5000 },
 
@@ -354,7 +358,7 @@ export function CampaignBuilder({
             </div>
           </fieldset>
 
-          <TargetingEditorBasic value={state.targeting} onChange={(t) => patch({ targeting: t })} />
+          <TargetingEditor orgId={orgId} value={state.targeting} onChange={(t) => patch({ targeting: t })} />
 
           {!state.campaignBudget.cboEnabled && (
             <BudgetEditor

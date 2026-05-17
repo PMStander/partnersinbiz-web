@@ -17,6 +17,7 @@ export default async function AdsAdminLayout({
         <Link href={`/admin/org/${slug}/ads/connections`}>Connections</Link>
         <Link href={`/admin/org/${slug}/ads/creatives`}>Creatives</Link>
         <Link href={`/admin/org/${slug}/ads/audiences`}>Audiences</Link>
+        <Link href={`/admin/org/${slug}/ads/saved-audiences`}>Saved</Link>
         <Link href={`/admin/org/${slug}/ads/campaigns`}>Campaigns</Link>
       </nav>
       {children}

@@ -6,7 +6,10 @@ import '@testing-library/jest-dom'
 import { CampaignBuilder } from '@/components/ads/CampaignBuilder'
 
 beforeEach(() => {
-  global.fetch = jest.fn() as unknown as typeof fetch
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ success: true, data: [] }),
+  }) as unknown as typeof fetch
 })
 
 describe('CampaignBuilder', () => {
@@ -34,25 +37,27 @@ describe('CampaignBuilder', () => {
   })
 
   it('submit creates campaign, adset, ad in sequence with X-Org-Id header', async () => {
+    // TargetingEditor v2 fetches saved-audiences + custom-audiences on mount (step 2).
+    // Seed those 2 empty-list responses first, then the 3 real API calls.
     ;(global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, data: { id: 'cmp_1', name: 'X' } }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, data: { id: 'ads_1' } }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, data: { id: 'ad_1' } }),
-      })
+      // step-2 mount: saved-audiences
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: [] }) })
+      // step-2 mount: custom-audiences?status=READY
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: [] }) })
+      // submit: campaign
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: { id: 'cmp_1', name: 'X' } }) })
+      // submit: adset
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: { id: 'ads_1' } }) })
+      // submit: ad
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: { id: 'ad_1' } }) })
 
     const onComplete = jest.fn()
     render(<CampaignBuilder orgId="org_1" orgSlug="acme" onComplete={onComplete} />)
 
     fireEvent.change(screen.getByLabelText(/Campaign name/i), { target: { value: 'Cmp' } })
-    fireEvent.click(screen.getByRole('button', { name: /Next/i })) // → step 2
+    fireEvent.click(screen.getByRole('button', { name: /Next/i })) // → step 2 (TargetingEditor mounts here)
+
+    await act(async () => {}) // flush TargetingEditor useEffect fetch calls
 
     fireEvent.change(screen.getByLabelText(/Ad set name/i), { target: { value: 'Set' } })
     fireEvent.click(screen.getByRole('button', { name: /Next/i })) // → step 3
@@ -75,24 +80,38 @@ describe('CampaignBuilder', () => {
       }),
     )
 
-    // Verify each call had X-Org-Id header
+    // Verify the 3 submission calls (indices 2-4; 0-1 are TargetingEditor mount calls)
     const calls = (global.fetch as jest.Mock).mock.calls
-    expect(calls).toHaveLength(3)
-    expect(calls[0][0]).toBe('/api/v1/ads/campaigns')
-    expect((calls[0][1] as RequestInit).headers).toMatchObject({ 'X-Org-Id': 'org_1' })
-    expect(calls[1][0]).toBe('/api/v1/ads/ad-sets')
-    expect(calls[2][0]).toBe('/api/v1/ads/ads')
+    expect(calls.length).toBeGreaterThanOrEqual(5)
+    const submitCalls = calls.filter(
+      (c) =>
+        typeof c[0] === 'string' &&
+        (c[0].includes('/api/v1/ads/campaigns') ||
+          c[0].includes('/api/v1/ads/ad-sets') ||
+          c[0].includes('/api/v1/ads/ads')),
+    )
+    expect(submitCalls).toHaveLength(3)
+    expect(submitCalls[0][0]).toBe('/api/v1/ads/campaigns')
+    expect((submitCalls[0][1] as RequestInit).headers).toMatchObject({ 'X-Org-Id': 'org_1' })
+    expect(submitCalls[1][0]).toBe('/api/v1/ads/ad-sets')
+    expect(submitCalls[2][0]).toBe('/api/v1/ads/ads')
   })
 
   it('shows the error dialog when an API call fails', async () => {
-    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({ success: false, error: 'Quota exceeded' }),
-    })
+    // TargetingEditor v2 fetches on step-2 mount; seed those 2 first, then the failing campaign call.
+    ;(global.fetch as jest.Mock)
+      // step-2 mount: saved-audiences
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: [] }) })
+      // step-2 mount: custom-audiences?status=READY
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, data: [] }) })
+      // submit: campaign — fails
+      .mockResolvedValueOnce({ ok: false, json: async () => ({ success: false, error: 'Quota exceeded' }) })
+
     render(<CampaignBuilder orgId="org_1" orgSlug="acme" />)
-    // Jump to step 3 fast
-    fireEvent.click(screen.getByRole('button', { name: /Next/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Next/i }))
+    // Jump to step 3 via step 2 (TargetingEditor mounts on step 2)
+    fireEvent.click(screen.getByRole('button', { name: /Next/i })) // → step 2
+    await act(async () => {}) // flush TargetingEditor useEffect
+    fireEvent.click(screen.getByRole('button', { name: /Next/i })) // → step 3
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Create campaign/i }))
