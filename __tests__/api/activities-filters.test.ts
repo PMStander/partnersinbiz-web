@@ -139,6 +139,12 @@ describe('GET /api/v1/crm/activities — filters', () => {
     expect(ids).toEqual(expect.arrayContaining(['a2', 'a3', 'a4']))
   })
 
+  it('GET ignores invalid dateFrom string (does not 500)', async () => {
+    mockCollections(buildQueryChain(activities))
+    const res = await GET(adminReq(`?dateFrom=not-a-date&contactId=c1`))
+    expect(res.status).toBe(200)
+  })
+
   it('dateFrom + dateTo — Firestore receives both range filters', async () => {
     // Simulate Firestore returning only docs within the range
     const inRange = activities.filter((a) => {

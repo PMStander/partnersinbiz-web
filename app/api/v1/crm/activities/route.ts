@@ -13,6 +13,12 @@ import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type { ActivityType } from '@/lib/crm/types'
 
+function parseDate(s: string | null): Date | null {
+  if (!s) return null
+  const d = new Date(s)
+  return isNaN(d.getTime()) ? null : d
+}
+
 const VALID_TYPES: ActivityType[] = [
   'email_sent', 'email_received', 'call', 'note',
   'stage_change', 'sequence_enrolled', 'sequence_completed',
@@ -44,8 +50,10 @@ export const GET = withCrmAuth('viewer', async (req, ctx) => {
   } else if (typeFilters.length > 1) {
     query = query.where('type', 'in', typeFilters)
   }
-  if (dateFrom) query = query.where('createdAt', '>=', new Date(dateFrom))
-  if (dateTo) query = query.where('createdAt', '<=', new Date(dateTo))
+  const fromDate = parseDate(dateFrom)
+  const toDate = parseDate(dateTo)
+  if (fromDate) query = query.where('createdAt', '>=', fromDate)
+  if (toDate) query = query.where('createdAt', '<=', toDate)
 
   const offset = (page - 1) * limit
   query = query.orderBy('createdAt', 'desc').limit(limit).offset(offset)

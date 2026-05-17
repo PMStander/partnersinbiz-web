@@ -336,6 +336,15 @@ describe('GET /api/v1/crm/segments/[id]', () => {
     const res = await GET(req, routeCtx('seg-x'))
     expect(res.status).toBe(404)
   })
+
+  it('GET soft-deleted segment returns 404', async () => {
+    const viewer = seedOrgMember('org-1', 'uid-v', { role: 'viewer' })
+    stageAuth(viewer, {}, { existingSegment: { id: 's1', data: { orgId: 'org-1', deleted: true, name: 'X', filters: {} } } })
+    const req = callAsMember(viewer, 'GET', '/api/v1/crm/segments/s1')
+    const { GET } = await import('@/app/api/v1/crm/segments/[id]/route')
+    const res = await GET(req, { params: Promise.resolve({ id: 's1' }) })
+    expect(res.status).toBe(404)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -379,6 +388,15 @@ describe('PUT /api/v1/crm/segments/[id]', () => {
     const req = callAsMember(admin, 'PUT', '/api/v1/crm/segments/seg-x', { name: 'Y' })
     const { PUT } = await import('@/app/api/v1/crm/segments/[id]/route')
     const res = await PUT(req, routeCtx('seg-x'))
+    expect(res.status).toBe(404)
+  })
+
+  it('PUT on soft-deleted segment returns 404', async () => {
+    const admin = seedOrgMember('org-1', 'uid-a', { role: 'admin' })
+    stageAuth(admin, {}, { existingSegment: { id: 's1', data: { orgId: 'org-1', deleted: true, name: 'X', filters: {} } } })
+    const req = callAsMember(admin, 'PUT', '/api/v1/crm/segments/s1', { name: 'New' })
+    const { PUT } = await import('@/app/api/v1/crm/segments/[id]/route')
+    const res = await PUT(req, { params: Promise.resolve({ id: 's1' }) })
     expect(res.status).toBe(404)
   })
 

@@ -27,6 +27,7 @@ async function loadSegment(id: string, ctxOrgId: string) {
   if (!snap.exists) return { ok: false as const, status: 404, error: 'Segment not found' }
   const data = snap.data()!
   if (data.orgId !== ctxOrgId) return { ok: false as const, status: 404, error: 'Segment not found' }
+  if (data.deleted === true) return { ok: false as const, status: 404, error: 'Segment not found' }
   return { ok: true as const, ref, data }
 }
 
