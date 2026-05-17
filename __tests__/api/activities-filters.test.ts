@@ -13,14 +13,17 @@ import { adminDb, adminAuth } from '@/lib/firebase/admin'
 
 process.env.AI_API_KEY = 'test-key'
 
+const ORG_ID = 'org-test-001'
+
 function adminReq(search = '') {
   return new NextRequest(`http://localhost/api/v1/crm/activities${search}`, {
     method: 'GET',
-    headers: { authorization: 'Bearer test-key' },
+    headers: {
+      authorization: 'Bearer test-key',
+      'x-org-id': ORG_ID,
+    },
   })
 }
-
-const ORG_ID = 'org-test-001'
 
 // Activity fixtures
 const activities = [
@@ -57,20 +60,21 @@ function buildSpyQueryChain(allDocs: typeof activities) {
   return { chain, receivedWhereArgs }
 }
 
-function setupAdminUser() {
-  ;(adminAuth.verifyIdToken as jest.Mock).mockResolvedValue({ uid: 'admin-1' })
+/** Build a collection mock that handles organizations + activities arms. */
+function mockCollections(activitiesChain: ReturnType<typeof buildQueryChain>) {
   ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
-    if (name === 'users') {
+    if (name === 'organizations') {
       return {
         doc: jest.fn().mockReturnValue({
           get: jest.fn().mockResolvedValue({
             exists: true,
-            data: () => ({ role: 'admin', orgId: ORG_ID }),
+            data: () => ({ settings: { permissions: {} } }),
           }),
         }),
       }
     }
-    return buildQueryChain(activities)
+    // 'activities' and any other collection
+    return activitiesChain
   })
 }
 
@@ -82,51 +86,23 @@ describe('GET /api/v1/crm/activities — filters', () => {
   })
 
   it('filter by single type returns only that type', async () => {
-    ;(adminAuth.verifyIdToken as jest.Mock).mockResolvedValue({ uid: 'admin-1' })
-
     const noteDocs = activities.filter((a) => a.type === 'note')
-    ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
-      if (name === 'users') {
-        return {
-          doc: jest.fn().mockReturnValue({
-            get: jest.fn().mockResolvedValue({
-              exists: true,
-              data: () => ({ role: 'admin', orgId: ORG_ID }),
-            }),
-          }),
-        }
-      }
-      return buildQueryChain(noteDocs)
-    })
+    mockCollections(buildQueryChain(noteDocs))
 
     const res = await GET(adminReq(`?orgId=${ORG_ID}&type=note`))
     expect(res.status).toBe(200)
     const json = await res.json()
-    const ids = (json.data as Array<{ id: string }>).map((a) => a.id)
+    const ids = (json.data.activities as Array<{ id: string }>).map((a) => a.id)
     expect(ids).toEqual(expect.arrayContaining(['a1', 'a4']))
     expect(ids).not.toContain('a2')
     expect(ids).not.toContain('a3')
   })
 
   it('filter by multiple types (comma-separated) returns all matching', async () => {
-    ;(adminAuth.verifyIdToken as jest.Mock).mockResolvedValue({ uid: 'admin-1' })
-
     const { chain, receivedWhereArgs } = buildSpyQueryChain(
       activities.filter((a) => a.type === 'note' || a.type === 'email_sent')
     )
-    ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
-      if (name === 'users') {
-        return {
-          doc: jest.fn().mockReturnValue({
-            get: jest.fn().mockResolvedValue({
-              exists: true,
-              data: () => ({ role: 'admin', orgId: ORG_ID }),
-            }),
-          }),
-        }
-      }
-      return chain
-    })
+    mockCollections(chain)
 
     const res = await GET(adminReq(`?orgId=${ORG_ID}&type=note,email_sent`))
     expect(res.status).toBe(200)
@@ -137,92 +113,52 @@ describe('GET /api/v1/crm/activities — filters', () => {
     expect(inFilter![2]).toEqual(expect.arrayContaining(['note', 'email_sent']))
 
     const json = await res.json()
-    const ids = (json.data as Array<{ id: string }>).map((a) => a.id)
+    const ids = (json.data.activities as Array<{ id: string }>).map((a) => a.id)
     expect(ids).toEqual(expect.arrayContaining(['a1', 'a2', 'a4']))
     expect(ids).not.toContain('a3')
   })
 
-  it('dateFrom filters out older activities (in-memory fallback path)', async () => {
-    ;(adminAuth.verifyIdToken as jest.Mock).mockResolvedValue({ uid: 'admin-1' })
-
-    // Simulate Firestore throwing on range filter so in-memory path is exercised.
-    // With ?orgId and no contactId/type, .where calls are:
-    //   1: orgId ==  (equality — fine)
-    //   2: createdAt >= dateFrom  (range — this is where we want to throw)
-    const chain: Record<string, jest.Mock> = {}
-    let callCount = 0
-    chain.where = jest.fn().mockImplementation(() => {
-      callCount++
-      // Throw on the 2nd .where (the dateFrom range filter)
-      if (callCount >= 2) throw new Error('Firestore index required')
-      return chain
-    })
-    chain.orderBy = jest.fn().mockReturnValue(chain)
-    chain.limit = jest.fn().mockReturnValue(chain)
-    chain.offset = jest.fn().mockReturnValue(chain)
-    chain.get = jest.fn().mockResolvedValue({
-      docs: activities.map((a) => ({ id: a.id, data: () => a })),
-    })
-
-    ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
-      if (name === 'users') {
-        return {
-          doc: jest.fn().mockReturnValue({
-            get: jest.fn().mockResolvedValue({
-              exists: true,
-              data: () => ({ role: 'admin', orgId: ORG_ID }),
-            }),
-          }),
-        }
-      }
-      return chain
-    })
+  it('dateFrom — Firestore receives the createdAt >= filter', async () => {
+    // The route delegates date filtering to Firestore; simulate Firestore returning
+    // only docs after the cutoff (as it would with a real index).
+    const afterJune = activities.filter((a) => a.createdAt.toDate() >= new Date('2024-06-01'))
+    const { chain, receivedWhereArgs } = buildSpyQueryChain(afterJune)
+    mockCollections(chain)
 
     const res = await GET(adminReq(`?orgId=${ORG_ID}&dateFrom=2024-06-01`))
     expect(res.status).toBe(200)
+
+    // Confirm the route passed a >= filter on createdAt to Firestore
+    const rangeFilter = receivedWhereArgs.find(([field, op]) => field === 'createdAt' && op === '>=')
+    expect(rangeFilter).toBeDefined()
+
     const json = await res.json()
-    const ids = (json.data as Array<{ id: string }>).map((a) => a.id)
-    // a1 (March) should be filtered out
+    const ids = (json.data.activities as Array<{ id: string }>).map((a) => a.id)
+    // a1 (March) is not in the simulated result set
     expect(ids).not.toContain('a1')
     expect(ids).toEqual(expect.arrayContaining(['a2', 'a3', 'a4']))
   })
 
-  it('dateFrom + dateTo returns only activities in range (in-memory fallback path)', async () => {
-    ;(adminAuth.verifyIdToken as jest.Mock).mockResolvedValue({ uid: 'admin-1' })
-
-    const chain: Record<string, jest.Mock> = {}
-    let callCount = 0
-    chain.where = jest.fn().mockImplementation(() => {
-      callCount++
-      // Throw on the 2nd .where (dateFrom range filter — triggers full in-memory path for both dates)
-      if (callCount >= 2) throw new Error('Firestore index required')
-      return chain
+  it('dateFrom + dateTo — Firestore receives both range filters', async () => {
+    // Simulate Firestore returning only docs within the range
+    const inRange = activities.filter((a) => {
+      const d = a.createdAt.toDate()
+      return d >= new Date('2024-05-01') && d <= new Date('2024-10-01')
     })
-    chain.orderBy = jest.fn().mockReturnValue(chain)
-    chain.limit = jest.fn().mockReturnValue(chain)
-    chain.offset = jest.fn().mockReturnValue(chain)
-    chain.get = jest.fn().mockResolvedValue({
-      docs: activities.map((a) => ({ id: a.id, data: () => a })),
-    })
-
-    ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
-      if (name === 'users') {
-        return {
-          doc: jest.fn().mockReturnValue({
-            get: jest.fn().mockResolvedValue({
-              exists: true,
-              data: () => ({ role: 'admin', orgId: ORG_ID }),
-            }),
-          }),
-        }
-      }
-      return chain
-    })
+    const { chain, receivedWhereArgs } = buildSpyQueryChain(inRange)
+    mockCollections(chain)
 
     const res = await GET(adminReq(`?orgId=${ORG_ID}&dateFrom=2024-05-01&dateTo=2024-10-01`))
     expect(res.status).toBe(200)
+
+    // Confirm both range filters were sent to Firestore
+    const fromFilter = receivedWhereArgs.find(([field, op]) => field === 'createdAt' && op === '>=')
+    const toFilter   = receivedWhereArgs.find(([field, op]) => field === 'createdAt' && op === '<=')
+    expect(fromFilter).toBeDefined()
+    expect(toFilter).toBeDefined()
+
     const json = await res.json()
-    const ids = (json.data as Array<{ id: string }>).map((a) => a.id)
+    const ids = (json.data.activities as Array<{ id: string }>).map((a) => a.id)
     // Only a2 (June) and a3 (September) are in range
     expect(ids).toEqual(expect.arrayContaining(['a2', 'a3']))
     expect(ids).not.toContain('a1')
