@@ -622,3 +622,47 @@ export interface AdMerchantCenter {
   createdAt: Timestamp
   updatedAt: Timestamp
 }
+
+// ─── Google Ads audience extensions (Sub-3a Phase 5) ─────────────────────────
+
+export type GoogleAdsAudienceSubtype =
+  | 'CUSTOMER_MATCH'
+  | 'REMARKETING'
+  | 'CUSTOM_SEGMENT'
+  | 'AFFINITY'
+  | 'IN_MARKET'
+  | 'DETAILED_DEMOGRAPHICS'
+
+export interface GoogleAdsCustomerMatchData {
+  subtype: 'CUSTOMER_MATCH'
+  userListResourceName: string  // 'customers/{cid}/userLists/{id}'
+  uploadKeyType: 'CONTACT_INFO' | 'CRM_ID' | 'MOBILE_ADVERTISING_ID'
+  memberCount?: number
+}
+
+export interface GoogleAdsRemarketingData {
+  subtype: 'REMARKETING'
+  userListResourceName: string
+  membershipLifeSpanDays: number
+  ruleType: 'WEBSITE' | 'APP' | 'COMBINED'
+  ruleDescription?: string
+}
+
+export interface GoogleAdsCustomSegmentData {
+  subtype: 'CUSTOM_SEGMENT'
+  customAudienceResourceName: string
+  segmentType: 'KEYWORD' | 'URL' | 'APP'
+  values: string[]
+}
+
+export interface GoogleAdsPredefinedAudienceData {
+  subtype: 'AFFINITY' | 'IN_MARKET' | 'DETAILED_DEMOGRAPHICS'
+  audienceResourceName: string
+  categoryName: string
+}
+
+export type GoogleAdsAudienceData =
+  | GoogleAdsCustomerMatchData
+  | GoogleAdsRemarketingData
+  | GoogleAdsCustomSegmentData
+  | GoogleAdsPredefinedAudienceData

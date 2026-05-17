@@ -2,7 +2,7 @@
 // Canonical ↔ Google status / network / bidding / micros / keyword mappers.
 // Additive — Sub-3a Phase 2 Batch 1.
 
-import type { AdEntityStatus } from '@/lib/ads/types'
+import type { AdEntityStatus, GoogleAdsAudienceSubtype } from '@/lib/ads/types'
 
 // ─── Entity Status ────────────────────────────────────────────────────────────
 
@@ -151,4 +151,27 @@ export function googleShoppingNetworkSettings() {
 /** Default bidding for Shopping MVP — Maximize Conversion Value (Smart Bidding) */
 export function defaultShoppingBiddingStrategy() {
   return { maximizeConversionValue: {} } as const
+}
+
+// ─── Google Audience Subtype Mappers (Sub-3a Phase 5) ─────────────────────────
+
+/** Maps Google audience subtype to its Google API resource collection.
+ *  Used to select which mutate endpoint a subtype targets. */
+export function googleAudienceCollection(subtype: GoogleAdsAudienceSubtype): string {
+  switch (subtype) {
+    case 'CUSTOMER_MATCH':
+    case 'REMARKETING':
+      return 'userLists'
+    case 'CUSTOM_SEGMENT':
+      return 'customAudiences'
+    case 'AFFINITY':
+    case 'IN_MARKET':
+    case 'DETAILED_DEMOGRAPHICS':
+      return 'audiences'
+  }
+}
+
+/** Returns true if the subtype is created via mutate (vs listed-only from Google's predefined catalog) */
+export function isCreatedAudienceSubtype(subtype: GoogleAdsAudienceSubtype): boolean {
+  return subtype === 'CUSTOMER_MATCH' || subtype === 'REMARKETING' || subtype === 'CUSTOM_SEGMENT'
 }

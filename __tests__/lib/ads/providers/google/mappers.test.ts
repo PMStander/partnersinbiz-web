@@ -13,6 +13,8 @@ import {
   defaultDisplayBiddingStrategy,
   googleShoppingNetworkSettings,
   defaultShoppingBiddingStrategy,
+  googleAudienceCollection,
+  isCreatedAudienceSubtype,
 } from '@/lib/ads/providers/google/mappers'
 
 describe('googleEntityStatusFromCanonical', () => {
@@ -149,5 +151,31 @@ describe('googleShoppingNetworkSettings', () => {
 describe('defaultShoppingBiddingStrategy', () => {
   it('returns {maximizeConversionValue: {}}', () => {
     expect(defaultShoppingBiddingStrategy()).toEqual({ maximizeConversionValue: {} })
+  })
+})
+
+// ─── Sub-3a Phase 5 Batch 1 additions ────────────────────────────────────────
+
+describe('googleAudienceCollection', () => {
+  it('maps CUSTOMER_MATCH → userLists', () => {
+    expect(googleAudienceCollection('CUSTOMER_MATCH')).toBe('userLists')
+  })
+  it('maps REMARKETING → userLists', () => {
+    expect(googleAudienceCollection('REMARKETING')).toBe('userLists')
+  })
+  it('maps CUSTOM_SEGMENT → customAudiences', () => {
+    expect(googleAudienceCollection('CUSTOM_SEGMENT')).toBe('customAudiences')
+  })
+  it('maps AFFINITY → audiences', () => {
+    expect(googleAudienceCollection('AFFINITY')).toBe('audiences')
+  })
+})
+
+describe('isCreatedAudienceSubtype', () => {
+  it('returns true for CUSTOMER_MATCH', () => {
+    expect(isCreatedAudienceSubtype('CUSTOMER_MATCH')).toBe(true)
+  })
+  it('returns false for AFFINITY', () => {
+    expect(isCreatedAudienceSubtype('AFFINITY')).toBe(false)
   })
 })
