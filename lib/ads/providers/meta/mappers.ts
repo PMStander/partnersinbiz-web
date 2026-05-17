@@ -5,6 +5,7 @@ import type {
   AdEntityStatus,
   AdObjective,
   AdSet,
+  AdTargeting,
 } from '@/lib/ads/types'
 
 // Meta v25 enum: OUTCOME_AWARENESS, OUTCOME_TRAFFIC, OUTCOME_ENGAGEMENT, OUTCOME_LEADS, OUTCOME_SALES
@@ -153,6 +154,76 @@ export function adSetToMetaForm(s: AdSet, metaCampaignId: string): MetaAdSetForm
   if (s.startTime) form.start_time = new Date(s.startTime.toMillis()).toISOString()
   if (s.endTime) form.end_time = new Date(s.endTime.toMillis()).toISOString()
   return form
+}
+
+// Meta gender enum: 1 = male, 2 = female (already defined above for adSetToMetaForm)
+/**
+ * Convert a canonical AdTargeting to the Meta targeting JSON string.
+ * Mirrors the targeting construction in adSetToMetaForm but operates on AdTargeting directly.
+ */
+export function targetingToMetaJson(t: AdTargeting): string {
+  const targeting: Record<string, unknown> = {
+    geo_locations: {
+      countries: t.geo.countries ?? [],
+    },
+    age_min: t.demographics.ageMin,
+    age_max: t.demographics.ageMax,
+  }
+  if (t.demographics.genders?.length) {
+    targeting.genders = t.demographics.genders.map((g) => GENDER_MAP[g])
+  }
+  if (t.demographics.languages?.length) {
+    targeting.locales = t.demographics.languages
+  }
+  if (t.geo.regions?.length) {
+    targeting.geo_locations = {
+      ...(targeting.geo_locations as Record<string, unknown>),
+      regions: t.geo.regions.map((r) => ({ key: r.key })),
+    }
+  }
+  if (t.geo.cities?.length) {
+    targeting.geo_locations = {
+      ...(targeting.geo_locations as Record<string, unknown>),
+      cities: t.geo.cities.map((c) => ({
+        key: c.key,
+        radius: c.radius,
+        distance_unit: c.distanceUnit,
+      })),
+    }
+  }
+  if (t.geo.locationTypes?.length) {
+    targeting.geo_locations = {
+      ...(targeting.geo_locations as Record<string, unknown>),
+      location_types: t.geo.locationTypes,
+    }
+  }
+  if (t.interests?.length) {
+    targeting.flexible_spec = [
+      { interests: t.interests.map((i) => ({ id: i.id, name: i.name })) },
+    ]
+  }
+  if (t.behaviors?.length) {
+    const existing = targeting.flexible_spec as Array<Record<string, unknown>> | undefined
+    if (existing) {
+      existing[0].behaviors = t.behaviors.map((b) => ({ id: b.id, name: b.name }))
+    } else {
+      targeting.flexible_spec = [
+        { behaviors: t.behaviors.map((b) => ({ id: b.id, name: b.name })) },
+      ]
+    }
+  }
+  if (t.customAudiences) {
+    if (t.customAudiences.include.length) {
+      targeting.custom_audiences = t.customAudiences.include.map((id) => ({ id }))
+    }
+    if (t.customAudiences.exclude.length) {
+      targeting.excluded_custom_audiences = t.customAudiences.exclude.map((id) => ({ id }))
+    }
+  }
+  if (t.advantage?.detailedTargetingExpansion) {
+    targeting.targeting_automation = { advantage_audience: 1 }
+  }
+  return JSON.stringify(targeting)
 }
 
 /** Build the Meta `object_story_spec` for an ad creative. */
