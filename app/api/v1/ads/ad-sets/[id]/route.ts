@@ -7,6 +7,7 @@ import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
 import { deleteAdSet as metaDeleteAdSet } from '@/lib/ads/providers/meta/adsets'
 import type { UpdateAdSetInput } from '@/lib/ads/types'
+import { logAdSetActivity } from '@/lib/ads/activity'
 
 export const GET = withAuth(
   'admin',
@@ -66,7 +67,7 @@ export const PATCH = withAuth(
 
 export const DELETE = withAuth(
   'admin',
-  async (req: NextRequest, _user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
+  async (req: NextRequest, user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
     const orgId = req.headers.get('X-Org-Id')
     if (!orgId) return apiError('Missing X-Org-Id header', 400)
 
@@ -88,6 +89,20 @@ export const DELETE = withAuth(
     }
 
     await deleteAdSet(id)
+
+    const actor = {
+      id: (user as { uid?: string }).uid ?? 'unknown',
+      name: (user as { email?: string }).email ?? 'Admin',
+      role: 'admin' as const,
+    }
+    await logAdSetActivity({
+      orgId,
+      actor,
+      action: 'deleted',
+      adSetId: id,
+      adSetName: adSet.name,
+    })
+
     return apiSuccess({ deleted: true })
   },
 )

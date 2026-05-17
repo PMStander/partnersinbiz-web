@@ -5,10 +5,12 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { getCampaign, updateCampaign, setCampaignMetaId } from '@/lib/ads/campaigns/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
+import { logCampaignActivity } from '@/lib/ads/activity'
+import { notifyCampaignLaunched } from '@/lib/ads/notifications'
 
 export const POST = withAuth(
   'admin',
-  async (req: NextRequest, _user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
+  async (req: NextRequest, user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
     const orgId = req.headers.get('X-Org-Id')
     if (!orgId) return apiError('Missing X-Org-Id header', 400)
 
@@ -30,6 +32,29 @@ export const POST = withAuth(
 
     if (result.created) {
       await setCampaignMetaId(id, result.metaCampaignId)
+    }
+
+    const actor = {
+      id: (user as { uid?: string }).uid ?? 'unknown',
+      name: (user as { email?: string }).email ?? 'Admin',
+      role: 'admin' as const,
+    }
+    await logCampaignActivity({
+      orgId,
+      actor,
+      action: 'launched',
+      campaignId: id,
+      campaignName: campaign.name,
+    })
+    const orgSlug = req.headers.get('X-Org-Slug') ?? ''
+    if (orgSlug) {
+      await notifyCampaignLaunched({
+        orgId,
+        orgSlug,
+        campaignId: id,
+        campaignName: campaign.name,
+        objective: campaign.objective,
+      })
     }
 
     const updated = await getCampaign(id)

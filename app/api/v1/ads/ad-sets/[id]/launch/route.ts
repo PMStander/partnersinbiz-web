@@ -6,10 +6,11 @@ import { getAdSet, updateAdSet, setAdSetMetaId } from '@/lib/ads/adsets/store'
 import { getCampaign } from '@/lib/ads/campaigns/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
+import { logAdSetActivity } from '@/lib/ads/activity'
 
 export const POST = withAuth(
   'admin',
-  async (req: NextRequest, _user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
+  async (req: NextRequest, user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
     const orgId = req.headers.get('X-Org-Id')
     if (!orgId) return apiError('Missing X-Org-Id header', 400)
 
@@ -40,6 +41,20 @@ export const POST = withAuth(
     if (result.created) {
       await setAdSetMetaId(id, result.metaAdSetId)
     }
+
+    const actor = {
+      id: (user as { uid?: string }).uid ?? 'unknown',
+      name: (user as { email?: string }).email ?? 'Admin',
+      role: 'admin' as const,
+    }
+    await logAdSetActivity({
+      orgId,
+      actor,
+      action: 'launched',
+      adSetId: id,
+      adSetName: adSet.name,
+      campaignName: campaign?.name,
+    })
 
     const updated = await getAdSet(id)
     return apiSuccess(updated)

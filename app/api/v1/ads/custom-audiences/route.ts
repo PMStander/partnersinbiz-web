@@ -6,6 +6,7 @@ import { listCustomAudiences, createCustomAudience, setCustomAudienceMetaId } fr
 import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
 import type { AdCustomAudienceType, AdCustomAudienceStatus, CreateAdCustomAudienceInput } from '@/lib/ads/types'
+import { logCustomAudienceActivity } from '@/lib/ads/activity'
 
 export const GET = withAuth('admin', async (req: NextRequest) => {
   const orgId = req.headers.get('X-Org-Id')
@@ -48,6 +49,21 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     const metaCaId = (result as { metaCaId: string }).metaCaId
     await setCustomAudienceMetaId(ca.id, metaCaId)
     const updated = await (await import('@/lib/ads/custom-audiences/store')).getCustomAudience(ca.id)
+
+    const actor = {
+      id: (user as { uid?: string }).uid ?? 'unknown',
+      name: (user as { email?: string }).email ?? 'Admin',
+      role: 'admin' as const,
+    }
+    await logCustomAudienceActivity({
+      orgId: ctx.orgId,
+      actor,
+      action: 'created',
+      audienceId: ca.id,
+      audienceName: ca.name,
+      audienceType: ca.type,
+    })
+
     return apiSuccess(updated, 201)
   } catch (err) {
     // Local doc still exists; surface the Meta error

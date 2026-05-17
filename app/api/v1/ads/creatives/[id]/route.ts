@@ -4,6 +4,7 @@ import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { getCreative, updateCreative, archiveCreative } from '@/lib/ads/creatives/store'
 import type { UpdateAdCreativeInput } from '@/lib/ads/types'
+import { logCreativeActivity } from '@/lib/ads/activity'
 
 export const GET = withAuth(
   'admin',
@@ -38,7 +39,7 @@ export const PATCH = withAuth(
 
 export const DELETE = withAuth(
   'admin',
-  async (req: NextRequest, _user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
+  async (req: NextRequest, user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
     const orgId = req.headers.get('X-Org-Id')
     if (!orgId) return apiError('Missing X-Org-Id header', 400)
 
@@ -47,6 +48,20 @@ export const DELETE = withAuth(
     if (!c || c.orgId !== orgId) return apiError('Creative not found', 404)
 
     await archiveCreative(id)
+
+    const actor = {
+      id: (user as { uid?: string }).uid ?? 'unknown',
+      name: (user as { email?: string }).email ?? 'Admin',
+      role: 'admin' as const,
+    }
+    await logCreativeActivity({
+      orgId,
+      actor,
+      action: 'archived',
+      creativeId: id,
+      creativeName: c.name,
+    })
+
     return apiSuccess({ archived: true })
   },
 )

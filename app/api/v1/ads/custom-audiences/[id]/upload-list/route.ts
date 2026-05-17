@@ -6,6 +6,7 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { getCustomAudience, updateCustomAudience } from '@/lib/ads/custom-audiences/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
+import { logCustomAudienceActivity } from '@/lib/ads/activity'
 
 /** Lowercase + trim + SHA-256 hex hash per Meta spec. */
 function hashField(raw: string): string {
@@ -17,7 +18,7 @@ const VALID_COLUMNS = ['EMAIL', 'PHONE'] as const
 
 export const POST = withAuth(
   'admin',
-  async (req: NextRequest, _user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
+  async (req: NextRequest, user: unknown, ctxParams: { params: Promise<{ id: string }> }) => {
     const { id } = await ctxParams.params
     const orgId = req.headers.get('X-Org-Id')
     if (!orgId) return apiError('Missing X-Org-Id header', 400)
@@ -89,6 +90,21 @@ export const POST = withAuth(
     await updateCustomAudience(id, {
       status: 'BUILDING',
     })
+
+    const actor = {
+      id: (user as { uid?: string }).uid ?? 'unknown',
+      name: (user as { email?: string }).email ?? 'Admin',
+      role: 'admin' as const,
+    }
+    await logCustomAudienceActivity({
+      orgId,
+      actor,
+      action: 'list_uploaded',
+      audienceId: id,
+      audienceName: ca.name,
+      audienceType: ca.type,
+    })
+
     const updated = await getCustomAudience(id)
     return apiSuccess({
       ...updated,
