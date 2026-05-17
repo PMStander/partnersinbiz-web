@@ -7,21 +7,20 @@
  *   - ids:      every matched contact id (so callers can enroll en masse)
  *   - contacts: the first 50 full contact docs (for UI preview)
  *
- * Auth: admin or ai
+ * Auth: admin (role matrix: POST → admin).
  */
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { resolveOrgScope } from '@/lib/api/orgScope'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { resolveSegmentContacts } from '@/lib/crm/segments'
 import type { Segment } from '@/lib/crm/segments'
 
 const PREVIEW_LIMIT = 50
 
-type Params = { params: Promise<{ id: string }> }
+type RouteCtx = { params: Promise<{ id: string }> }
 
-export const POST = withAuth('client', async (_req, user, context) => {
-  const { id } = await (context as Params).params
+export const POST = withCrmAuth<RouteCtx>('admin', async (_req, ctx, routeCtx) => {
+  const { id } = await routeCtx!.params
   const doc = await adminDb.collection('segments').doc(id).get()
   if (!doc.exists) return apiError('Segment not found', 404)
 
@@ -29,10 +28,10 @@ export const POST = withAuth('client', async (_req, user, context) => {
   if (segment.deleted === true) return apiError('Segment not found', 404)
   if (!segment.orgId) return apiError('Segment has no orgId', 422)
 
-  const scope = resolveOrgScope(user, segment.orgId)
-  if (!scope.ok) return apiError(scope.error, scope.status)
+  // Tenant isolation: 404 if segment belongs to a different org
+  if (segment.orgId !== ctx.orgId) return apiError('Segment not found', 404)
 
-  const contacts = await resolveSegmentContacts(segment.orgId, segment.filters ?? {})
+  const contacts = await resolveSegmentContacts(ctx.orgId, segment.filters ?? {})
 
   return apiSuccess({
     count: contacts.length,

@@ -18,6 +18,10 @@ const routeCtx = (id: string) => ({ params: Promise.resolve({ id }) })
  * Stage auth for segment list / create tests (no specific doc id).
  * segments mock supports both `.doc(id).get/update/delete` and
  * `.where(...).orderBy(...).get()` (for the list).
+ *
+ * Extended opts:
+ *   contactsForOrg     – rows returned from contacts.where('orgId','==',X).get()
+ *   existingSegment    – single segment doc returned from segments.doc(id).get()
  */
 function stageAuth(
   member: { uid: string; orgId: string; role: string; firstName?: string; lastName?: string },
@@ -26,6 +30,8 @@ function stageAuth(
     capturedSet?: jest.Mock
     existingSegments?: Array<{ id: string; data: Record<string, unknown> }>
     docId?: string
+    contactsForOrg?: Array<{ id: string; data: Record<string, unknown> }>
+    existingSegment?: { id: string; data: Record<string, unknown> }
   },
 ) {
   ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: member.uid })
@@ -51,22 +57,39 @@ function stageAuth(
       }
     if (name === 'segments') {
       const setFn = opts?.capturedSet ?? jest.fn().mockResolvedValue(undefined)
-      const docs = (opts?.existingSegments ?? []).map((s) => ({
+      const listDocs = (opts?.existingSegments ?? []).map((s) => ({
         id: s.id,
         data: () => s.data,
       }))
-      const autoDocId = opts?.docId ?? 'auto-seg-id'
+      const autoDocId = opts?.docId ?? (opts?.existingSegment?.id ?? 'auto-seg-id')
+      const singleSegment = opts?.existingSegment
       return {
         doc: jest.fn().mockReturnValue({
           id: autoDocId,
           set: setFn,
-          get: jest.fn().mockResolvedValue({ exists: false }),
+          get: jest.fn().mockResolvedValue(
+            singleSegment
+              ? { exists: true, id: singleSegment.id, data: () => singleSegment.data }
+              : { exists: false },
+          ),
           update: jest.fn().mockResolvedValue(undefined),
         }),
         where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ docs }),
+        get: jest.fn().mockResolvedValue({ docs: listDocs }),
         add: jest.fn().mockResolvedValue({ id: autoDocId }),
+      }
+    }
+    if (name === 'contacts') {
+      const contactDocs = (opts?.contactsForOrg ?? []).map((c) => ({
+        id: c.id,
+        data: () => c.data,
+      }))
+      return {
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        get: jest.fn().mockResolvedValue({ docs: contactDocs }),
       }
     }
     return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }
@@ -420,5 +443,98 @@ describe('DELETE /api/v1/crm/segments/[id]', () => {
     const { DELETE } = await import('@/app/api/v1/crm/segments/[id]/route')
     const res = await DELETE(req, routeCtx('seg-x'))
     expect(res.status).toBe(404)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/crm/segments/preview
+// ---------------------------------------------------------------------------
+
+describe('POST /api/v1/crm/segments/preview', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('admin can preview filters (returns count + sample)', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuth(admin, {}, {
+      contactsForOrg: [{ id: 'c1', data: { orgId: 'org-1', name: 'Alice', tags: ['vip'] } }],
+    })
+    const req = callAsMember(admin, 'POST', '/api/v1/crm/segments/preview', { filters: { tags: ['vip'] } })
+    const { POST } = await import('@/app/api/v1/crm/segments/preview/route')
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.count).toBeGreaterThanOrEqual(0)
+  })
+
+  it('member cannot preview (403)', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuth(member)
+    const req = callAsMember(member, 'POST', '/api/v1/crm/segments/preview', { filters: {} })
+    const { POST } = await import('@/app/api/v1/crm/segments/preview/route')
+    const res = await POST(req)
+    expect(res.status).toBe(403)
+  })
+
+  it('agent (Bearer) can preview', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuth(member, {}, { contactsForOrg: [] })
+    const req = callAsAgent('org-1', 'POST', '/api/v1/crm/segments/preview', { filters: {} })
+    const { POST } = await import('@/app/api/v1/crm/segments/preview/route')
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/crm/segments/[id]/resolve
+// ---------------------------------------------------------------------------
+
+describe('POST /api/v1/crm/segments/[id]/resolve', () => {
+  const resolveCtx = (id: string) => ({ params: Promise.resolve({ id }) })
+
+  beforeEach(() => jest.clearAllMocks())
+
+  it('admin can resolve own-org segment (returns count + ids)', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuth(admin, {}, {
+      existingSegment: { id: 's1', data: { orgId: 'org-1', filters: {}, name: 'All' } },
+      contactsForOrg: [{ id: 'c1', data: { orgId: 'org-1' } }],
+    })
+    const req = callAsMember(admin, 'POST', '/api/v1/crm/segments/s1/resolve', {})
+    const { POST } = await import('@/app/api/v1/crm/segments/[id]/resolve/route')
+    const res = await POST(req, resolveCtx('s1'))
+    expect(res.status).toBe(200)
+  })
+
+  it('member cannot resolve (403)', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuth(member)
+    const req = callAsMember(member, 'POST', '/api/v1/crm/segments/s1/resolve', {})
+    const { POST } = await import('@/app/api/v1/crm/segments/[id]/resolve/route')
+    const res = await POST(req, resolveCtx('s1'))
+    expect(res.status).toBe(403)
+  })
+
+  it('admin cannot resolve cross-org segment (404)', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuth(admin, {}, {
+      existingSegment: { id: 's1', data: { orgId: 'org-2', filters: {} } },
+    })
+    const req = callAsMember(admin, 'POST', '/api/v1/crm/segments/s1/resolve', {})
+    const { POST } = await import('@/app/api/v1/crm/segments/[id]/resolve/route')
+    const res = await POST(req, resolveCtx('s1'))
+    expect(res.status).toBe(404)
+  })
+
+  it('agent (Bearer) can resolve own-org segment', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuth(member, {}, {
+      existingSegment: { id: 's1', data: { orgId: 'org-1', filters: {} } },
+      contactsForOrg: [],
+    })
+    const req = callAsAgent('org-1', 'POST', '/api/v1/crm/segments/s1/resolve', {})
+    const { POST } = await import('@/app/api/v1/crm/segments/[id]/resolve/route')
+    const res = await POST(req, resolveCtx('s1'))
+    expect(res.status).toBe(200)
   })
 })
