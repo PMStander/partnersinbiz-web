@@ -1,5 +1,6 @@
 // app/(admin)/admin/org/[slug]/ads/connections/page.tsx
 import { ConnectionsPanel } from '@/components/ads/ConnectionsPanel'
+import { GoogleConnectionsPanel } from '@/components/ads/GoogleConnectionsPanel'
 import { listConnections } from '@/lib/ads/connections/store'
 import { resolveOrgIdBySlug } from '@/lib/organizations/resolve-by-slug'
 
@@ -18,7 +19,12 @@ export default async function ConnectionsPage({
     return <div className="text-white/60">Org not found.</div>
   }
   const connections = await listConnections({ orgId })
-  // Strip secrets before passing to the client component
+  // Strip secrets before passing to the client components
   const safe = connections.map(({ accessTokenEnc, refreshTokenEnc, ...rest }) => rest as any)
-  return <ConnectionsPanel orgSlug={slug} orgId={orgId} connections={safe} />
+  return (
+    <div className="space-y-4">
+      <ConnectionsPanel orgSlug={slug} orgId={orgId} connections={safe} />
+      <GoogleConnectionsPanel orgSlug={slug} orgId={orgId} connections={safe} />
+    </div>
+  )
 }
