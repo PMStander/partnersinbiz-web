@@ -10,6 +10,7 @@ import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
 import { createResponsiveSearchAd } from '@/lib/ads/providers/google/ads'
 import type { CreateAdInput, AdEntityStatus, AdPlatform } from '@/lib/ads/types'
 import type { RsaAssets } from '@/lib/ads/providers/google/ads'
+import type { RdaAssets } from '@/lib/ads/providers/google/display-types'
 
 export const GET = withAuth('admin', async (req: NextRequest) => {
   const orgId = req.headers.get('X-Org-Id')
@@ -38,6 +39,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     input?: Omit<CreateAdInput, 'adAccountId'>
     platform?: AdPlatform
     rsaAssets?: RsaAssets
+    rdaAssets?: RdaAssets
   }
 
   if (!body.input?.name || !body.input?.adSetId) {
@@ -59,8 +61,8 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   })
 
   if (platform === 'google') {
-    if (!body.rsaAssets) {
-      return apiError('rsaAssets required for Google ads', 400)
+    if (!body.rdaAssets && !body.rsaAssets) {
+      return apiError('Google ads require either rsaAssets (Search) or rdaAssets (Display)', 400)
     }
     const conn = await getConnection({ orgId: ctx.orgId, platform: 'google' })
     if (!conn) return apiError('No Google Ads connection for org', 400)
@@ -75,15 +77,29 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     const adGroupResourceName = typeof googleAdSetData?.adGroupResourceName === 'string' ? googleAdSetData.adGroupResourceName : undefined
     if (!adGroupResourceName) return apiError('Parent ad set has no Google ad group resource name', 400)
 
-    const result = await createResponsiveSearchAd({
-      customerId: loginCustomerId,
-      accessToken,
-      developerToken,
-      loginCustomerId,
-      adGroupResourceName,
-      canonical: ad,
-      rsaAssets: body.rsaAssets,
-    })
+    let result
+    if (body.rdaAssets) {
+      const { createResponsiveDisplayAd } = await import('@/lib/ads/providers/google/display-ads')
+      result = await createResponsiveDisplayAd({
+        customerId: loginCustomerId,
+        accessToken,
+        developerToken,
+        loginCustomerId,
+        adGroupResourceName,
+        canonical: ad,
+        rdaAssets: body.rdaAssets,
+      })
+    } else {
+      result = await createResponsiveSearchAd({
+        customerId: loginCustomerId,
+        accessToken,
+        developerToken,
+        loginCustomerId,
+        adGroupResourceName,
+        canonical: ad,
+        rsaAssets: body.rsaAssets!,
+      })
+    }
 
     await updateAd(ad.id, {
       providerData: {

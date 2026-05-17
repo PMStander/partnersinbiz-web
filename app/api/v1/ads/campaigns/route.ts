@@ -33,7 +33,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   const body = (await req.json()) as {
     input?: Omit<CreateAdCampaignInput, 'adAccountId'>
     platform?: AdPlatform
-    googleAds?: { dailyBudgetMajor?: number }
+    googleAds?: { dailyBudgetMajor?: number; campaignType?: 'SEARCH' | 'DISPLAY' }
   }
 
   if (!body.input?.name || !body.input?.objective) {
@@ -63,14 +63,28 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     const customerId = loginCustomerId
     if (!customerId) return apiError('No Customer ID set on Google connection', 400)
 
-    const result = await createSearchCampaign({
-      customerId,
-      accessToken,
-      developerToken,
-      loginCustomerId,
-      canonical: campaign,
-      dailyBudgetMajor: body.googleAds?.dailyBudgetMajor,
-    })
+    const campaignType = body.googleAds?.campaignType  // 'SEARCH' | 'DISPLAY' (default 'SEARCH')
+    let result
+    if (campaignType === 'DISPLAY') {
+      const { createDisplayCampaign } = await import('@/lib/ads/providers/google/campaigns-display')
+      result = await createDisplayCampaign({
+        customerId,
+        accessToken,
+        developerToken,
+        loginCustomerId,
+        canonical: campaign,
+        dailyBudgetMajor: body.googleAds?.dailyBudgetMajor,
+      })
+    } else {
+      result = await createSearchCampaign({
+        customerId,
+        accessToken,
+        developerToken,
+        loginCustomerId,
+        canonical: campaign,
+        dailyBudgetMajor: body.googleAds?.dailyBudgetMajor,
+      })
+    }
 
     await updateCampaign(campaign.id, {
       providerData: {

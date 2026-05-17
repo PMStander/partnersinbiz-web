@@ -188,4 +188,53 @@ describe('Google Ads Ad Group CRUD', () => {
       }),
     ).rejects.toThrow(/Google Ads adGroups mutate failed/)
   })
+
+  // ─── Phase 3 Batch 3: optional type param ──────────────────────────────────
+
+  // Test 8: createAdGroup with type: 'DISPLAY_STANDARD' sends that type in create body
+  it('createAdGroup with type DISPLAY_STANDARD sends DISPLAY_STANDARD in create body', async () => {
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [{ resourceName: 'customers/1234567890/adGroups/6666' }],
+      }),
+    })
+
+    const result = await createAdGroup({
+      ...baseArgs,
+      campaignResourceName: 'customers/1234567890/campaigns/5555',
+      canonical: baseCanonical,
+      type: 'DISPLAY_STANDARD',
+    })
+
+    expect(result).toEqual({
+      resourceName: 'customers/1234567890/adGroups/6666',
+      id: '6666',
+    })
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0]
+    const body = JSON.parse(init.body)
+    expect(body.operations[0].create.type).toBe('DISPLAY_STANDARD')
+  })
+
+  // Test 9: createAdGroup without type defaults to SEARCH_STANDARD
+  it('createAdGroup without type defaults to SEARCH_STANDARD', async () => {
+    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [{ resourceName: 'customers/1234567890/adGroups/7777' }],
+      }),
+    })
+
+    await createAdGroup({
+      ...baseArgs,
+      campaignResourceName: 'customers/1234567890/campaigns/5555',
+      canonical: baseCanonical,
+      // type omitted
+    })
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0]
+    const body = JSON.parse(init.body)
+    expect(body.operations[0].create.type).toBe('SEARCH_STANDARD')
+  })
 })

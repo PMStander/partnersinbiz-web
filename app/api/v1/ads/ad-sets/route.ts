@@ -35,7 +35,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   const body = (await req.json()) as {
     input?: Omit<CreateAdSetInput, 'adAccountId'>
     platform?: AdPlatform
-    googleAds?: { defaultCpcBidMajor?: number }
+    googleAds?: { defaultCpcBidMajor?: number; type?: 'SEARCH_STANDARD' | 'DISPLAY_STANDARD' }
   }
 
   if (!body.input?.name || !body.input?.campaignId) {
@@ -78,6 +78,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
       campaignResourceName,
       canonical: adSet,
       defaultCpcBidMajor: body.googleAds?.defaultCpcBidMajor,
+      type: body.googleAds?.type,
     })
 
     await updateAdSet(adSet.id, {

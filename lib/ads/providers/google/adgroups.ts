@@ -1,6 +1,7 @@
 import type { AdSet, AdEntityStatus } from '@/lib/ads/types'
 import { GOOGLE_ADS_API_BASE_URL } from './constants'
 import { googleEntityStatusFromCanonical, microsFromMajor } from './mappers'
+import type { GoogleAdGroupType } from './mappers'
 
 interface CallArgs {
   customerId: string
@@ -47,6 +48,7 @@ export async function createAdGroup(args: CallArgs & {
   campaignResourceName: string  // 'customers/{cid}/campaigns/{cid}'
   canonical: AdSet
   defaultCpcBidMajor?: number  // default CPC bid in dollars
+  type?: GoogleAdGroupType     // defaults to 'SEARCH_STANDARD'
 }): Promise<GoogleMutateResult> {
   const cpcBidMicros = args.defaultCpcBidMajor !== undefined
     ? microsFromMajor(args.defaultCpcBidMajor)
@@ -59,7 +61,7 @@ export async function createAdGroup(args: CallArgs & {
           name: args.canonical.name,
           campaign: args.campaignResourceName,
           status: googleEntityStatusFromCanonical(args.canonical.status),
-          type: 'SEARCH_STANDARD',
+          type: args.type ?? 'SEARCH_STANDARD',
           cpcBidMicros,
         },
       },
