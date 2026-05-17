@@ -204,3 +204,100 @@ describe('PlatformCreativeRef', () => {
     expect(r.creativeId).toBe('h1')
   })
 })
+
+import type {
+  AdCustomAudience,
+  AdCustomAudienceType,
+  AdCustomAudienceStatus,
+  CustomerListSource,
+  WebsiteCASource,
+  LookalikeSource,
+  AppCASource,
+  EngagementCASource,
+  AdSavedAudience,
+  CreateAdCustomAudienceInput,
+  CreateAdSavedAudienceInput,
+} from '@/lib/ads/types'
+
+describe('AdCustomAudience type discriminator', () => {
+  it('supports all 5 source types', () => {
+    const ts: AdCustomAudienceType[] = [
+      'CUSTOMER_LIST',
+      'WEBSITE',
+      'LOOKALIKE',
+      'APP',
+      'ENGAGEMENT',
+    ]
+    expect(ts).toHaveLength(5)
+  })
+
+  it('CUSTOMER_LIST has source.csvStoragePath + hashCount', () => {
+    const src: CustomerListSource = {
+      kind: 'CUSTOMER_LIST',
+      csvStoragePath: 'orgs/x/ad_audiences/customer-lists/abc.csv',
+      hashCount: 1234,
+      uploadedAt: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    expect(src.hashCount).toBe(1234)
+  })
+
+  it('WEBSITE has rule with retention days + url contains rules', () => {
+    const src: WebsiteCASource = {
+      kind: 'WEBSITE',
+      pixelId: '1234567890',
+      retentionDays: 30,
+      rules: [{ op: 'url_contains', value: '/pricing' }],
+    }
+    expect(src.retentionDays).toBe(30)
+  })
+
+  it('LOOKALIKE has sourceAudienceId + percent + country', () => {
+    const src: LookalikeSource = {
+      kind: 'LOOKALIKE',
+      sourceAudienceId: 'crv_existing',
+      percent: 1,
+      country: 'US',
+    }
+    expect(src.percent).toBe(1)
+  })
+
+  it('APP has propertyId + event', () => {
+    const src: AppCASource = {
+      kind: 'APP',
+      propertyId: 'prop_xyz',
+      event: 'Purchase',
+      retentionDays: 90,
+    }
+    expect(src.event).toBe('Purchase')
+  })
+
+  it('ENGAGEMENT has source + lookback', () => {
+    const src: EngagementCASource = {
+      kind: 'ENGAGEMENT',
+      engagementType: 'PAGE',
+      sourceObjectId: 'fb_page_123',
+      retentionDays: 60,
+    }
+    expect(src.engagementType).toBe('PAGE')
+  })
+})
+
+describe('AdSavedAudience shape', () => {
+  it('matches the documented shape', () => {
+    const s: AdSavedAudience = {
+      id: 'sav_1',
+      orgId: 'org_1',
+      platform: 'meta',
+      name: 'US adults 25-54',
+      targeting: {
+        geo: { countries: ['US'] },
+        demographics: { ageMin: 25, ageMax: 54 },
+      },
+      providerData: {},
+      createdBy: 'user_1',
+      createdAt: { seconds: 1, nanoseconds: 0 } as any,
+      updatedAt: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    expect(s.targeting.demographics.ageMin).toBe(25)
+  })
+})

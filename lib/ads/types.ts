@@ -320,3 +320,130 @@ export type CreateAdCreativeInput = Omit<
 export type UpdateAdCreativeInput = Partial<
   Pick<AdCreative, 'name' | 'copy' | 'status' | 'previewUrl' | 'width' | 'height' | 'duration' | 'lastError'>
 >
+
+// ─── Custom Audiences (Phase 4) ──────────────────────────────────────────────
+
+export type AdCustomAudienceType =
+  | 'CUSTOMER_LIST'
+  | 'WEBSITE'
+  | 'LOOKALIKE'
+  | 'APP'
+  | 'ENGAGEMENT'
+
+export type AdCustomAudienceStatus =
+  | 'BUILDING'       // upload sent to Meta, awaiting match
+  | 'READY'          // matched, usable
+  | 'EMPTY'          // matched but too few users
+  | 'TOO_SMALL'      // Meta minimum (typically 1000) not met
+  | 'ERROR'          // Meta rejected the audience
+
+export interface CustomerListSource {
+  kind: 'CUSTOMER_LIST'
+  /** Firebase Storage path of the original CSV (deleted after 24h). */
+  csvStoragePath: string
+  /** Count of hashed rows sent to Meta. */
+  hashCount: number
+  uploadedAt: Timestamp
+}
+
+export interface WebsiteCAUrlRule {
+  op: 'url_contains' | 'url_equals' | 'url_not_contains'
+  value: string
+}
+
+export interface WebsiteCASource {
+  kind: 'WEBSITE'
+  pixelId: string
+  retentionDays: number // typically 30, 60, 90, 180
+  rules: WebsiteCAUrlRule[]
+}
+
+export interface LookalikeSource {
+  kind: 'LOOKALIKE'
+  /** PiB-side ID of the source AdCustomAudience. */
+  sourceAudienceId: string
+  /** 1-10. Meta interprets as 1% being the most similar. */
+  percent: number
+  /** ISO country code (Meta lookalikes are per-country). */
+  country: string
+}
+
+export interface AppCASource {
+  kind: 'APP'
+  /** PiB Property ID — see [[properties-module-live]]. */
+  propertyId: string
+  /** Event name as recorded in PiB analytics, e.g. 'Purchase' or 'CompleteRegistration'. */
+  event: string
+  retentionDays: number
+}
+
+export type EngagementType =
+  | 'PAGE'           // engaged with a Facebook Page
+  | 'VIDEO'          // watched a Facebook video
+  | 'LEAD_FORM'      // opened or submitted a lead form
+  | 'EVENT'          // RSVPed to a Facebook event
+  | 'INSTAGRAM_ACCOUNT'
+
+export interface EngagementCASource {
+  kind: 'ENGAGEMENT'
+  engagementType: EngagementType
+  /** Page ID / video ID / lead form ID / event ID / IG account ID, depending on engagementType. */
+  sourceObjectId: string
+  retentionDays: number
+}
+
+export type CustomAudienceSource =
+  | CustomerListSource
+  | WebsiteCASource
+  | LookalikeSource
+  | AppCASource
+  | EngagementCASource
+
+export interface AdCustomAudience {
+  id: string
+  orgId: string
+  platform: AdPlatform
+  name: string
+  description?: string
+  type: AdCustomAudienceType
+  status: AdCustomAudienceStatus
+  approximateSize?: number
+  source: CustomAudienceSource
+  providerData: { meta?: { customAudienceId?: string; [key: string]: unknown } }
+  lastSyncedAt?: Timestamp
+  lastError?: string
+  createdBy: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type CreateAdCustomAudienceInput = Omit<
+  AdCustomAudience,
+  'id' | 'orgId' | 'platform' | 'providerData' | 'createdBy' | 'createdAt' | 'updatedAt' | 'lastSyncedAt' | 'approximateSize' | 'lastError'
+>
+
+export type UpdateAdCustomAudienceInput = Partial<
+  Pick<AdCustomAudience, 'name' | 'description' | 'status' | 'approximateSize' | 'lastError'>
+>
+
+// ─── Saved Audiences (Phase 4) ───────────────────────────────────────────────
+
+export interface AdSavedAudience {
+  id: string
+  orgId: string
+  platform: AdPlatform
+  name: string
+  description?: string
+  targeting: AdTargeting
+  providerData: { meta?: { savedAudienceId?: string } }
+  createdBy: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type CreateAdSavedAudienceInput = Omit<
+  AdSavedAudience,
+  'id' | 'orgId' | 'platform' | 'providerData' | 'createdBy' | 'createdAt' | 'updatedAt'
+>
+
+export type UpdateAdSavedAudienceInput = Partial<Pick<AdSavedAudience, 'name' | 'description' | 'targeting'>>
