@@ -111,3 +111,29 @@ export function canonicalKeywordMatchTypeFromGoogle(g: string): AdKeywordMatchTy
   // BROAD_MATCH_MODIFIER is deprecated; treat as BROAD
   return 'BROAD'
 }
+
+// ─── Ad Group / Campaign Types ────────────────────────────────────────────────
+
+export type GoogleAdGroupType =
+  | 'SEARCH_STANDARD'
+  | 'DISPLAY_STANDARD'
+  | 'VIDEO_BUMPER'
+  | 'VIDEO_NON_SKIPPABLE_IN_STREAM'
+  | 'VIDEO_TRUE_VIEW_IN_STREAM'
+  | 'SHOPPING_PRODUCT_ADS'
+
+export type GoogleCampaignType = 'SEARCH' | 'DISPLAY' | 'SHOPPING'
+
+export function googleAdGroupTypeFor(campaignType: GoogleCampaignType): GoogleAdGroupType {
+  switch (campaignType) {
+    case 'DISPLAY': return 'DISPLAY_STANDARD'
+    case 'SHOPPING': return 'SHOPPING_PRODUCT_ADS'
+    case 'SEARCH':
+    default: return 'SEARCH_STANDARD'
+  }
+}
+
+/** Default bidding for Display — MAXIMIZE_CONVERSIONS auto-bid is Google's recommended default */
+export function defaultDisplayBiddingStrategy() {
+  return { maximizeConversions: {} } as const
+}

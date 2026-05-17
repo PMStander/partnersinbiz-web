@@ -9,6 +9,8 @@ import {
   majorFromMicros,
   googleKeywordMatchType,
   canonicalKeywordMatchTypeFromGoogle,
+  googleAdGroupTypeFor,
+  defaultDisplayBiddingStrategy,
 } from '@/lib/ads/providers/google/mappers'
 
 describe('googleEntityStatusFromCanonical', () => {
@@ -106,5 +108,25 @@ describe('keyword match type mappers', () => {
 
   it('canonicalKeywordMatchTypeFromGoogle(BROAD_MATCH_MODIFIER) falls back to BROAD', () => {
     expect(canonicalKeywordMatchTypeFromGoogle('BROAD_MATCH_MODIFIER')).toBe('BROAD')
+  })
+})
+
+// ─── Sub-3a Phase 3 Batch 1 additions ────────────────────────────────────────
+
+describe('googleAdGroupTypeFor', () => {
+  it('maps SEARCH → SEARCH_STANDARD', () => {
+    expect(googleAdGroupTypeFor('SEARCH')).toBe('SEARCH_STANDARD')
+  })
+  it('maps DISPLAY → DISPLAY_STANDARD', () => {
+    expect(googleAdGroupTypeFor('DISPLAY')).toBe('DISPLAY_STANDARD')
+  })
+  it('maps SHOPPING → SHOPPING_PRODUCT_ADS', () => {
+    expect(googleAdGroupTypeFor('SHOPPING')).toBe('SHOPPING_PRODUCT_ADS')
+  })
+})
+
+describe('defaultDisplayBiddingStrategy', () => {
+  it('returns {maximizeConversions: {}}', () => {
+    expect(defaultDisplayBiddingStrategy()).toEqual({ maximizeConversions: {} })
   })
 })
