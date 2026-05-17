@@ -75,7 +75,7 @@ export const PATCH = withAuth(
       const slot = sanitisedPatch[platform] as { capiToken?: string; [k: string]: unknown } | undefined
       if (slot?.capiToken !== undefined) {
         const { capiToken: _removed, ...rest } = slot
-        sanitisedPatch[platform] = rest as AdPixelConfig[typeof platform]
+        sanitisedPatch[platform] = rest as unknown as AdPixelConfig[typeof platform]
       }
     }
 
