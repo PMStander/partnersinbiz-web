@@ -1,31 +1,32 @@
 // app/api/v1/quotes/route.ts
+import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import type { Quote } from '@/lib/quotes/types'
 
 export const dynamic = 'force-dynamic'
 
-export const GET = withAuth('admin', async (req) => {
-  const { searchParams } = new URL(req.url)
-  const orgId = searchParams.get('orgId')
+export const GET = withCrmAuth('viewer', async (_req: NextRequest, ctx) => {
+  const snapshot = await adminDb
+    .collection('quotes')
+    .where('orgId', '==', ctx.orgId)
+    .orderBy('createdAt', 'desc')
+    .limit(50)
+    .get()
 
-  let query = adminDb.collection('quotes').orderBy('createdAt', 'desc') as any
-  if (orgId) query = query.where('orgId', '==', orgId)
-
-  const snapshot = await query.limit(50).get()
-  const quotes = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
-  return apiSuccess(quotes)
+  const quotes = snapshot.docs.map((doc: any) => ({ ...(doc.data() as Quote), id: doc.id }))
+  return apiSuccess({ quotes })
 })
 
-export const POST = withAuth('admin', async (req, user) => {
+export const POST = withCrmAuth('member', async (req: NextRequest, ctx) => {
   const body = await req.json().catch(() => ({}))
-  if (!body.orgId) return apiError('orgId is required', 400)
   if (!body.lineItems?.length) return apiError('At least one line item is required', 400)
 
-  // Fetch client org
-  const clientOrgDoc = await adminDb.collection('organizations').doc(body.orgId).get()
+  // Fetch client org for prefix + billing + currency
+  const clientOrgDoc = await adminDb.collection('organizations').doc(ctx.orgId).get()
   if (!clientOrgDoc.exists) return apiError('Client organisation not found', 404)
   const clientOrg = clientOrgDoc.data()!
   const clientBilling = clientOrg.billingDetails ?? {}
@@ -67,14 +68,15 @@ export const POST = withAuth('admin', async (req, user) => {
   const prefix = (alphaOnly.length >= 3 ? alphaOnly.slice(0, 3) : alphaOnly.padEnd(3, 'X')).toUpperCase()
   const quoteCounterRef = adminDb
     .collection('organizations')
-    .doc(body.orgId)
+    .doc(ctx.orgId)
     .collection('counters')
     .doc('quotes')
-  const quoteCount = await adminDb.runTransaction(async (tx) => {
+  let quoteCount = 1
+  await adminDb.runTransaction(async (tx) => {
     const snap = await tx.get(quoteCounterRef)
     const next = snap.exists ? (snap.data()!.count as number) + 1 : 1
     tx.set(quoteCounterRef, { count: next }, { merge: true })
-    return next
+    quoteCount = next
   })
   const quoteNumber = `Q-${prefix}-${String(quoteCount).padStart(3, '0')}`
 
@@ -90,8 +92,10 @@ export const POST = withAuth('admin', async (req, user) => {
   const taxAmount = subtotal * (taxRate / 100)
   const total = subtotal + taxAmount
 
-  const doc = {
-    orgId: body.orgId,
+  const actorRef = ctx.actor
+
+  const quoteData: Record<string, unknown> = {
+    orgId: ctx.orgId,
     quoteNumber,
     status: 'draft' as const,
     issueDate: FieldValue.serverTimestamp(),
@@ -101,31 +105,45 @@ export const POST = withAuth('admin', async (req, user) => {
     taxRate,
     taxAmount,
     total,
-    currency: body.currency ?? clientOrg.settings?.currency ?? 'USD',
+    currency: body.currency ?? clientOrg.settings?.currency ?? 'ZAR',
     notes: body.notes ?? '',
     fromDetails,
     clientDetails,
     convertedInvoiceId: null,
     sentAt: null,
     acceptedAt: null,
-    createdBy: user.uid,
+    createdByRef: actorRef,
+    updatedByRef: actorRef,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }
 
-  const ref = await adminDb.collection('quotes').add(doc)
+  // Omit createdBy / updatedBy uid for agent calls
+  if (!ctx.isAgent) {
+    quoteData.createdBy = actorRef.uid
+    quoteData.updatedBy = actorRef.uid
+  }
 
+  // Strip undefined values so Firestore doesn't reject
+  const sanitized = Object.fromEntries(Object.entries(quoteData).filter(([, v]) => v !== undefined))
+
+  const docRef = adminDb.collection('quotes').doc()
+  await docRef.set(sanitized)
+
+  // Explicit-field webhook payload (PR 3+ pattern — no body spread)
   try {
-    await dispatchWebhook(body.orgId, 'quote.created', {
-      id: ref.id,
+    await dispatchWebhook(ctx.orgId, 'quote.created', {
+      id: docRef.id,
       quoteNumber,
+      status: 'draft',
       total,
-      currency: doc.currency,
-      clientOrgId: body.orgId,
+      currency: sanitized.currency as string,
+      validUntil: sanitized.validUntil ?? null,
+      createdByRef: actorRef,
     })
   } catch (err) {
     console.error('[webhook-dispatch-error] quote.created', err)
   }
 
-  return apiSuccess({ id: ref.id, quoteNumber }, 201)
+  return apiSuccess({ ...sanitized, id: docRef.id }, 201)
 })
