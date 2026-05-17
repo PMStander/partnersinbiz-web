@@ -3,19 +3,22 @@
 // Platform picker + conditional wizard mount.
 // Sub-3a Phase 2 Batch 4 — additive edit, Meta path unchanged.
 // Sub-3a Phase 3 Batch 2 Agent D — extended to 3-way picker (+ Google Display).
+// Sub-3a Phase 4 Batch 2 Agent D — extended to 4-way picker (+ Google Shopping).
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CampaignBuilder } from '@/components/ads/CampaignBuilder'
 import { SearchCampaignBuilder } from '@/components/ads/google/SearchCampaignBuilder'
 import { DisplayCampaignBuilder } from '@/components/ads/google/DisplayCampaignBuilder'
+import { ShoppingCampaignBuilder } from '@/components/ads/google/ShoppingCampaignBuilder'
 
-type Platform = 'meta' | 'google-search' | 'google-display'
+type Platform = 'meta' | 'google-search' | 'google-display' | 'google-shopping'
 
-const PLATFORM_OPTIONS: { value: Platform; label: string }[] = [
+const PLATFORM_OPTIONS: { value: Platform; label: string; description?: string }[] = [
   { value: 'meta', label: 'Meta (Facebook / Instagram)' },
   { value: 'google-search', label: 'Google Search' },
   { value: 'google-display', label: 'Google Display' },
+  { value: 'google-shopping', label: 'Google Shopping', description: 'Shopping ads from your Merchant Center product feed.' },
 ]
 
 interface Props {
@@ -80,6 +83,14 @@ export function NewCampaignClient({ orgId, orgSlug, currency }: Props) {
 
       {platform === 'google-display' && (
         <DisplayCampaignBuilder
+          orgId={orgId}
+          orgSlug={orgSlug}
+          onCancel={() => router.push(`/admin/org/${orgSlug}/ads/campaigns`)}
+        />
+      )}
+
+      {platform === 'google-shopping' && (
+        <ShoppingCampaignBuilder
           orgId={orgId}
           orgSlug={orgSlug}
           onCancel={() => router.push(`/admin/org/${orgSlug}/ads/campaigns`)}
