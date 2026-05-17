@@ -1879,6 +1879,16 @@
         { "fieldPath": "campaignId", "order": "ASCENDING" },
         { "fieldPath": "negativeKeyword", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "saved_views",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "resourceKind", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

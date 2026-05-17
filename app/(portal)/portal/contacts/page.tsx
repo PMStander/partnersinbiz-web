@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { ContactForm } from '@/components/admin/crm/ContactForm'
 import { fmtTimestamp } from '@/components/admin/email/fmtTimestamp'
+import { SavedViewsBar } from '@/components/crm/SavedViewsBar'
 
 const STAGES = ['new', 'contacted', 'replied', 'demo', 'proposal', 'won', 'lost']
 const TYPES = ['lead', 'prospect', 'client', 'churned']
@@ -115,6 +116,16 @@ export default function PortalContactsPage() {
       </header>
 
       {/* Filters */}
+      <section className="space-y-2">
+        <SavedViewsBar
+          currentFilters={{ search, stage: stageFilter, type: typeFilter }}
+          onSelectView={(f) => {
+            if (typeof f.search === 'string') setSearch(f.search)
+            if (typeof f.stage === 'string') setStageFilter(f.stage)
+            if (typeof f.type === 'string') setTypeFilter(f.type)
+          }}
+        />
+      </section>
       <section className="flex flex-wrap gap-3">
         <input
           placeholder="Search name, email, company…"
