@@ -3,9 +3,8 @@
  *
  * Body:
  *   {
- *     orgId: string                 // required
  *     capturedFromId?: string       // CaptureSource id (must be type='csv' for clarity)
- *     rows: Array<{
+ *     rows: Array<{                 // also accepted as `contacts`
  *       email: string               // required
  *       name?: string
  *       firstName?: string
@@ -22,7 +21,7 @@
  * Returns: { created, updated, skipped, invalidRows: [{ index, reason }] }
  *          dryRun mode also returns: previewSample (first 3 normalized rows)
  *
- * Auth: admin (or ai)
+ * Auth: member+
  *
  * Notes:
  * - Existing contacts (by orgId+email) get tag-merge only — no name/company overwrite.
@@ -31,11 +30,10 @@
  * - Auto-enroll behavior is OUT OF SCOPE — CSV imports skip campaign enrollment to
  *   avoid surprise sends.
  */
-import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { resolveOrgScope } from '@/lib/api/orgScope'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
+import { snapshotForWrite } from '@/lib/orgMembers/memberRef'
 import { apiSuccess, apiError } from '@/lib/api/response'
 
 const MAX_ROWS = 5000
@@ -98,12 +96,12 @@ function deriveName(row: ImportRow): string {
   return combined
 }
 
-export const POST = withAuth('client', async (req: NextRequest, user) => {
+export const POST = withCrmAuth('member', async (req, ctx) => {
   const body = await req.json().catch(() => null) as
     | {
-        orgId?: string
         capturedFromId?: string
         rows?: ImportRow[]
+        contacts?: ImportRow[]
         defaultTags?: string[]
         dryRun?: boolean
       }
@@ -111,14 +109,13 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
 
   if (!body) return apiError('Invalid JSON', 400)
 
-  const requestedOrgId = typeof body.orgId === 'string' ? body.orgId.trim() : null
-  const scope = resolveOrgScope(user, requestedOrgId)
-  if (!scope.ok) return apiError(scope.error, scope.status)
-  const orgId = scope.orgId
+  const { orgId } = ctx
 
-  if (!Array.isArray(body.rows)) return apiError('rows must be an array', 400)
-  if (body.rows.length === 0) return apiError('rows must not be empty', 400)
-  if (body.rows.length > MAX_ROWS) {
+  // Accept either `rows` or `contacts` as the array field name
+  const rawRows = Array.isArray(body.rows) ? body.rows : Array.isArray(body.contacts) ? body.contacts : null
+  if (!rawRows) return apiError('rows must be an array', 400)
+  if (rawRows.length === 0) return apiError('rows must not be empty', 400)
+  if (rawRows.length > MAX_ROWS) {
     return apiError(`rows exceeds maximum of ${MAX_ROWS}`, 400)
   }
 
@@ -126,6 +123,11 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
     typeof body.capturedFromId === 'string' ? body.capturedFromId.trim() : ''
   const defaultTags = Array.isArray(body.defaultTags) ? body.defaultTags : []
   const dryRun = body.dryRun === true
+
+  // Resolve actor reference ONCE for the whole batch
+  const actorRef = ctx.isAgent
+    ? ctx.actor
+    : await snapshotForWrite(ctx.orgId, ctx.actor.uid)
 
   // Resolve capture source autoTags (and confirm same org). If the source
   // doesn't belong to the org, we silently ignore it (don't apply autoTags
@@ -155,8 +157,8 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
   const normalized: NormalizedRow[] = []
   const seenEmailsInPayload = new Set<string>()
 
-  for (let i = 0; i < body.rows.length; i++) {
-    const raw = body.rows[i]
+  for (let i = 0; i < rawRows.length; i++) {
+    const raw = rawRows[i]
     if (!raw || typeof raw !== 'object') {
       invalidRows.push({ index: i, reason: 'row is not an object' })
       continue
@@ -242,8 +244,6 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
       const mergedTags = uniqueTags(existing.tags, row.tags)
       // Skip the write if no new tags were added.
       if (mergedTags.length === existing.tags.length) {
-        // Still count as "updated" only when we'd change something.
-        // Treat no-op as updated=0 for this row by skipping push.
         continue
       }
       toUpdate.push({ row, ref: existing.ref, mergedTags })
@@ -290,7 +290,7 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
     const batch = adminDb.batch()
     for (const op of slice) {
       if (op.kind === 'create') {
-        batch.set(op.ref, {
+        const data = {
           orgId,
           capturedFromId: effectiveCapturedFromId,
           name: op.row.name,
@@ -311,25 +311,37 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           lastContactedAt: null,
-        })
+          createdBy: ctx.isAgent ? undefined : ctx.actor.uid,
+          createdByRef: actorRef,
+          updatedBy: ctx.isAgent ? undefined : ctx.actor.uid,
+          updatedByRef: actorRef,
+        }
+        const sanitized = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined))
+        batch.set(op.ref, sanitized)
       } else {
-        batch.update(op.ref, {
+        const updatePatch: Record<string, unknown> = {
           tags: op.mergedTags,
+          updatedBy: ctx.isAgent ? undefined : ctx.actor.uid,
+          updatedByRef: actorRef,
           updatedAt: FieldValue.serverTimestamp(),
-        })
+        }
+        const sanitized = Object.fromEntries(Object.entries(updatePatch).filter(([, v]) => v !== undefined))
+        batch.update(op.ref, sanitized)
       }
     }
     await batch.commit()
   }
 
-  // Bump source counter by `created` only.
+  // Bump source counter by `created` only — folded into a final batch write.
   if (sourceRef && toCreate.length > 0) {
     try {
-      await sourceRef.update({
+      const finalBatch = adminDb.batch()
+      finalBatch.update(sourceRef, {
         capturedCount: FieldValue.increment(toCreate.length),
         lastCapturedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       })
+      await finalBatch.commit()
     } catch (err) {
       console.error('[contacts-import] failed to bump source counter', err)
     }
