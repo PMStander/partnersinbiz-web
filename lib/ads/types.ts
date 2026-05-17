@@ -118,6 +118,16 @@ export interface AdCampaign {
   createdBy: string
   createdAt: Timestamp
   updatedAt: Timestamp
+  // ─── Approval workflow (Sub-2) ──
+  reviewState?: CampaignReviewState
+  submittedForReviewAt?: Timestamp
+  submittedForReviewBy?: string  // admin uid
+  approvedAt?: Timestamp
+  approvedBy?: string  // portal uid
+  rejectedAt?: Timestamp
+  rejectedBy?: string  // portal uid
+  rejectionReason?: string
+  approvalHistory?: AdCampaignApprovalEntry[]
 }
 
 export type CreateAdCampaignInput = Omit<
@@ -544,4 +554,16 @@ export interface AdCapiEvent {
     tiktok?: CapiFanoutResult
   }
   createdAt: Timestamp
+}
+
+// ─── Approval workflow (Sub-2) ───────────────────────────────────────────────
+
+export type CampaignReviewState = 'awaiting' | 'approved' | 'rejected'
+
+export interface AdCampaignApprovalEntry {
+  state: 'submitted' | 'approved' | 'rejected'
+  actorUid: string
+  actorRole: 'admin' | 'member' | 'viewer' | 'owner'
+  reason?: string
+  at: Timestamp
 }

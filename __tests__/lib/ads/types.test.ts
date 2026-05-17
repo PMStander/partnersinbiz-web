@@ -435,3 +435,83 @@ describe('AdCapiEvent shape', () => {
     expect(sources).toHaveLength(5)
   })
 })
+
+// ─── Sub-2: Approval workflow types ─────────────────────────────────────────
+
+import type {
+  CampaignReviewState,
+  AdCampaignApprovalEntry,
+} from '@/lib/ads/types'
+
+describe('AdCampaign with review fields', () => {
+  it('compiles and roundtrips with all review fields populated', () => {
+    const c: AdCampaign = {
+      id: 'cmp_review_1',
+      orgId: 'org_1',
+      platform: 'meta',
+      adAccountId: 'act_42',
+      name: 'Review Test Campaign',
+      objective: 'TRAFFIC',
+      status: 'PENDING_REVIEW',
+      cboEnabled: false,
+      specialAdCategories: [],
+      providerData: {},
+      createdBy: 'admin_uid_1',
+      createdAt: { seconds: 1, nanoseconds: 0 } as any,
+      updatedAt: { seconds: 2, nanoseconds: 0 } as any,
+      // review fields
+      reviewState: 'awaiting',
+      submittedForReviewAt: { seconds: 2, nanoseconds: 0 } as any,
+      submittedForReviewBy: 'admin_uid_1',
+      approvedAt: undefined,
+      approvedBy: undefined,
+      rejectedAt: undefined,
+      rejectedBy: undefined,
+      rejectionReason: undefined,
+      approvalHistory: [
+        {
+          state: 'submitted',
+          actorUid: 'admin_uid_1',
+          actorRole: 'admin',
+          at: { seconds: 2, nanoseconds: 0 } as any,
+        },
+      ],
+    }
+    expect(c.reviewState).toBe('awaiting')
+    expect(c.submittedForReviewBy).toBe('admin_uid_1')
+    expect(c.approvalHistory).toHaveLength(1)
+    expect(c.approvalHistory![0].state).toBe('submitted')
+    expect(c.approvalHistory![0].actorRole).toBe('admin')
+  })
+})
+
+describe('AdCampaignApprovalEntry shape', () => {
+  it('accepts submitted/approved/rejected states and all actor roles', () => {
+    const submitted: AdCampaignApprovalEntry = {
+      state: 'submitted',
+      actorUid: 'admin_uid_1',
+      actorRole: 'admin',
+      at: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    const approved: AdCampaignApprovalEntry = {
+      state: 'approved',
+      actorUid: 'portal_uid_1',
+      actorRole: 'member',
+      at: { seconds: 2, nanoseconds: 0 } as any,
+    }
+    const rejected: AdCampaignApprovalEntry = {
+      state: 'rejected',
+      actorUid: 'portal_uid_2',
+      actorRole: 'owner',
+      reason: 'The headline needs to be updated to reflect our current offer.',
+      at: { seconds: 3, nanoseconds: 0 } as any,
+    }
+    expect(submitted.state).toBe('submitted')
+    expect(submitted.reason).toBeUndefined()
+    expect(approved.actorRole).toBe('member')
+    expect(rejected.reason).toMatch(/headline/)
+    // CampaignReviewState union sanity check
+    const states: CampaignReviewState[] = ['awaiting', 'approved', 'rejected']
+    expect(states).toHaveLength(3)
+  })
+})
