@@ -666,3 +666,45 @@ export type GoogleAdsAudienceData =
   | GoogleAdsRemarketingData
   | GoogleAdsCustomSegmentData
   | GoogleAdsPredefinedAudienceData
+
+// ─── Cross-platform Conversion Actions (Sub-3a Phase 6) ───────────────────────
+
+export type AdConversionCategory =
+  | 'PAGE_VIEW' | 'PURCHASE' | 'SIGNUP' | 'LEAD' | 'DOWNLOAD'
+  | 'ADD_TO_CART' | 'BEGIN_CHECKOUT' | 'SUBSCRIBE_PAID'
+  | 'PHONE_CALL_LEAD' | 'IMPORTED_LEAD' | 'SUBMIT_LEAD_FORM'
+  | 'BOOK_APPOINTMENT' | 'REQUEST_QUOTE' | 'GET_DIRECTIONS'
+  | 'OUTBOUND_CLICK' | 'CONTACT' | 'ENGAGEMENT'
+  | 'STORE_VISIT' | 'STORE_SALE'
+  | 'QUALIFIED_LEAD' | 'CONVERTED_LEAD' | 'OTHER'
+
+export type AdConversionPlatform = 'meta' | 'google'
+
+export type AdConversionCountingType = 'ONE_PER_CLICK' | 'MANY_PER_CLICK'
+
+export type AdConversionAttributionModel =
+  | 'LAST_CLICK' | 'GOOGLE_SEARCH_ATTRIBUTION_DATA_DRIVEN' | 'LINEAR'
+  | 'TIME_DECAY' | 'POSITION_BASED'
+
+export interface AdConversionActionValueSettings {
+  defaultValue?: number
+  defaultCurrencyCode?: string
+  alwaysUseDefault?: boolean
+}
+
+export interface AdConversionAction {
+  id: string
+  orgId: string
+  platform: AdConversionPlatform
+  name: string
+  category: AdConversionCategory
+  valueSettings: AdConversionActionValueSettings
+  countingType: AdConversionCountingType
+  attributionModel?: AdConversionAttributionModel
+  providerData?: {
+    google?: { conversionActionResourceName: string }
+    meta?: { customEventType?: string; pixelId?: string }
+  }
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}

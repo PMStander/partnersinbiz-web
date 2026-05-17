@@ -1906,6 +1906,15 @@
         { "fieldPath": "platform", "order": "ASCENDING" },
         { "fieldPath": "subtype", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "ad_conversion_actions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "platform", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
