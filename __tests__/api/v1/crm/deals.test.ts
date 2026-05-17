@@ -341,7 +341,9 @@ describe('PUT /api/v1/crm/deals/[id]', () => {
     const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
     stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-1', stage: 'discovery', value: 100, title: 'D' } })
     const { dispatchWebhook } = await import('@/lib/webhooks/dispatch')
+    const { logActivity } = await import('@/lib/activity/log')
     ;(dispatchWebhook as jest.Mock).mockClear()
+    ;(logActivity as jest.Mock).mockClear()
     const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { stage: 'proposal', notes: 'moved', sneaky: 'leak' })
     const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
     await PUT(req, routeCtx('d1'))
@@ -354,6 +356,30 @@ describe('PUT /api/v1/crm/deals/[id]', () => {
     expect(payload.fromStage).toBe('discovery')
     expect(payload.toStage).toBe('proposal')
     expect(payload.id).toBe('d1')
+    expect(logActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'crm_deal_updated' })
+    )
+  })
+
+  it('PUT { ownerUid: "" } clears ownerRef via FieldValue.delete()', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    const captured = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDeal(member,
+      { id: 'd1', data: { orgId: 'org-1', stage: 'discovery', ownerUid: 'uid-old' } },
+      {},
+      { capturedUpdate: captured },
+    )
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { ownerUid: '' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    const res = await PUT(req, routeCtx('d1'))
+    expect(res.status).toBeLessThan(300)
+    const patch = captured.mock.calls[0][0]
+    expect(patch.ownerUid).toBe('')
+    // FieldValue.delete() returns a sentinel — assert it's present and is a sentinel-like value
+    expect(patch.ownerRef).toBeDefined()
+    // Firebase Admin SDK sentinels: check via toString or by sniffing properties
+    // Simplest: assert the field is in the patch (the FieldValue.delete sentinel is truthy but not a MemberRef)
+    expect(typeof (patch.ownerRef as any).displayName).toBe('undefined')  // proves it's NOT a MemberRef
   })
 
   it('PUT stage → won fires deal.won + tryAttributeDealWon + crm_deal_won activity', async () => {

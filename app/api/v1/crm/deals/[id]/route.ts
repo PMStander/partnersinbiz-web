@@ -40,9 +40,6 @@ async function handleDealUpdate(
   let ownerRef: MemberRef | undefined
   const newOwnerUid = typeof body.ownerUid === 'string' ? body.ownerUid : undefined
   const ownerChanged = newOwnerUid !== undefined && newOwnerUid !== (before.ownerUid ?? '')
-  if (ownerChanged && newOwnerUid !== '') {
-    ownerRef = await resolveMemberRef(ctx.orgId, newOwnerUid)
-  }
 
   const patch: Record<string, unknown> = {
     ...body,
@@ -50,7 +47,16 @@ async function handleDealUpdate(
     updatedByRef: actorRef,
     updatedAt: FieldValue.serverTimestamp(),
   }
-  if (ownerRef) patch.ownerRef = ownerRef
+
+  if (ownerChanged) {
+    if (newOwnerUid !== '') {
+      ownerRef = await resolveMemberRef(ctx.orgId, newOwnerUid)
+      patch.ownerRef = ownerRef
+    } else {
+      // Unassign — explicitly clear ownerRef in Firestore
+      patch.ownerRef = FieldValue.delete()
+    }
+  }
 
   // Firestore rejects undefined values — strip them before write
   const sanitized = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined))
@@ -99,13 +105,17 @@ async function handleDealUpdate(
         (typeof body?.currency === 'string' && body.currency) ||
         (typeof before.currency === 'string' && before.currency) ||
         'ZAR'
-      await tryAttributeDealWon({
-        orgId: ctx.orgId,
-        contactId,
-        dealId: id,
-        amount: typeof dealValue === 'number' ? dealValue : 0,
-        currency,
-      })
+      try {
+        await tryAttributeDealWon({
+          orgId: ctx.orgId,
+          contactId,
+          dealId: id,
+          amount: typeof dealValue === 'number' ? dealValue : 0,
+          currency,
+        })
+      } catch (e) {
+        console.error('[attribution-error] tryAttributeDealWon', e)
+      }
 
       try {
         await logActivity({
