@@ -447,3 +447,101 @@ export type CreateAdSavedAudienceInput = Omit<
 >
 
 export type UpdateAdSavedAudienceInput = Partial<Pick<AdSavedAudience, 'name' | 'description' | 'targeting'>>
+
+// ─── Pixel + CAPI (Phase 6) ──────────────────────────────────────────────────
+
+export interface AdPixelConfigPlatform {
+  pixelId: string
+  capiTokenEnc?: EncryptedData
+  testEventCode?: string
+}
+
+export interface AdPixelEventMapping {
+  /** PiB analytics event name (e.g. 'purchase'). */
+  pibEventName: string
+  /** Meta CAPI standard event name (e.g. 'Purchase'). */
+  metaEventName: string
+  /** Optional field on the event payload to use as the `value` for Meta CAPI. */
+  valueField?: string
+}
+
+export interface AdPixelConfig {
+  id: string
+  orgId: string
+  /** Optional PiB Property reference (see [[properties-module-live]]); null for org-wide configs. */
+  propertyId?: string
+  name: string
+  meta?: AdPixelConfigPlatform
+  google?: AdPixelConfigPlatform
+  linkedin?: AdPixelConfigPlatform
+  tiktok?: AdPixelConfigPlatform
+  eventMappings: AdPixelEventMapping[]
+  createdBy: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type CreateAdPixelConfigInput = Omit<
+  AdPixelConfig,
+  'id' | 'orgId' | 'createdBy' | 'createdAt' | 'updatedAt'
+>
+
+export type UpdateAdPixelConfigInput = Partial<
+  Pick<AdPixelConfig, 'name' | 'meta' | 'google' | 'linkedin' | 'tiktok' | 'eventMappings'>
+>
+
+// ─── CAPI Event Log (Phase 6) ────────────────────────────────────────────────
+
+export type CapiActionSource = 'website' | 'email' | 'phone_call' | 'system_generated' | 'other'
+
+export interface CapiUserHash {
+  em?: string       // email SHA-256
+  ph?: string       // phone SHA-256
+  fn?: string       // first name SHA-256
+  ln?: string       // last name SHA-256
+  ge?: string       // gender SHA-256
+  ct?: string       // city SHA-256
+  st?: string       // state SHA-256
+  country?: string  // country SHA-256
+  zp?: string       // zip SHA-256
+  db?: string       // dob SHA-256
+  external_id?: string  // SHA-256
+  fbp?: string      // raw (already hashed by Meta browser pixel)
+  fbc?: string      // raw
+}
+
+export interface CapiCustomData {
+  value?: number
+  currency?: string
+  content_ids?: string[]
+  content_type?: string
+  num_items?: number
+}
+
+export interface CapiFanoutResult {
+  status: 'sent' | 'failed' | 'skipped'
+  metaResponseId?: string  // Meta returns events_received count, not per-event id
+  error?: string
+  sentAt: Timestamp
+}
+
+export interface AdCapiEvent {
+  id: string  // = event_id from client (dedupe key; matches browser Pixel eventID)
+  orgId: string
+  pixelConfigId: string
+  propertyId?: string
+  eventName: string  // e.g. 'Purchase', 'Lead'
+  eventTime: Timestamp
+  userHash: CapiUserHash
+  customData?: CapiCustomData
+  actionSource: CapiActionSource
+  eventSourceUrl?: string
+  optOut: boolean
+  fanout: {
+    meta?: CapiFanoutResult
+    google?: CapiFanoutResult
+    linkedin?: CapiFanoutResult
+    tiktok?: CapiFanoutResult
+  }
+  createdAt: Timestamp
+}

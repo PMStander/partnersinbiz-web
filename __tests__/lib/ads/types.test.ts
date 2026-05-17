@@ -301,3 +301,137 @@ describe('AdSavedAudience shape', () => {
     expect(s.targeting.demographics.ageMin).toBe(25)
   })
 })
+
+// ─── Phase 6: Pixel + CAPI types ────────────────────────────────────────────
+
+import type {
+  AdPixelConfig,
+  CapiUserHash,
+  CapiCustomData,
+  AdCapiEvent,
+} from '@/lib/ads/types'
+
+describe('AdPixelConfig shape', () => {
+  it('requires id, orgId, name, eventMappings, timestamps; platforms are optional', () => {
+    const config: AdPixelConfig = {
+      id: 'pxc_abc',
+      orgId: 'org_1',
+      name: 'Main Pixel',
+      eventMappings: [
+        { pibEventName: 'purchase', metaEventName: 'Purchase', valueField: 'total' },
+      ],
+      meta: { pixelId: '1234567890' },
+      createdBy: 'user_1',
+      createdAt: { seconds: 1, nanoseconds: 0 } as any,
+      updatedAt: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    expect(config.id).toBe('pxc_abc')
+    expect(config.meta?.pixelId).toBe('1234567890')
+    expect(config.google).toBeUndefined()
+    expect(config.eventMappings[0].pibEventName).toBe('purchase')
+  })
+
+  it('accepts optional propertyId and capiTokenEnc on platform', () => {
+    const config: AdPixelConfig = {
+      id: 'pxc_xyz',
+      orgId: 'org_2',
+      propertyId: 'prop_1',
+      name: 'Scoped Pixel',
+      eventMappings: [],
+      meta: {
+        pixelId: '9876543210',
+        capiTokenEnc: { ciphertext: 'enc', iv: 'iv1', tag: 'tag1' },
+        testEventCode: 'TEST123',
+      },
+      createdBy: 'user_2',
+      createdAt: { seconds: 2, nanoseconds: 0 } as any,
+      updatedAt: { seconds: 2, nanoseconds: 0 } as any,
+    }
+    expect(config.propertyId).toBe('prop_1')
+    expect(config.meta?.capiTokenEnc?.ciphertext).toBe('enc')
+    expect(config.meta?.testEventCode).toBe('TEST123')
+  })
+})
+
+describe('CapiUserHash shape', () => {
+  it('accepts all optional PII hash fields + raw fbp/fbc pass-throughs', () => {
+    const hash: CapiUserHash = {
+      em: 'a'.repeat(64),
+      ph: 'b'.repeat(64),
+      fn: 'c'.repeat(64),
+      ln: 'd'.repeat(64),
+      ge: 'e'.repeat(64),
+      ct: 'f'.repeat(64),
+      st: 'g'.repeat(64),
+      country: 'h'.repeat(64),
+      zp: 'i'.repeat(64),
+      db: 'j'.repeat(64),
+      external_id: 'k'.repeat(64),
+      fbp: 'fb.1.1234.5678',
+      fbc: 'fb.1.1234.AbCdEfGh',
+    }
+    expect(hash.em).toHaveLength(64)
+    expect(hash.fbp).toBe('fb.1.1234.5678')
+    expect(hash.fbc).toBe('fb.1.1234.AbCdEfGh')
+  })
+
+  it('allows an empty hash (all fields undefined)', () => {
+    const hash: CapiUserHash = {}
+    expect(Object.keys(hash)).toHaveLength(0)
+  })
+})
+
+describe('CapiCustomData shape', () => {
+  it('accepts value, currency, content_ids, content_type, num_items', () => {
+    const cd: CapiCustomData = {
+      value: 49.99,
+      currency: 'USD',
+      content_ids: ['sku_1', 'sku_2'],
+      content_type: 'product',
+      num_items: 2,
+    }
+    expect(cd.value).toBe(49.99)
+    expect(cd.content_ids).toHaveLength(2)
+  })
+
+  it('allows an empty object (all optional)', () => {
+    const cd: CapiCustomData = {}
+    expect(cd.value).toBeUndefined()
+  })
+})
+
+describe('AdCapiEvent shape', () => {
+  it('matches the documented shape with fanout results', () => {
+    const event: AdCapiEvent = {
+      id: 'evt_dedup_123',
+      orgId: 'org_1',
+      pixelConfigId: 'pxc_abc',
+      propertyId: 'prop_1',
+      eventName: 'Purchase',
+      eventTime: { seconds: 1716000000, nanoseconds: 0 } as any,
+      userHash: { em: 'a'.repeat(64), fbp: 'fb.1.1234.5678' },
+      customData: { value: 99.0, currency: 'USD' },
+      actionSource: 'website',
+      eventSourceUrl: 'https://example.com/checkout',
+      optOut: false,
+      fanout: {
+        meta: { status: 'sent', metaResponseId: '1', sentAt: { seconds: 1, nanoseconds: 0 } as any },
+        google: { status: 'skipped', sentAt: { seconds: 1, nanoseconds: 0 } as any },
+        linkedin: { status: 'failed', error: 'Not configured', sentAt: { seconds: 1, nanoseconds: 0 } as any },
+      },
+      createdAt: { seconds: 1, nanoseconds: 0 } as any,
+    }
+    expect(event.id).toBe('evt_dedup_123')
+    expect(event.fanout.meta?.status).toBe('sent')
+    expect(event.fanout.google?.status).toBe('skipped')
+    expect(event.fanout.linkedin?.error).toBe('Not configured')
+    expect(event.fanout.tiktok).toBeUndefined()
+  })
+
+  it('actionSource accepts all 5 canonical values', () => {
+    const sources: AdCapiEvent['actionSource'][] = [
+      'website', 'email', 'phone_call', 'system_generated', 'other',
+    ]
+    expect(sources).toHaveLength(5)
+  })
+})
