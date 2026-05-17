@@ -58,7 +58,7 @@ All `/api/v1/crm/contacts/*` routes now use the `withCrmAuth` middleware:
 
 ## Collaboration primitives
 
-- **Idempotency**: `POST /crm/contacts`, `POST /crm/deals`, `POST /quotes`, `POST /tasks` accept `Idempotency-Key` header
+- **Idempotency**: see the `## Idempotency` section below — CRM POST routes do NOT generally honour an `Idempotency-Key` header
 - **Comments** (`resourceType: 'contact' | 'deal' | 'quote' | 'form_submission'`): leave internal notes with `@user:<uid>` / `@agent:<id>` mentions
 - **Tasks** linked to contacts/deals: `POST /tasks` with `contactId` / `dealId` — see `project-management` skill
 - **Calendar events** linked to contacts/deals: `POST /calendar/events` with `relatedTo: { type: 'contact'|'deal', id }` — see `project-management` skill
@@ -68,6 +68,31 @@ All `/api/v1/crm/contacts/*` routes now use the `withCrmAuth` middleware:
 ```json
 { "success": true, "data": { ... }, "meta": { "total": 50, "page": 1, "limit": 20 } }
 ```
+
+## Idempotency
+
+CRM POST routes do NOT honour an `Idempotency-Key` header. Duplicate POSTs may create duplicate records.
+
+**Mitigations in place:**
+- **Quotes** — atomic `runTransaction` quote numbering (no duplicate quote numbers under concurrency)
+- **Forms** — slug uniqueness per-org enforced (duplicate POST with same slug → 409)
+- **Form submissions** (`/forms/[id]/submit` public route) — deduped via IP rate-limiting
+
+**Not deduped:**
+- Contacts, Deals, Segments, Integrations, Capture-sources — duplicate POSTs create duplicates. Callers should retry POST only after confirming the previous call did NOT succeed (check response, or query for the record).
+
+This is a deliberate decision (Sub-1 cleanup). To restore idempotency in a future PR, add `withIdempotency` wrapping around the relevant POST handlers.
+
+## DELETE response shape
+
+All CRM DELETE endpoints return `apiSuccess({ id })` on success (HTTP 200). Forms previously returned `{ id, deleted: true }` — standardized in PR 8.
+
+```ts
+// Response body:
+{ success: true, data: { id: "<deleted-id>" } }
+```
+
+For Forms, `?force=true` triggers hard-delete; default is soft-delete (`deleted: true, active: false` set on doc). The response is the same `{ id }` in both cases.
 
 ---
 
@@ -137,9 +162,15 @@ Log activity. Body: `{ type, summary, dealId?, metadata? }`. `type`: `email_sent
 #### `POST /crm/contacts/[id]/tags` — auth: cookie (member+) or Bearer + X-Org-Id
 Atomic tag update. Body: `{ add?: string[], remove?: string[] }`. Uses Firestore `arrayUnion` / `arrayRemove`. Returns `{ id, tags }` (post-update).
 
+#### `GET /contacts/[id]/preferences` — auth: viewer
+Fetch communication preferences for a contact (email opt-in/out, SMS, notification channels).
+
+#### `PUT /contacts/[id]/preferences` — auth: member
+Update communication preferences. Partial updates accepted — only supplied fields change.
+
 ### Deals
 
-#### `GET /crm/deals` — auth: admin
+#### `GET /crm/deals` — auth: viewer
 Filters: `stage`, `contactId`, `page`, `limit`.
 
 Response: array of `Deal`:
@@ -150,12 +181,14 @@ Response: array of `Deal`:
   "createdAt": "...", "updatedAt": "...", "deleted": false }
 ```
 
-#### `POST /crm/deals` — auth: admin
+#### `POST /crm/deals` — auth: member
 Required: `orgId`, `title`, `contactId`. Defaults: `value=0`, `currency='USD'`, `stage='discovery'`.
 Currencies: `USD`, `EUR`, `ZAR`. `orgId` is **required** — 400 if missing. Dispatches `deal.created`.
 
-#### `GET/PUT/DELETE /crm/deals/[id]` — auth: admin
+#### `GET /crm/deals/[id]` — auth: viewer
+#### `PUT /crm/deals/[id]` — auth: member
 PUT dispatches `deal.stage_changed` when `stage` changes; if new stage is `won` → also `deal.won`; if `lost` → also `deal.lost`.
+#### `DELETE /crm/deals/[id]` — auth: admin
 
 ### CRM activities (cross-cutting)
 
@@ -167,10 +200,10 @@ Log an activity not tied to a specific contact resource (e.g., generic meeting n
 
 ### Quotes
 
-#### `GET /quotes` — auth: admin
+#### `GET /quotes` — auth: viewer
 List quotes. Filter `?orgId=X`. Sorted `createdAt desc`, limit 50.
 
-#### `POST /quotes` — auth: admin
+#### `POST /quotes` — auth: member
 Required: `orgId` (the client org), `lineItems: [{ description, quantity, unitPrice }]`.
 
 Body:
@@ -190,10 +223,10 @@ Auto-computes: `subtotal`, `taxAmount`, `total`. Assigns sequential `quoteNumber
 
 Response (201): `{ id, quoteNumber }`. Dispatches `quote.created`.
 
-#### `GET /quotes/[id]` — auth: admin
+#### `GET /quotes/[id]` — auth: viewer
 Full quote.
 
-#### `PATCH /quotes/[id]` — auth: admin
+#### `PATCH /quotes/[id]` — auth: member
 Update fields. Status transitions: `draft` → `sent` → `accepted` | `rejected` | `converted`.
 - On `status=accepted`: dispatches `quote.accepted`
 - On `status=rejected`: dispatches `quote.rejected`
@@ -217,10 +250,10 @@ Use this before any outbound call or email.
 
 ### Forms (lead capture)
 
-#### `GET /forms` — auth: admin
+#### `GET /forms` — auth: viewer
 List. Filters: `orgId` (required), `active`, `search`, `page`, `limit`.
 
-#### `POST /forms` — auth: admin (idempotent)
+#### `POST /forms` — auth: admin (slug-unique per org — duplicate slug → 409)
 Create a form.
 
 Body:
@@ -251,8 +284,10 @@ Body:
 
 Response (201): `{ id, slug }`.
 
-#### `GET/PUT/DELETE /forms/[id]` — auth: admin
+#### `GET /forms/[id]` — auth: viewer
+#### `PUT /forms/[id]` — auth: admin
 `slug` can only change if no submissions exist yet (409 otherwise).
+#### `DELETE /forms/[id]` — auth: admin
 
 #### `POST /forms/[slug]/submit` — **public, no auth**
 Query param: `?orgId=X` (required). Body is the form data keyed by `fieldId`.
@@ -272,10 +307,20 @@ Response:
 
 If `createContact: true` and `email` is valid, upserts a `Contact` (source=`form`) and links it via `contactId` on the submission. Dispatches `form.submitted` webhook.
 
-#### `GET /forms/[id]/submissions` — auth: admin
+### Attribution on public /submit
+
+The public `/forms/[id]/submit` endpoint writes `createdByRef = formSubmissionRef(formId, formName)` on three records when triggered by an anonymous visitor:
+- The `FormSubmission` doc
+- The auto-created Contact (only on INSERT — existing Contact's `createdByRef` is NOT overwritten)
+- A new Activity record (`type: 'note'`, `summary: 'Submitted form: <formName>'`) linked to the contact
+
+The synthetic actor uid is `system:form-submission:<formId>` and `kind: 'system'`.
+
+#### `GET /forms/[id]/submissions` — auth: viewer
 Filters: `status` (`new`|`read`|`archived`), `from`, `to`, `page`, `limit`.
 
-#### `GET/PATCH /forms/[id]/submissions/[subId]` — auth: admin
+#### `GET /forms/[id]/submissions/[subId]` — auth: viewer
+#### `PATCH /forms/[id]/submissions/[subId]` — auth: admin
 PATCH updates `status`.
 
 ### Comments on CRM resources
@@ -413,7 +458,7 @@ Use the `platform-ops` skill's `/reports/pipeline` endpoint for `byStage` counts
 3. **Log activities proactively** — AI should log every call/email so future briefs are accurate.
 4. **Use tags for segmentation** — cheaper than custom fields and queryable with `array-contains-any`.
 5. **Webhook subscriptions** — listen for `contact.created`, `deal.won`, `form.submitted` to trigger downstream flows (see `platform-ops`).
-6. **Idempotency** — pass `Idempotency-Key` on creates to dedupe.
+6. **Idempotency** — CRM POST routes do NOT honour `Idempotency-Key`. Do not retry a POST unless you have confirmed the prior call failed. See `## Idempotency` section for per-route details.
 
 ---
 
