@@ -168,12 +168,39 @@ describe('DELETE /api/v1/crm/contacts/:id', () => {
 describe('GET /api/v1/crm/contacts/:id/activities', () => {
 
   it('returns activities for a contact', async () => {
-    // activities route still uses withAuth('admin') — AI_API_KEY Bearer satisfies it
+    // activities route now uses withCrmAuth('viewer') — AI_API_KEY Bearer satisfies it
+    // Contacts collection needed for tenant-isolation preflight check
     ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
       if (name === 'users') {
         return {
           doc: () => ({
-            get: () => Promise.resolve({ exists: true, data: () => ({ role: 'admin' }) }),
+            get: () => Promise.resolve({ exists: true, data: () => ({ activeOrgId: 'org-test' }) }),
+          }),
+        }
+      }
+      if (name === 'orgMembers') {
+        return {
+          doc: () => ({
+            get: () => Promise.resolve({ exists: true, data: () => ({ uid: 'uid-agent', orgId: 'org-test', role: 'member' }) }),
+          }),
+        }
+      }
+      if (name === 'organizations') {
+        return {
+          doc: () => ({
+            get: () => Promise.resolve({ exists: true, data: () => ({ settings: { permissions: {} } }) }),
+          }),
+        }
+      }
+      if (name === 'contacts') {
+        return {
+          doc: jest.fn().mockReturnValue({
+            id: 'a1',
+            get: jest.fn().mockResolvedValue({
+              exists: true,
+              id: 'a1',
+              data: () => ({ orgId: 'org-test' }),
+            }),
           }),
         }
       }
