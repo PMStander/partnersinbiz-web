@@ -42,6 +42,7 @@ const NAV_LINKS: NavItem[] = [
       '/portal/segments',
       '/portal/email-domains',
       '/portal/integrations',
+      '/portal/ads',
     ],
   },
   {
