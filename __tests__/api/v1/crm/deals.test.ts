@@ -12,9 +12,10 @@ const AI_API_KEY = 'test-ai-key-abc'
 process.env.AI_API_KEY = AI_API_KEY
 process.env.SESSION_COOKIE_NAME = '__session'
 
-// Suppress logActivity and dispatchWebhook noise in tests
+// Suppress logActivity, dispatchWebhook, and tryAttributeDealWon noise in tests
 jest.mock('@/lib/activity/log', () => ({ logActivity: jest.fn().mockResolvedValue(undefined) }))
 jest.mock('@/lib/webhooks/dispatch', () => ({ dispatchWebhook: jest.fn().mockResolvedValue(undefined) }))
+jest.mock('@/lib/email-analytics/attribution-hooks', () => ({ tryAttributeDealWon: jest.fn().mockResolvedValue(undefined) }))
 
 const params = { params: Promise.resolve({ id: 'deal-1' }) }
 
@@ -48,6 +49,46 @@ function stageAuth(
     return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }
   })
 }
+
+function stageAuthWithDeal(
+  member: { uid: string; orgId: string; role: string; firstName?: string; lastName?: string },
+  existingDeal: { id: string; data: Record<string, unknown> } | null,
+  perms: Record<string, unknown> = {},
+  opts?: { capturedUpdate?: jest.Mock; capturedDelete?: jest.Mock; ownerLookup?: Record<string, { firstName?: string; lastName?: string }> },
+) {
+  ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: member.uid })
+  ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
+    if (name === 'users') return { doc: () => ({ get: () => Promise.resolve({ exists: true, data: () => ({ activeOrgId: member.orgId }) }) }) }
+    if (name === 'orgMembers') return {
+      doc: jest.fn().mockImplementation((id: string) => {
+        if (id === `${member.orgId}_${member.uid}`) return { get: () => Promise.resolve({ exists: true, data: () => member }) }
+        const ownerUid = id.replace(`${member.orgId}_`, '')
+        const ownerData = opts?.ownerLookup?.[ownerUid]
+        return { get: () => Promise.resolve(ownerData ? { exists: true, data: () => ({ uid: ownerUid, ...ownerData }) } : { exists: false }) }
+      }),
+    }
+    if (name === 'organizations') return { doc: () => ({ get: () => Promise.resolve({ exists: true, data: () => ({ settings: { permissions: perms } }) }) }) }
+    if (name === 'deals') {
+      const updateFn = opts?.capturedUpdate ?? jest.fn().mockResolvedValue(undefined)
+      const deleteFn = opts?.capturedDelete ?? jest.fn().mockResolvedValue(undefined)
+      return {
+        doc: jest.fn().mockReturnValue({
+          id: existingDeal?.id ?? 'd1',
+          get: jest.fn().mockResolvedValue({
+            exists: existingDeal != null,
+            id: existingDeal?.id ?? 'd1',
+            data: () => existingDeal?.data ?? {},
+          }),
+          update: updateFn,
+          delete: deleteFn,
+        }),
+      }
+    }
+    return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }
+  })
+}
+
+const routeCtx = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('GET /api/v1/crm/deals', () => {
   it('returns list of deals', async () => {
@@ -240,48 +281,163 @@ describe('POST /api/v1/crm/deals', () => {
   })
 })
 
-describe('PUT /api/v1/crm/deals/:id', () => {
-  it('updates deal', async () => {
-    ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
-      if (name === 'users') return { doc: () => ({ get: () => Promise.resolve({ exists: true, data: () => ({ activeOrgId: 'org-test', role: 'admin' }) }) }) }
-      if (name === 'organizations') return { doc: () => ({ get: () => Promise.resolve({ exists: true, data: () => ({ settings: { permissions: {} } }) }) }) }
-      if (name === 'deals') {
-        return {
-          doc: jest.fn().mockReturnValue({
-            id: 'deal-1',
-            get: jest.fn().mockResolvedValue({ exists: true, data: () => ({ title: 'Deal', deleted: false, orgId: 'org-test' }) }),
-            update: jest.fn().mockResolvedValue(undefined),
-          }),
-        }
-      }
-      return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }
-    })
-    const req = callAsAgent('org-test', 'PUT', '/api/v1/crm/deals/deal-1', { stage: 'proposal' }, AI_API_KEY)
+describe('PUT /api/v1/crm/deals/[id]', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('member can update deal title in own org', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member', firstName: 'Alice', lastName: 'B' })
+    const captured = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-1', stage: 'discovery', title: 'Old', value: 100 } }, {}, { capturedUpdate: captured })
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { title: 'New' })
     const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
-    const res = await PUT(req, params)
-    expect(res.status).toBe(200)
+    const res = await PUT(req, routeCtx('d1'))
+    expect(res.status).toBeLessThan(300)
+    const patch = captured.mock.calls[0][0]
+    expect(patch.title).toBe('New')
+    expect(patch.updatedByRef.displayName).toBe('Alice B')
+    expect(patch.updatedByRef.kind).toBe('human')
+  })
+
+  it('member PUT to deal in another org → 404', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-2' } })
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { title: 'X' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    const res = await PUT(req, routeCtx('d1'))
+    expect(res.status).toBe(404)
+  })
+
+  it('writes ownerRef when PUT body has new ownerUid', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    const captured = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-1', stage: 'discovery', ownerUid: '' } }, {}, {
+      capturedUpdate: captured,
+      ownerLookup: { 'uid-2': { firstName: 'Bob', lastName: 'C' } },
+    })
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { ownerUid: 'uid-2' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    const res = await PUT(req, routeCtx('d1'))
+    expect(res.status).toBeLessThan(300)
+    const patch = captured.mock.calls[0][0]
+    expect(patch.ownerUid).toBe('uid-2')
+    expect(patch.ownerRef.displayName).toBe('Bob C')
+  })
+
+  it('agent PUT uses AGENT_PIP_REF for updatedByRef, omits updatedBy', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    const captured = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-1', stage: 'discovery' } }, {}, { capturedUpdate: captured })
+    const req = callAsAgent('org-1', 'PUT', '/api/v1/crm/deals/d1', { notes: 'agent updated' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    const res = await PUT(req, routeCtx('d1'))
+    expect(res.status).toBeLessThan(300)
+    const patch = captured.mock.calls[0][0]
+    expect(patch.updatedByRef.uid).toBe('agent:pip')
+    expect(patch.updatedByRef.kind).toBe('agent')
+    expect(patch.updatedBy).toBeUndefined()
+  })
+
+  it('PUT stage change fires deal.stage_changed webhook with explicit fields', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-1', stage: 'discovery', value: 100, title: 'D' } })
+    const { dispatchWebhook } = await import('@/lib/webhooks/dispatch')
+    ;(dispatchWebhook as jest.Mock).mockClear()
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { stage: 'proposal', notes: 'moved', sneaky: 'leak' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    await PUT(req, routeCtx('d1'))
+    expect(dispatchWebhook).toHaveBeenCalledWith(
+      'org-1',
+      'deal.stage_changed',
+      expect.not.objectContaining({ sneaky: expect.anything() }),
+    )
+    const payload = (dispatchWebhook as jest.Mock).mock.calls.find((c: unknown[]) => c[1] === 'deal.stage_changed')[2]
+    expect(payload.fromStage).toBe('discovery')
+    expect(payload.toStage).toBe('proposal')
+    expect(payload.id).toBe('d1')
+  })
+
+  it('PUT stage → won fires deal.won + tryAttributeDealWon + crm_deal_won activity', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-1', stage: 'negotiation', value: 5000, title: 'Big', contactId: 'c1', currency: 'ZAR' } })
+    const { dispatchWebhook } = await import('@/lib/webhooks/dispatch')
+    const { logActivity } = await import('@/lib/activity/log')
+    const { tryAttributeDealWon } = await import('@/lib/email-analytics/attribution-hooks')
+    ;(dispatchWebhook as jest.Mock).mockClear()
+    ;(logActivity as jest.Mock).mockClear()
+    ;(tryAttributeDealWon as jest.Mock).mockClear()
+
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { stage: 'won' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    await PUT(req, routeCtx('d1'))
+
+    expect(dispatchWebhook).toHaveBeenCalledWith('org-1', 'deal.stage_changed', expect.any(Object))
+    expect(dispatchWebhook).toHaveBeenCalledWith('org-1', 'deal.won', expect.any(Object))
+    expect(tryAttributeDealWon).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-1', dealId: 'd1' }))
+    expect(logActivity).toHaveBeenCalledWith(expect.objectContaining({ type: 'crm_deal_won' }))
+  })
+
+  it('PUT stage → lost fires deal.lost + crm_deal_lost activity', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-1', stage: 'negotiation', value: 1000, title: 'X' } })
+    const { dispatchWebhook } = await import('@/lib/webhooks/dispatch')
+    const { logActivity } = await import('@/lib/activity/log')
+    ;(dispatchWebhook as jest.Mock).mockClear()
+    ;(logActivity as jest.Mock).mockClear()
+
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { stage: 'lost' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    await PUT(req, routeCtx('d1'))
+
+    expect(dispatchWebhook).toHaveBeenCalledWith('org-1', 'deal.lost', expect.any(Object))
+    expect(logActivity).toHaveBeenCalledWith(expect.objectContaining({ type: 'crm_deal_lost' }))
+  })
+
+  it('PUT without stage change does NOT fire stage_changed webhook', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-1', stage: 'discovery', value: 100 } })
+    const { dispatchWebhook } = await import('@/lib/webhooks/dispatch')
+    ;(dispatchWebhook as jest.Mock).mockClear()
+
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { notes: 'just notes' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    await PUT(req, routeCtx('d1'))
+
+    const stageChangeCalls = (dispatchWebhook as jest.Mock).mock.calls.filter((c: unknown[]) => c[1] === 'deal.stage_changed')
+    expect(stageChangeCalls).toHaveLength(0)
   })
 })
 
-describe('DELETE /api/v1/crm/deals/:id', () => {
-  it('soft-deletes deal', async () => {
-    ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
-      if (name === 'users') return { doc: () => ({ get: () => Promise.resolve({ exists: true, data: () => ({ activeOrgId: 'org-test', role: 'admin' }) }) }) }
-      if (name === 'organizations') return { doc: () => ({ get: () => Promise.resolve({ exists: true, data: () => ({ settings: { permissions: {} } }) }) }) }
-      if (name === 'deals') {
-        return {
-          doc: jest.fn().mockReturnValue({
-            id: 'deal-1',
-            get: jest.fn().mockResolvedValue({ exists: true, data: () => ({ title: 'Deal', deleted: false, orgId: 'org-test' }) }),
-            update: jest.fn().mockResolvedValue(undefined),
-          }),
-        }
-      }
-      return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }
-    })
-    const req = callAsAgent('org-test', 'DELETE', '/api/v1/crm/deals/deal-1', undefined, AI_API_KEY)
+describe('DELETE /api/v1/crm/deals/[id]', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('admin can delete (soft-delete with updatedByRef)', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin', firstName: 'Adm', lastName: 'In' })
+    const captured = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDeal(admin, { id: 'd1', data: { orgId: 'org-1', title: 'D' } }, {}, { capturedUpdate: captured })
+    const req = callAsMember(admin, 'DELETE', '/api/v1/crm/deals/d1')
     const { DELETE } = await import('@/app/api/v1/crm/deals/[id]/route')
-    const res = await DELETE(req, params)
-    expect(res.status).toBe(200)
+    const res = await DELETE(req, routeCtx('d1'))
+    expect(res.status).toBeLessThan(300)
+    const patch = captured.mock.calls[0][0]
+    expect(patch.deleted).toBe(true)
+    expect(patch.updatedByRef.displayName).toBe('Adm In')
+  })
+
+  it('member DELETE → 403 (role gate)', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    stageAuthWithDeal(member, { id: 'd1', data: { orgId: 'org-1' } })
+    const req = callAsMember(member, 'DELETE', '/api/v1/crm/deals/d1')
+    const { DELETE } = await import('@/app/api/v1/crm/deals/[id]/route')
+    const res = await DELETE(req, routeCtx('d1'))
+    expect(res.status).toBe(403)
+  })
+
+  it('admin DELETE to deal in another org → 404', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuthWithDeal(admin, { id: 'd1', data: { orgId: 'org-2' } })
+    const req = callAsMember(admin, 'DELETE', '/api/v1/crm/deals/d1')
+    const { DELETE } = await import('@/app/api/v1/crm/deals/[id]/route')
+    const res = await DELETE(req, routeCtx('d1'))
+    expect(res.status).toBe(404)
   })
 })
