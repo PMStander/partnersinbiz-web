@@ -712,6 +712,18 @@ describe('PUT /api/v1/crm/integrations/[id]', () => {
     const res = await PUT(req, { params: Promise.resolve({ id: 'int-1' }) })
     expect(res.status).toBe(403)
   })
+
+  it('PUT with empty body returns 400 (no editable fields)', async () => {
+    const admin = seedOrgMember('org-1', 'uid-1', { role: 'admin' })
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1'))
+
+    const req = callAsMember(admin, 'PUT', '/api/v1/crm/integrations/int-1', {})
+    const { PUT } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await PUT(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/no editable fields/i)
+  })
 })
 
 // ---------------------------------------------------------------------------

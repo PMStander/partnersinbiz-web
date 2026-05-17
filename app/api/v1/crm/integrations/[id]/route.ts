@@ -72,6 +72,19 @@ async function handleIntegrationUpdate(
   const body = await req.json().catch(() => null)
   if (!body) return apiError('Invalid JSON', 400)
 
+  // Guard: reject no-op requests that supply no editable fields
+  const hasEditableFields = (
+    typeof body.name === 'string' ||
+    Array.isArray(body.autoTags) ||
+    Array.isArray(body.autoCampaignIds) ||
+    typeof body.cadenceMinutes === 'number' ||
+    body.status === 'paused' || body.status === 'active' ||
+    (body.config !== undefined && body.config !== null)
+  )
+  if (!hasEditableFields) {
+    return apiError('No editable fields supplied', 400)
+  }
+
   // Decrypt existing config for merging
   let currentConfig: Record<string, string> = (r.data as CrmIntegration).config ?? {}
   if (r.data.configEnc) {
