@@ -1827,6 +1827,31 @@
         { "fieldPath": "dimensionId", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "ad_pixel_configs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "propertyId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ad_capi_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "eventTime", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ad_capi_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "eventName", "order": "ASCENDING" },
+        { "fieldPath": "eventTime", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
