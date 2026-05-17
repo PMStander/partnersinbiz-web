@@ -1,14 +1,13 @@
 /**
- * GET  /api/v1/forms — list forms for an org (filterable, paginated)
- * POST /api/v1/forms — create a new form (idempotent via Idempotency-Key)
+ * GET  /api/v1/forms — list forms for the authenticated org (filterable, paginated)
+ * POST /api/v1/forms — create a new form
  *
- * Auth: admin (AI/admin)
+ * Auth: GET → viewer+, POST → admin+
  */
+import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { withIdempotency } from '@/lib/api/idempotency'
-import { actorFrom } from '@/lib/api/actor'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import {
   VALID_FIELD_TYPES,
@@ -56,11 +55,10 @@ function validateFields(fields: unknown): FormField[] | string {
   return cleaned
 }
 
-export const GET = withAuth('admin', async (req) => {
-  const { searchParams } = new URL(req.url)
-  const orgId = searchParams.get('orgId')
-  if (!orgId) return apiError('orgId is required; pass it as a query param')
+export const GET = withCrmAuth('viewer', async (_req: NextRequest, ctx) => {
+  const orgId = ctx.orgId
 
+  const { searchParams } = new URL(_req.url)
   const activeParam = searchParams.get('active')
   const search = (searchParams.get('search') ?? '').trim().toLowerCase()
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 200)
@@ -92,61 +90,70 @@ export const GET = withAuth('admin', async (req) => {
   return apiSuccess(forms, 200, { total: forms.length, page, limit })
 })
 
-export const POST = withAuth(
-  'admin',
-  withIdempotency(async (req, user) => {
-    const body = (await req.json()) as FormInput
+export const POST = withCrmAuth('admin', async (req: NextRequest, ctx) => {
+  const body = await req.json().catch(() => null) as FormInput | null
+  if (!body) return apiError('Invalid JSON', 400)
 
-    if (!body.orgId?.trim()) return apiError('orgId is required')
-    if (!body.name?.trim()) return apiError('name is required')
-    if (!body.slug?.trim()) return apiError('slug is required')
+  const orgId = ctx.orgId
+  if (!body.name?.trim()) return apiError('name is required')
+  if (!body.slug?.trim()) return apiError('slug is required')
 
-    const slug = body.slug.trim().toLowerCase()
-    if (!SLUG_RE.test(slug)) {
-      return apiError(
-        'slug must be lowercase letters, numbers, and dashes (e.g. "contact-us")',
-      )
-    }
+  const slug = body.slug.trim().toLowerCase()
+  if (!SLUG_RE.test(slug)) {
+    return apiError(
+      'slug must be lowercase letters, numbers, and dashes (e.g. "contact-us")',
+    )
+  }
 
-    const fieldsOrError = validateFields(body.fields)
-    if (typeof fieldsOrError === 'string') return apiError(fieldsOrError)
+  const fieldsOrError = validateFields(body.fields)
+  if (typeof fieldsOrError === 'string') return apiError(fieldsOrError)
 
-    const orgId = body.orgId.trim()
+  // Slug must be unique per org (among non-deleted forms).
+  const existing = await adminDb
+    .collection('forms')
+    .where('orgId', '==', orgId)
+    .where('slug', '==', slug)
+    .limit(1)
+    .get()
+  const conflict = existing.docs.find((d) => d.data()?.deleted !== true)
+  if (conflict) {
+    return apiError(`Slug "${slug}" already exists in this org`, 409)
+  }
 
-    // Slug must be unique per org (among non-deleted forms).
-    const existing = await adminDb
-      .collection('forms')
-      .where('orgId', '==', orgId)
-      .where('slug', '==', slug)
-      .limit(1)
-      .get()
-    const conflict = existing.docs.find((d) => d.data()?.deleted !== true)
-    if (conflict) {
-      return apiError(`Slug "${slug}" already exists in this org`, 409)
-    }
+  const actorRef = ctx.actor
 
-    const docRef = await adminDb.collection('forms').add({
-      orgId,
-      name: body.name.trim(),
-      slug,
-      title: body.title?.trim() ?? body.name.trim(),
-      description: body.description?.trim() ?? '',
-      fields: fieldsOrError,
-      thankYouMessage:
-        body.thankYouMessage?.trim() ?? 'Thanks for your submission',
-      notifyEmails: body.notifyEmails ?? [],
-      redirectUrl: body.redirectUrl ?? null,
-      createContact: body.createContact ?? true,
-      active: body.active ?? true,
-      rateLimitPerMinute: body.rateLimitPerMinute ?? 10,
-      turnstileEnabled: body.turnstileEnabled === true,
-      turnstileSiteKey: typeof body.turnstileSiteKey === 'string' ? body.turnstileSiteKey.trim() : '',
-      ...actorFrom(user),
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      deleted: false,
-    })
+  // Sanitize: strip undefined values so Firestore doesn't reject
+  const doc: Record<string, unknown> = {
+    orgId,
+    name: body.name.trim(),
+    slug,
+    title: body.title?.trim() ?? body.name.trim(),
+    description: body.description?.trim() ?? '',
+    fields: fieldsOrError,
+    thankYouMessage:
+      body.thankYouMessage?.trim() ?? 'Thanks for your submission',
+    notifyEmails: body.notifyEmails ?? [],
+    redirectUrl: body.redirectUrl ?? null,
+    createContact: body.createContact ?? true,
+    active: body.active ?? true,
+    rateLimitPerMinute: body.rateLimitPerMinute ?? 10,
+    turnstileEnabled: body.turnstileEnabled === true,
+    turnstileSiteKey:
+      typeof body.turnstileSiteKey === 'string' ? body.turnstileSiteKey.trim() : '',
+    createdByRef: actorRef,
+    updatedByRef: actorRef,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+    deleted: false,
+  }
 
-    return apiSuccess({ id: docRef.id, slug }, 201)
-  }),
-)
+  // Omit createdBy / updatedBy uid for agent calls
+  if (!ctx.isAgent) {
+    doc.createdBy = actorRef.uid
+    doc.updatedBy = actorRef.uid
+  }
+
+  const docRef = await adminDb.collection('forms').add(doc)
+  const created = await docRef.get()
+  return apiSuccess({ id: docRef.id, ...created.data() }, 201)
+})

@@ -3,18 +3,18 @@
  * PUT    /api/v1/forms/:id — update a form (slug only changeable pre-submission)
  * DELETE /api/v1/forms/:id — soft-delete (?force=true for hard-delete)
  *
- * Auth: admin (AI/admin)
+ * Auth: GET → viewer+, PUT/DELETE → admin+
  */
+import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { lastActorFrom } from '@/lib/api/actor'
+import { withCrmAuth, type CrmAuthContext } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { VALID_FIELD_TYPES, type Form, type FormField } from '@/lib/forms/types'
 
 export const dynamic = 'force-dynamic'
 
-type RouteContext = { params: Promise<{ id: string }> }
+type RouteCtx = { params: Promise<{ id: string }> }
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -29,6 +29,7 @@ const UPDATABLE_FIELDS = [
   'createContact',
   'active',
   'rateLimitPerMinute',
+  'slug',
 ] as const
 
 function validateFields(fields: unknown): FormField[] | string {
@@ -67,29 +68,57 @@ function validateFields(fields: unknown): FormField[] | string {
   return cleaned
 }
 
-export const GET = withAuth('admin', async (_req, _user, context) => {
-  const { id } = await (context as RouteContext).params
-  const doc = await adminDb.collection('forms').doc(id).get()
-  if (!doc.exists) return apiError('Form not found', 404)
-  const data = doc.data() as Form | undefined
-  if (!data || data.deleted === true) return apiError('Form not found', 404)
-  return apiSuccess({ ...data, id: doc.id })
+// ---------------------------------------------------------------------------
+// Tenant-scoped loader — returns 404 for missing OR cross-org OR deleted docs
+// ---------------------------------------------------------------------------
+
+async function loadForm(id: string, ctxOrgId: string) {
+  const ref = adminDb.collection('forms').doc(id)
+  const snap = await ref.get()
+  if (!snap.exists) return { ok: false as const, status: 404, error: 'Form not found' }
+  const data = snap.data()!
+  if (data.orgId !== ctxOrgId) return { ok: false as const, status: 404, error: 'Form not found' }
+  if (data.deleted === true) return { ok: false as const, status: 404, error: 'Form not found' }
+  return { ok: true as const, ref, snap, data: data as Form }
+}
+
+// ---------------------------------------------------------------------------
+// GET — viewer+
+// ---------------------------------------------------------------------------
+
+export const GET = withCrmAuth<RouteCtx>('viewer', async (_req, ctx, routeCtx) => {
+  const { id } = await routeCtx!.params
+  const r = await loadForm(id, ctx.orgId)
+  if (!r.ok) return apiError(r.error, r.status)
+  return apiSuccess({ id, ...r.data } as Form)
 })
 
-export const PUT = withAuth('admin', async (req, user, context) => {
-  const { id } = await (context as RouteContext).params
-  const ref = adminDb.collection('forms').doc(id)
-  const doc = await ref.get()
-  if (!doc.exists) return apiError('Form not found', 404)
-  const existing = doc.data() as Form | undefined
-  if (!existing || existing.deleted === true) {
-    return apiError('Form not found', 404)
+// ---------------------------------------------------------------------------
+// PUT — shared handler (factored out for clarity)
+// ---------------------------------------------------------------------------
+
+async function handleFormUpdate(
+  req: NextRequest,
+  ctx: CrmAuthContext,
+  id: string,
+): Promise<Response> {
+  const r = await loadForm(id, ctx.orgId)
+  if (!r.ok) return apiError(r.error, r.status)
+
+  const body = await req.json().catch(() => null)
+  if (!body) return apiError('Invalid JSON', 400)
+
+  // Empty-body guard: check if any editable field is present
+  const hasEditable = UPDATABLE_FIELDS.some((key) => body[key] !== undefined)
+  if (!hasEditable) {
+    return apiError('No editable fields supplied', 400)
   }
 
-  const body = (await req.json()) as Record<string, unknown>
-
   const updates: Record<string, unknown> = {}
-  for (const key of UPDATABLE_FIELDS) {
+
+  // Collect all updatable fields except slug (handled separately)
+  const nonSlugFields = UPDATABLE_FIELDS.filter((k) => k !== 'slug') as readonly string[]
+  for (const key of nonSlugFields) {
     if (body[key] !== undefined) updates[key] = body[key]
   }
 
@@ -100,7 +129,7 @@ export const PUT = withAuth('admin', async (req, user, context) => {
   }
 
   // Slug change is restricted: only allowed if no submissions exist yet.
-  if (body.slug !== undefined && body.slug !== existing.slug) {
+  if (body.slug !== undefined && body.slug !== r.data.slug) {
     const newSlug = String(body.slug).trim().toLowerCase()
     if (!SLUG_RE.test(newSlug)) {
       return apiError(
@@ -120,7 +149,7 @@ export const PUT = withAuth('admin', async (req, user, context) => {
     // Uniqueness check against other forms in the same org.
     const clashSnap = await adminDb
       .collection('forms')
-      .where('orgId', '==', existing.orgId)
+      .where('orgId', '==', r.data.orgId)
       .where('slug', '==', newSlug)
       .limit(2)
       .get()
@@ -132,33 +161,63 @@ export const PUT = withAuth('admin', async (req, user, context) => {
     updates.slug = newSlug
   }
 
-  await ref.update({
-    ...updates,
-    ...lastActorFrom(user),
-  })
+  const actorRef = ctx.actor
+  updates.updatedByRef = actorRef
+  updates.updatedAt = FieldValue.serverTimestamp()
 
-  const after = await ref.get()
+  // Omit updatedBy uid for agent calls
+  if (!ctx.isAgent) {
+    updates.updatedBy = actorRef.uid
+  }
+
+  // Sanitize: strip undefined values so Firestore doesn't reject
+  const sanitized = Object.fromEntries(
+    Object.entries(updates).filter(([, v]) => v !== undefined),
+  )
+
+  await r.ref.update(sanitized)
+  const after = await r.ref.get()
   return apiSuccess({ ...(after.data() as Form), id })
+}
+
+export const PUT = withCrmAuth<RouteCtx>('admin', async (req: NextRequest, ctx, routeCtx) => {
+  const { id } = await routeCtx!.params
+  return handleFormUpdate(req, ctx, id)
 })
 
-export const DELETE = withAuth('admin', async (req, user, context) => {
-  const { id } = await (context as RouteContext).params
-  const ref = adminDb.collection('forms').doc(id)
-  const doc = await ref.get()
-  if (!doc.exists) return apiError('Form not found', 404)
+// ---------------------------------------------------------------------------
+// DELETE — admin+
+// ---------------------------------------------------------------------------
+
+export const DELETE = withCrmAuth<RouteCtx>('admin', async (req: NextRequest, ctx, routeCtx) => {
+  const { id } = await routeCtx!.params
+  const r = await loadForm(id, ctx.orgId)
+  if (!r.ok) return apiError(r.error, r.status)
 
   const { searchParams } = new URL(req.url)
   const force = searchParams.get('force') === 'true'
 
   if (force) {
-    await ref.delete()
+    await r.ref.delete()
   } else {
-    await ref.update({
+    const actorRef = ctx.actor
+    const deletePatch: Record<string, unknown> = {
       deleted: true,
       active: false,
-      ...lastActorFrom(user),
+      updatedByRef: actorRef,
       updatedAt: FieldValue.serverTimestamp(),
-    })
+    }
+
+    // Omit updatedBy uid for agent calls
+    if (!ctx.isAgent) {
+      deletePatch.updatedBy = actorRef.uid
+    }
+
+    // Sanitize before write
+    const sanitized = Object.fromEntries(
+      Object.entries(deletePatch).filter(([, v]) => v !== undefined),
+    )
+    await r.ref.update(sanitized)
   }
 
   return apiSuccess({ id, deleted: true })
