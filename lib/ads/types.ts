@@ -608,3 +608,17 @@ export interface GoogleAdsConnectionData {
   loginCustomerId?: string
   refreshTokenExpiresAt?: Timestamp
 }
+
+// ─── Merchant Center (Sub-3a Phase 4) ────────────────────────────────────────
+
+export interface AdMerchantCenter {
+  id: string
+  orgId: string
+  merchantId: string  // Google Merchant Center account ID (numeric, but stored as string)
+  accessTokenRef: string  // pointer to encrypted access token (e.g. tokens collection doc id)
+  refreshTokenRef: string  // pointer to encrypted refresh token
+  primaryFeedId?: string  // selected default feed for Shopping campaigns
+  feedLabels: string[]  // available country/feed labels populated at connect time
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}

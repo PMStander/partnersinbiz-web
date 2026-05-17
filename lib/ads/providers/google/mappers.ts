@@ -137,3 +137,18 @@ export function googleAdGroupTypeFor(campaignType: GoogleCampaignType): GoogleAd
 export function defaultDisplayBiddingStrategy() {
   return { maximizeConversions: {} } as const
 }
+
+/** Network settings for Shopping campaigns — Search network only (no Display/Partner) */
+export function googleShoppingNetworkSettings() {
+  return {
+    targetGoogleSearch: true,
+    targetSearchNetwork: false,
+    targetContentNetwork: false,
+    targetPartnerSearchNetwork: false,
+  }
+}
+
+/** Default bidding for Shopping MVP — Maximize Conversion Value (Smart Bidding) */
+export function defaultShoppingBiddingStrategy() {
+  return { maximizeConversionValue: {} } as const
+}

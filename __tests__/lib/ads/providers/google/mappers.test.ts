@@ -11,6 +11,8 @@ import {
   canonicalKeywordMatchTypeFromGoogle,
   googleAdGroupTypeFor,
   defaultDisplayBiddingStrategy,
+  googleShoppingNetworkSettings,
+  defaultShoppingBiddingStrategy,
 } from '@/lib/ads/providers/google/mappers'
 
 describe('googleEntityStatusFromCanonical', () => {
@@ -128,5 +130,24 @@ describe('googleAdGroupTypeFor', () => {
 describe('defaultDisplayBiddingStrategy', () => {
   it('returns {maximizeConversions: {}}', () => {
     expect(defaultDisplayBiddingStrategy()).toEqual({ maximizeConversions: {} })
+  })
+})
+
+// ─── Sub-3a Phase 4 Batch 1 additions ────────────────────────────────────────
+
+describe('googleShoppingNetworkSettings', () => {
+  it('returns Search-only network settings for Shopping campaigns', () => {
+    expect(googleShoppingNetworkSettings()).toEqual({
+      targetGoogleSearch: true,
+      targetSearchNetwork: false,
+      targetContentNetwork: false,
+      targetPartnerSearchNetwork: false,
+    })
+  })
+})
+
+describe('defaultShoppingBiddingStrategy', () => {
+  it('returns {maximizeConversionValue: {}}', () => {
+    expect(defaultShoppingBiddingStrategy()).toEqual({ maximizeConversionValue: {} })
   })
 })
