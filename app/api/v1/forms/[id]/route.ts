@@ -220,5 +220,5 @@ export const DELETE = withCrmAuth<RouteCtx>('admin', async (req: NextRequest, ct
     await r.ref.update(sanitized)
   }
 
-  return apiSuccess({ id, deleted: true })
+  return apiSuccess({ id })
 })
