@@ -3,7 +3,7 @@ import Link from 'next/link'
 export default function PortalAdsLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex items-start justify-between gap-4">
         <div>
           <Link
             href="/portal/marketing"
@@ -16,6 +16,12 @@ export default function PortalAdsLayout({ children }: { children: React.ReactNod
             Your live Meta ad campaigns and any drafts awaiting your review.
           </p>
         </div>
+        <Link
+          href="/portal/ads/activity"
+          className="shrink-0 mt-1 text-xs text-[var(--color-pib-accent)] hover:text-[var(--color-pib-accent-hover)]"
+        >
+          Activity →
+        </Link>
       </header>
       {children}
     </div>
