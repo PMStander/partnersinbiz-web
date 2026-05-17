@@ -1,3 +1,4 @@
+// @deprecated: Phase 2 component. Use TargetingEditor (v2) for all Phase 4+ ad-set targeting.
 'use client'
 import type { AdTargeting } from '@/lib/ads/types'
 
