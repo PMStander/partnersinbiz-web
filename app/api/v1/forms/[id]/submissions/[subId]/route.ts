@@ -2,10 +2,11 @@
  * GET   /api/v1/forms/:id/submissions/:subId — fetch a submission
  * PATCH /api/v1/forms/:id/submissions/:subId — update submission status
  *
- * Auth: admin (AI/admin)
+ * Auth: GET → viewer+, PATCH → admin+
  */
+import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import {
   VALID_SUBMISSION_STATUSES,
@@ -14,51 +15,54 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-type RouteContext = { params: Promise<{ id: string; subId: string }> }
+type SubRouteCtx = { params: Promise<{ id: string; subId: string }> }
 
-async function loadSubmission(
-  formId: string,
-  subId: string,
-): Promise<
-  | { ok: true; ref: FirebaseFirestore.DocumentReference; data: FormSubmission }
-  | { ok: false }
-> {
-  const ref = adminDb.collection('form_submissions').doc(subId)
-  const doc = await ref.get()
-  if (!doc.exists) return { ok: false }
-  const data = doc.data() as FormSubmission | undefined
-  if (!data || data.formId !== formId) return { ok: false }
-  return { ok: true, ref, data: { ...data, id: doc.id } }
-}
+export const GET = withCrmAuth<SubRouteCtx>('viewer', async (_req, ctx, routeCtx) => {
+  const { id, subId } = await routeCtx!.params
 
-export const GET = withAuth('admin', async (_req, _user, context) => {
-  const { id, subId } = await (context as RouteContext).params
-  const result = await loadSubmission(id, subId)
-  if (!result.ok) return apiError('Submission not found', 404)
-  return apiSuccess(result.data)
+  const subSnap = await adminDb.collection('form_submissions').doc(subId).get()
+  if (!subSnap.exists) return apiError('Submission not found', 404)
+  const sub = subSnap.data() as FormSubmission
+  if (sub.orgId !== ctx.orgId) return apiError('Submission not found', 404)
+  if (sub.formId !== id) return apiError('Submission not found', 404)
+
+  return apiSuccess({ submission: { id: subSnap.id, ...sub } })
 })
 
-export const PATCH = withAuth('admin', async (req, _user, context) => {
-  const { id, subId } = await (context as RouteContext).params
-  const result = await loadSubmission(id, subId)
-  if (!result.ok) return apiError('Submission not found', 404)
+export const PATCH = withCrmAuth<SubRouteCtx>('admin', async (req, ctx, routeCtx) => {
+  const { id, subId } = await routeCtx!.params
+
+  const ref = adminDb.collection('form_submissions').doc(subId)
+  const snap = await ref.get()
+  if (!snap.exists) return apiError('Submission not found', 404)
+  const sub = snap.data() as FormSubmission
+  if (sub.orgId !== ctx.orgId) return apiError('Submission not found', 404)
+  if (sub.formId !== id) return apiError('Submission not found', 404)
 
   const body = (await req.json()) as Record<string, unknown>
-  const updates: Record<string, unknown> = {}
 
-  if (body.status !== undefined) {
-    if (!VALID_SUBMISSION_STATUSES.includes(body.status as FormSubmission['status'])) {
-      return apiError('Invalid status; expected new | read | archived')
-    }
-    updates.status = body.status
+  if (!body.status || !VALID_SUBMISSION_STATUSES.includes(body.status as FormSubmission['status'])) {
+    return apiError('Invalid status; expected new | read | archived', 400)
   }
 
-  if (Object.keys(updates).length === 0) {
-    return apiError('No updatable fields provided (status is the only one)')
+  const actorRef = ctx.actor
+  const patch: Record<string, unknown> = {
+    status: body.status,
+    updatedByRef: actorRef,
+    updatedAt: FieldValue.serverTimestamp(),
   }
 
-  await result.ref.update(updates)
+  // Omit updatedBy uid for agent calls
+  if (!ctx.isAgent) {
+    patch.updatedBy = actorRef.uid
+  }
 
-  const after = await result.ref.get()
-  return apiSuccess({ ...(after.data() as FormSubmission), id: after.id })
+  // Sanitize: strip undefined values
+  const sanitized = Object.fromEntries(
+    Object.entries(patch).filter(([, v]) => v !== undefined),
+  )
+
+  await ref.update(sanitized)
+
+  return apiSuccess({ submission: { id: subId, ...sub, ...sanitized } })
 })

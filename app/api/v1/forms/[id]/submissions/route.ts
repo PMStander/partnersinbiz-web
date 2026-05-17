@@ -3,30 +3,30 @@
  *
  * Filters: status, from (ISO), to (ISO), page, limit.
  * Sort: submittedAt desc.
- * Auth: admin (AI/admin)
+ * Auth: viewer+
  */
 import { Timestamp } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import {
   VALID_SUBMISSION_STATUSES,
-  type Form,
   type FormSubmission,
 } from '@/lib/forms/types'
 
 export const dynamic = 'force-dynamic'
 
-type RouteContext = { params: Promise<{ id: string }> }
+type RouteCtx = { params: Promise<{ id: string }> }
 
-export const GET = withAuth('admin', async (req, _user, context) => {
-  const { id } = await (context as RouteContext).params
+export const GET = withCrmAuth<RouteCtx>('viewer', async (req, ctx, routeCtx) => {
+  const { id } = await routeCtx!.params
 
-  // Confirm parent form exists (so we can 404 cleanly rather than an empty list).
-  const formDoc = await adminDb.collection('forms').doc(id).get()
-  if (!formDoc.exists) return apiError('Form not found', 404)
-  const formData = formDoc.data() as Form | undefined
-  if (!formData || formData.deleted === true) return apiError('Form not found', 404)
+  // Preflight: verify form exists + belongs to caller's org + not deleted
+  const formSnap = await adminDb.collection('forms').doc(id).get()
+  if (!formSnap.exists) return apiError('Form not found', 404)
+  const formData = formSnap.data()!
+  if (formData.orgId !== ctx.orgId) return apiError('Form not found', 404)
+  if (formData.deleted === true) return apiError('Form not found', 404)
 
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status') as FormSubmission['status'] | null
@@ -39,6 +39,7 @@ export const GET = withAuth('admin', async (req, _user, context) => {
   let query: any = adminDb
     .collection('form_submissions')
     .where('formId', '==', id)
+    .where('orgId', '==', ctx.orgId)
     .orderBy('submittedAt', 'desc')
 
   if (status && VALID_SUBMISSION_STATUSES.includes(status)) {
