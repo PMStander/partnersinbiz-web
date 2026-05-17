@@ -51,8 +51,43 @@ export default async function CampaignDetailPage({
           orgSlug={slug}
           campaignId={id}
           status={campaign.status}
+          reviewState={campaign.reviewState}
         />
       </header>
+
+      {campaign.reviewState && (
+        <div
+          className={[
+            'rounded-lg border p-4',
+            campaign.reviewState === 'awaiting' && 'border-amber-500/40 bg-amber-500/5',
+            campaign.reviewState === 'approved' && 'border-emerald-600/40 bg-emerald-600/5',
+            campaign.reviewState === 'rejected' && 'border-red-600/40 bg-red-600/5',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {campaign.reviewState === 'awaiting' && (
+            <p className="text-sm font-medium text-amber-100">
+              Awaiting client review · submitted to client portal
+            </p>
+          )}
+          {campaign.reviewState === 'approved' && (
+            <p className="text-sm font-medium text-emerald-100">
+              ✓ Approved by client — ready to launch
+            </p>
+          )}
+          {campaign.reviewState === 'rejected' && (
+            <div>
+              <p className="text-sm font-medium text-red-100">Client requested changes</p>
+              {campaign.rejectionReason && (
+                <blockquote className="mt-2 text-xs text-white/60 border-l-2 border-red-500/40 pl-3">
+                  {campaign.rejectionReason}
+                </blockquote>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Ad sets ({adSets.length})</h2>

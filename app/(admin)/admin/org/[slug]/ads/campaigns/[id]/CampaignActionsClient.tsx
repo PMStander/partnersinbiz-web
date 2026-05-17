@@ -8,16 +8,35 @@ interface Props {
   orgSlug: string
   campaignId: string
   status: AdEntityStatus
+  reviewState?: 'awaiting' | 'approved' | 'rejected'
 }
 
-export function CampaignActionsClient({ orgId, orgSlug, campaignId, status }: Props) {
+export function CampaignActionsClient({ orgId, orgSlug, campaignId, status, reviewState }: Props) {
   const router = useRouter()
-  const [busy, setBusy] = useState<'launch' | 'pause' | 'delete' | null>(null)
+  const [busy, setBusy] = useState<'launch' | 'pause' | 'delete' | 'submit' | null>(null)
 
   async function call(action: 'launch' | 'pause') {
     setBusy(action)
     try {
       const res = await fetch(`/api/v1/ads/campaigns/${campaignId}/${action}`, {
+        method: 'POST',
+        headers: { 'X-Org-Id': orgId },
+      })
+      const body = await res.json()
+      if (!body.success) throw new Error(body.error ?? `HTTP ${res.status}`)
+      router.refresh()
+    } catch (err) {
+      alert((err as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function submitForReview() {
+    if (!confirm('Submit this campaign to the client for approval? They will receive an email.')) return
+    setBusy('submit')
+    try {
+      const res = await fetch(`/api/v1/ads/campaigns/${campaignId}/submit-for-review`, {
         method: 'POST',
         headers: { 'X-Org-Id': orgId },
       })
@@ -52,6 +71,15 @@ export function CampaignActionsClient({ orgId, orgSlug, campaignId, status }: Pr
 
   return (
     <div className="flex gap-2">
+      {status === 'DRAFT' && reviewState !== 'awaiting' && reviewState !== 'approved' && (
+        <button
+          className="btn-pib-ghost text-sm"
+          onClick={submitForReview}
+          disabled={busy !== null}
+        >
+          {busy === 'submit' ? 'Sending…' : 'Submit for client review'}
+        </button>
+      )}
       {status !== 'ACTIVE' ? (
         <button
           className="btn-pib-accent text-sm"
