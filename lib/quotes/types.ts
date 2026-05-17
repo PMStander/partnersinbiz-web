@@ -31,6 +31,8 @@ export interface Quote {
   createdByRef?: MemberRef
   updatedBy?: string
   updatedByRef?: MemberRef
+  companyId?: string
+  companyName?: string
   createdAt?: unknown
   updatedAt?: unknown
 }

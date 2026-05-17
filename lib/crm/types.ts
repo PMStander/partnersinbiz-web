@@ -71,6 +71,8 @@ export interface Contact {
   updatedAt: Timestamp | null
   lastContactedAt: Timestamp | null
   deleted?: boolean
+  companyId?: string
+  companyName?: string
 }
 
 export type ContactInput = Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>
@@ -105,6 +107,8 @@ export interface Deal {
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
   deleted?: boolean
+  companyId?: string
+  companyName?: string
 }
 
 export type DealInput = Omit<Deal, 'id' | 'createdAt' | 'updatedAt'>
@@ -138,6 +142,7 @@ export interface Activity {
   createdByRef?: MemberRef
   updatedBy?: string
   updatedByRef?: MemberRef
+  companyId?: string
 }
 
 export type ActivityInput = Omit<Activity, 'id' | 'createdAt'>
