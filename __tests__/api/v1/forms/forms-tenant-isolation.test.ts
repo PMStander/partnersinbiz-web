@@ -542,4 +542,21 @@ describe('cross-tenant isolation: forms routes', () => {
     expect((act?.createdByRef as any)?.kind).toBe('system')
     expect(act?.type).toBe('note')
   })
+
+  it('public submit with org-b orgId + org-a form slug returns 404', async () => {
+    setupIsolationFixtures()
+    // formA has slug 'formA-slug' in org-a; resolving by org-b + that slug should 404
+    const { NextRequest: NR } = require('next/server')
+    const req = new NR(
+      `http://localhost/api/v1/forms/formA-slug/submit?orgId=org-b`,
+      {
+        method: 'POST',
+        headers: new Headers({ 'content-type': 'application/json', 'x-forwarded-for': '127.0.0.1' }),
+        body: JSON.stringify({ name: 'Test', email: 'test@example.com' }),
+      },
+    )
+    const { POST } = await import('@/app/api/v1/forms/[id]/submit/route')
+    const res = await POST(req, { params: Promise.resolve({ id: 'formA-slug' }) })
+    expect(res.status).toBe(404)
+  })
 })

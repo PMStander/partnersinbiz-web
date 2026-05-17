@@ -39,7 +39,8 @@ export const PATCH = withCrmAuth<SubRouteCtx>('admin', async (req, ctx, routeCtx
   if (sub.orgId !== ctx.orgId) return apiError('Submission not found', 404)
   if (sub.formId !== id) return apiError('Submission not found', 404)
 
-  const body = (await req.json()) as Record<string, unknown>
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== 'object') return apiError('Invalid JSON body', 400)
 
   if (!body.status || !VALID_SUBMISSION_STATUSES.includes(body.status as FormSubmission['status'])) {
     return apiError('Invalid status; expected new | read | archived', 400)
