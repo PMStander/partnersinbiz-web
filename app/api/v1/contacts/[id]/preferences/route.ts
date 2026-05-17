@@ -3,62 +3,70 @@
 // GET / PUT a contact's email preferences (topics + frequency). Admin-side
 // only — the public preferences page lives at `app/preferences/[token]` and
 // is signed-token authenticated.
+//
+// Role matrix: GET → viewer, PUT → member
 
-import { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { resolveOrgScope } from '@/lib/api/orgScope'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { getContactPreferences, setContactPreferences } from '@/lib/preferences/store'
-import type { ApiUser } from '@/lib/api/types'
-import type { FrequencyChoice } from '@/lib/preferences/types'
+import { FREQUENCY_CHOICES } from '@/lib/preferences/types'
 
 export const dynamic = 'force-dynamic'
 
-type Params = { params: Promise<{ id: string }> }
+type RouteCtx = { params: Promise<{ id: string }> }
 
-async function loadContactOrgId(contactId: string): Promise<string | null> {
-  const snap = await adminDb.collection('contacts').doc(contactId).get()
-  if (!snap.exists) return null
-  const data = snap.data() ?? {}
-  return typeof data.orgId === 'string' ? data.orgId : null
+async function loadContact(id: string, ctxOrgId: string) {
+  const ref = adminDb.collection('contacts').doc(id)
+  const snap = await ref.get()
+  if (!snap.exists) return { ok: false as const, status: 404, error: 'Contact not found' }
+  const data = snap.data()!
+  if (data.orgId !== ctxOrgId) return { ok: false as const, status: 404, error: 'Contact not found' }
+  if (data.deleted === true) return { ok: false as const, status: 404, error: 'Contact not found' }
+  return { ok: true as const, ref, data }
 }
 
-export const GET = withAuth(
-  'client',
-  async (_req: NextRequest, user: ApiUser, context?: unknown) => {
-    const { id } = await (context as Params).params
-    const orgId = await loadContactOrgId(id)
-    if (!orgId) return apiError('contact not found', 404)
-    const scope = resolveOrgScope(user, orgId)
-    if (!scope.ok) return apiError(scope.error, scope.status)
-    const prefs = await getContactPreferences(id, scope.orgId)
-    return apiSuccess(prefs)
-  },
-)
+export const GET = withCrmAuth<RouteCtx>('viewer', async (_req, ctx, routeCtx) => {
+  const { id } = await routeCtx!.params
+  const r = await loadContact(id, ctx.orgId)
+  if (!r.ok) return apiError(r.error, r.status)
+  const prefs = await getContactPreferences(id, ctx.orgId)
+  return apiSuccess(prefs)
+})
 
-export const PUT = withAuth(
-  'client',
-  async (req: NextRequest, user: ApiUser, context?: unknown) => {
-    const { id } = await (context as Params).params
-    const orgId = await loadContactOrgId(id)
-    if (!orgId) return apiError('contact not found', 404)
-    const scope = resolveOrgScope(user, orgId)
-    if (!scope.ok) return apiError(scope.error, scope.status)
-    const body = await req.json().catch(() => null)
-    if (!body || typeof body !== 'object') return apiError('invalid JSON body', 400)
-    const next = await setContactPreferences({
-      contactId: id,
-      orgId: scope.orgId,
-      topics:
-        typeof body.topics === 'object' && body.topics !== null
-          ? (body.topics as Record<string, boolean>)
-          : undefined,
-      frequency:
-        typeof body.frequency === 'string' ? (body.frequency as FrequencyChoice) : undefined,
-      unsubscribeAll: typeof body.unsubscribeAll === 'boolean' ? body.unsubscribeAll : undefined,
-      updatedFrom: 'admin',
-    })
-    return apiSuccess(next)
-  },
-)
+export const PUT = withCrmAuth<RouteCtx>('member', async (req, ctx, routeCtx) => {
+  const { id } = await routeCtx!.params
+  const r = await loadContact(id, ctx.orgId)
+  if (!r.ok) return apiError(r.error, r.status)
+
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== 'object') return apiError('Invalid JSON body', 400)
+
+  // Validate frequency if provided
+  if (
+    typeof body.frequency === 'string' &&
+    !FREQUENCY_CHOICES.includes(body.frequency as typeof FREQUENCY_CHOICES[number])
+  ) {
+    return apiError(
+      `Invalid frequency. Must be one of: ${FREQUENCY_CHOICES.join(', ')}`,
+      400,
+    )
+  }
+
+  const next = await setContactPreferences({
+    contactId: id,
+    orgId: ctx.orgId,
+    topics:
+      typeof body.topics === 'object' && body.topics !== null
+        ? (body.topics as Record<string, boolean>)
+        : undefined,
+    frequency:
+      typeof body.frequency === 'string'
+        ? (body.frequency as typeof FREQUENCY_CHOICES[number])
+        : undefined,
+    unsubscribeAll:
+      typeof body.unsubscribeAll === 'boolean' ? body.unsubscribeAll : undefined,
+    updatedFrom: 'admin',
+  })
+  return apiSuccess(next)
+})
