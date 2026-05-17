@@ -40,6 +40,7 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     platform?: AdPlatform
     rsaAssets?: RsaAssets
     rdaAssets?: RdaAssets
+    productAd?: boolean
   }
 
   if (!body.input?.name || !body.input?.adSetId) {
@@ -61,8 +62,8 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   })
 
   if (platform === 'google') {
-    if (!body.rdaAssets && !body.rsaAssets) {
-      return apiError('Google ads require either rsaAssets (Search) or rdaAssets (Display)', 400)
+    if (!body.rdaAssets && !body.rsaAssets && !body.productAd) {
+      return apiError('Google ads require rsaAssets (Search), rdaAssets (Display), or productAd: true (Shopping)', 400)
     }
     const conn = await getConnection({ orgId: ctx.orgId, platform: 'google' })
     if (!conn) return apiError('No Google Ads connection for org', 400)
@@ -78,7 +79,17 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     if (!adGroupResourceName) return apiError('Parent ad set has no Google ad group resource name', 400)
 
     let result
-    if (body.rdaAssets) {
+    if (body.productAd === true) {
+      const { createProductAd } = await import('@/lib/ads/providers/google/shopping-ads')
+      result = await createProductAd({
+        customerId: loginCustomerId,
+        accessToken,
+        developerToken,
+        loginCustomerId,
+        adGroupResourceName,
+        canonical: ad,
+      })
+    } else if (body.rdaAssets) {
       const { createResponsiveDisplayAd } = await import('@/lib/ads/providers/google/display-ads')
       result = await createResponsiveDisplayAd({
         customerId: loginCustomerId,

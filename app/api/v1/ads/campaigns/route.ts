@@ -33,7 +33,11 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
   const body = (await req.json()) as {
     input?: Omit<CreateAdCampaignInput, 'adAccountId'>
     platform?: AdPlatform
-    googleAds?: { dailyBudgetMajor?: number; campaignType?: 'SEARCH' | 'DISPLAY' }
+    googleAds?: {
+      dailyBudgetMajor?: number
+      campaignType?: 'SEARCH' | 'DISPLAY' | 'SHOPPING'
+      shopping?: { merchantId?: string; feedLabel?: string }
+    }
   }
 
   if (!body.input?.name || !body.input?.objective) {
@@ -63,9 +67,26 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     const customerId = loginCustomerId
     if (!customerId) return apiError('No Customer ID set on Google connection', 400)
 
-    const campaignType = body.googleAds?.campaignType  // 'SEARCH' | 'DISPLAY' (default 'SEARCH')
+    const campaignType = body.googleAds?.campaignType  // 'SEARCH' | 'DISPLAY' | 'SHOPPING' (default 'SEARCH')
     let result
-    if (campaignType === 'DISPLAY') {
+    if (campaignType === 'SHOPPING') {
+      const merchantId = body.googleAds?.shopping?.merchantId
+      const feedLabel = body.googleAds?.shopping?.feedLabel
+      if (!merchantId || !feedLabel) {
+        return apiError('Shopping campaigns require googleAds.shopping.{merchantId, feedLabel}', 400)
+      }
+      const { createShoppingCampaign } = await import('@/lib/ads/providers/google/campaigns-shopping')
+      result = await createShoppingCampaign({
+        customerId,
+        accessToken,
+        developerToken,
+        loginCustomerId,
+        canonical: campaign,
+        dailyBudgetMajor: body.googleAds?.dailyBudgetMajor,
+        merchantId,
+        feedLabel,
+      })
+    } else if (campaignType === 'DISPLAY') {
       const { createDisplayCampaign } = await import('@/lib/ads/providers/google/campaigns-display')
       result = await createDisplayCampaign({
         customerId,

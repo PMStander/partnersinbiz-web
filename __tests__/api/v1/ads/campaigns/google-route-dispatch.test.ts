@@ -34,6 +34,9 @@ jest.mock('@/lib/ads/providers/google/campaigns', () => ({
 jest.mock('@/lib/ads/providers/google/campaigns-display', () => ({
   createDisplayCampaign: jest.fn(),
 }))
+jest.mock('@/lib/ads/providers/google/campaigns-shopping', () => ({
+  createShoppingCampaign: jest.fn().mockResolvedValue({ resourceName: 'customers/1234567890/campaigns/777', id: '777' }),
+}))
 
 // ─── Imports after mocks ─────────────────────────────────────────────────────
 const { requireMetaContext } = jest.requireMock('@/lib/ads/api-helpers')
@@ -42,6 +45,7 @@ const { getConnection, decryptAccessToken } = jest.requireMock('@/lib/ads/connec
 const { readDeveloperToken } = jest.requireMock('@/lib/integrations/google_ads/oauth')
 const { createSearchCampaign } = jest.requireMock('@/lib/ads/providers/google/campaigns')
 const { createDisplayCampaign } = jest.requireMock('@/lib/ads/providers/google/campaigns-display')
+const { createShoppingCampaign } = jest.requireMock('@/lib/ads/providers/google/campaigns-shopping')
 
 // ─── Shared stubs ────────────────────────────────────────────────────────────
 const fakeCtx = {
@@ -82,6 +86,7 @@ beforeEach(() => {
   readDeveloperToken.mockReturnValue('dev-token')
   createSearchCampaign.mockResolvedValue(fakeResult)
   createDisplayCampaign.mockResolvedValue(fakeResult)
+  createShoppingCampaign.mockResolvedValue({ resourceName: 'customers/1234567890/campaigns/777', id: '777' })
 })
 
 describe('POST /api/v1/ads/campaigns — Google dispatch branching', () => {
@@ -136,5 +141,75 @@ describe('POST /api/v1/ads/campaigns — Google dispatch branching', () => {
     expect(res.status).toBe(201)
     expect(createSearchCampaign).toHaveBeenCalledTimes(1)
     expect(createDisplayCampaign).not.toHaveBeenCalled()
+  })
+
+  // ─── Shopping campaign tests (Sub-3a Phase 4 Batch 3 F) ───────────────────
+
+  // Test 4: SHOPPING campaignType with merchantId + feedLabel → createShoppingCampaign called
+  it('calls createShoppingCampaign when googleAds.campaignType is SHOPPING with merchantId and feedLabel', async () => {
+    const res = await POST(
+      makeReq({
+        platform: 'google',
+        input: { name: 'Shopping Campaign', objective: 'CONVERSIONS' },
+        googleAds: {
+          campaignType: 'SHOPPING',
+          dailyBudgetMajor: 15,
+          shopping: { merchantId: 'merch-123', feedLabel: 'US' },
+        },
+      }) as any,
+      { uid: 'user-001' } as any,
+    )
+
+    expect(res.status).toBe(201)
+    expect(createShoppingCampaign).toHaveBeenCalledTimes(1)
+    expect(createSearchCampaign).not.toHaveBeenCalled()
+    expect(createDisplayCampaign).not.toHaveBeenCalled()
+
+    const call = createShoppingCampaign.mock.calls[0][0]
+    expect(call.customerId).toBe('1234567890')
+    expect(call.merchantId).toBe('merch-123')
+    expect(call.feedLabel).toBe('US')
+    expect(call.dailyBudgetMajor).toBe(15)
+    expect(call.canonical).toEqual(fakeCampaign)
+  })
+
+  // Test 5: SHOPPING missing merchantId → 400
+  it('returns 400 when googleAds.campaignType is SHOPPING but merchantId is missing', async () => {
+    const res = await POST(
+      makeReq({
+        platform: 'google',
+        input: { name: 'Shopping No Merchant', objective: 'CONVERSIONS' },
+        googleAds: {
+          campaignType: 'SHOPPING',
+          shopping: { feedLabel: 'US' },
+        },
+      }) as any,
+      { uid: 'user-001' } as any,
+    )
+
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/merchantId/i)
+    expect(createShoppingCampaign).not.toHaveBeenCalled()
+  })
+
+  // Test 6: SHOPPING missing feedLabel → 400
+  it('returns 400 when googleAds.campaignType is SHOPPING but feedLabel is missing', async () => {
+    const res = await POST(
+      makeReq({
+        platform: 'google',
+        input: { name: 'Shopping No Feed', objective: 'CONVERSIONS' },
+        googleAds: {
+          campaignType: 'SHOPPING',
+          shopping: { merchantId: 'merch-123' },
+        },
+      }) as any,
+      { uid: 'user-001' } as any,
+    )
+
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/feedLabel/i)
+    expect(createShoppingCampaign).not.toHaveBeenCalled()
   })
 })
