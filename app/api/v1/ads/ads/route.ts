@@ -2,10 +2,14 @@
 import { NextRequest } from 'next/server'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import { listAds, createAd } from '@/lib/ads/ads/store'
+import { listAds, createAd, updateAd } from '@/lib/ads/ads/store'
 import { getAdSet } from '@/lib/ads/adsets/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
-import type { CreateAdInput, AdEntityStatus } from '@/lib/ads/types'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
+import { createResponsiveSearchAd } from '@/lib/ads/providers/google/ads'
+import type { CreateAdInput, AdEntityStatus, AdPlatform } from '@/lib/ads/types'
+import type { RsaAssets } from '@/lib/ads/providers/google/ads'
 
 export const GET = withAuth('admin', async (req: NextRequest) => {
   const orgId = req.headers.get('X-Org-Id')
@@ -32,6 +36,8 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
 
   const body = (await req.json()) as {
     input?: Omit<CreateAdInput, 'adAccountId'>
+    platform?: AdPlatform
+    rsaAssets?: RsaAssets
   }
 
   if (!body.input?.name || !body.input?.adSetId) {
@@ -44,10 +50,49 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     return apiError('Ad set not found', 404)
   }
 
+  const platform: AdPlatform = body.platform ?? adSet.platform ?? 'meta'
+
   const ad = await createAd({
     orgId: ctx.orgId,
     input: body.input as CreateAdInput,
+    platform,
   })
+
+  if (platform === 'google') {
+    if (!body.rsaAssets) {
+      return apiError('rsaAssets required for Google ads', 400)
+    }
+    const conn = await getConnection({ orgId: ctx.orgId, platform: 'google' })
+    if (!conn) return apiError('No Google Ads connection for org', 400)
+    const accessToken = decryptAccessToken(conn)
+    const developerToken = readDeveloperToken()
+    if (!developerToken) return apiError('Google Ads developer token not configured', 500)
+    const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+    const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+    if (!loginCustomerId) return apiError('No Customer ID set on Google connection', 400)
+
+    const googleAdSetData = (adSet.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+    const adGroupResourceName = typeof googleAdSetData?.adGroupResourceName === 'string' ? googleAdSetData.adGroupResourceName : undefined
+    if (!adGroupResourceName) return apiError('Parent ad set has no Google ad group resource name', 400)
+
+    const result = await createResponsiveSearchAd({
+      customerId: loginCustomerId,
+      accessToken,
+      developerToken,
+      loginCustomerId,
+      adGroupResourceName,
+      canonical: ad,
+      rsaAssets: body.rsaAssets,
+    })
+
+    await updateAd(ad.id, {
+      providerData: {
+        ...(ad.providerData ?? {}),
+        google: { ...((ad.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined ?? {}), adGroupAdResourceName: result.resourceName, googleAdId: result.id },
+      },
+    } as any)
+  }
+  // Meta: no provider push on POST — ads are pushed to Meta on /launch
 
   return apiSuccess(ad, 201)
 })

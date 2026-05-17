@@ -6,6 +6,12 @@ import { getAd, updateAd, deleteAd } from '@/lib/ads/ads/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
 import { deleteAd as metaDeleteAd } from '@/lib/ads/providers/meta/ads'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
+import {
+  updateAdGroupAd as googleUpdateAdGroupAd,
+  removeAdGroupAd as googleRemoveAdGroupAd,
+} from '@/lib/ads/providers/google/ads'
 import type { UpdateAdInput } from '@/lib/ads/types'
 import { logAdActivity } from '@/lib/ads/activity'
 
@@ -38,24 +44,55 @@ export const PATCH = withAuth(
     const patch = (await req.json()) as UpdateAdInput
     await updateAd(id, patch)
 
-    // If ad is live in Meta, push the update upstream
-    // PATCH limited to: name, status
-    // Creative changes require re-create (Meta API limitation — updateAd in meta/ads.ts)
     const warnings: string[] = []
-    const metaId = (ad.providerData?.meta as { id?: string } | undefined)?.id
-    if (metaId) {
-      const ctx = await requireMetaContext(req)
-      if (!(ctx instanceof Response)) {
-        try {
-          await metaProvider.upsertAd!({
-            accessToken: ctx.accessToken,
-            adAccountId: ctx.adAccountId,
-            ad: { ...ad, ...patch } as any,
-            metaAdSetId: (ad.providerData?.meta as { adSetId?: string } | undefined)?.adSetId ?? '',
-            pageId: req.headers.get('X-Page-Id') ?? '',
-          })
-        } catch (err) {
-          warnings.push(`Meta sync warning: ${(err as Error).message}`)
+
+    if (ad.platform === 'google') {
+      const googleData = (ad.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+      const resourceName = typeof googleData?.adGroupAdResourceName === 'string' ? googleData.adGroupAdResourceName : undefined
+      if (resourceName) {
+        const conn = await getConnection({ orgId, platform: 'google' })
+        if (conn) {
+          const accessToken = decryptAccessToken(conn)
+          const developerToken = readDeveloperToken()
+          if (developerToken) {
+            const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+            const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+            if (loginCustomerId) {
+              try {
+                await googleUpdateAdGroupAd({
+                  customerId: loginCustomerId,
+                  accessToken,
+                  developerToken,
+                  loginCustomerId,
+                  resourceName,
+                  status: patch.status,
+                })
+              } catch (err) {
+                warnings.push(`Google Ads sync warning: ${(err as Error).message}`)
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // Meta path — preserved verbatim
+      // PATCH limited to: name, status
+      // Creative changes require re-create (Meta API limitation — updateAd in meta/ads.ts)
+      const metaId = (ad.providerData?.meta as { id?: string } | undefined)?.id
+      if (metaId) {
+        const ctx = await requireMetaContext(req)
+        if (!(ctx instanceof Response)) {
+          try {
+            await metaProvider.upsertAd!({
+              accessToken: ctx.accessToken,
+              adAccountId: ctx.adAccountId,
+              ad: { ...ad, ...patch } as any,
+              metaAdSetId: (ad.providerData?.meta as { adSetId?: string } | undefined)?.adSetId ?? '',
+              pageId: req.headers.get('X-Page-Id') ?? '',
+            })
+          } catch (err) {
+            warnings.push(`Meta sync warning: ${(err as Error).message}`)
+          }
         }
       }
     }
@@ -76,15 +113,44 @@ export const DELETE = withAuth(
     const ad = await getAd(id)
     if (!ad || ad.orgId !== orgId) return apiError('Ad not found', 404)
 
-    // Best-effort delete from Meta first
-    const metaId = (ad.providerData?.meta as { id?: string } | undefined)?.id
-    if (metaId) {
-      const ctx = await requireMetaContext(req)
-      if (!(ctx instanceof Response)) {
-        try {
-          await metaDeleteAd({ metaAdId: metaId, accessToken: ctx.accessToken })
-        } catch {
-          // swallow — local delete is source of truth
+    if (ad.platform === 'google') {
+      const googleData = (ad.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+      const resourceName = typeof googleData?.adGroupAdResourceName === 'string' ? googleData.adGroupAdResourceName : undefined
+      if (resourceName) {
+        const conn = await getConnection({ orgId, platform: 'google' })
+        if (conn) {
+          const accessToken = decryptAccessToken(conn)
+          const developerToken = readDeveloperToken()
+          if (developerToken) {
+            const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+            const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+            if (loginCustomerId) {
+              try {
+                await googleRemoveAdGroupAd({
+                  customerId: loginCustomerId,
+                  accessToken,
+                  developerToken,
+                  loginCustomerId,
+                  resourceName,
+                })
+              } catch {
+                // swallow — local delete is source of truth
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // Meta path — preserved verbatim
+      const metaId = (ad.providerData?.meta as { id?: string } | undefined)?.id
+      if (metaId) {
+        const ctx = await requireMetaContext(req)
+        if (!(ctx instanceof Response)) {
+          try {
+            await metaDeleteAd({ metaAdId: metaId, accessToken: ctx.accessToken })
+          } catch {
+            // swallow — local delete is source of truth
+          }
         }
       }
     }

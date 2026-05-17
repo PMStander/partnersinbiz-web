@@ -9,6 +9,7 @@ const COLLECTION = 'ad_sets'
 export async function createAdSet(args: {
   orgId: string
   input: CreateAdSetInput
+  platform?: AdSet['platform']
 }): Promise<AdSet> {
   const id = `ads_${crypto.randomBytes(8).toString('hex')}`
   const now = Timestamp.now()
@@ -17,7 +18,7 @@ export async function createAdSet(args: {
     ...args.input,
     id,
     orgId: args.orgId,
-    platform: 'meta',
+    platform: args.platform ?? 'meta',
     providerData: {},
     createdAt: now,
     updatedAt: now,

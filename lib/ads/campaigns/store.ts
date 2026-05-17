@@ -10,6 +10,7 @@ export async function createCampaign(args: {
   orgId: string
   createdBy: string
   input: CreateAdCampaignInput
+  platform?: AdCampaign['platform']
 }): Promise<AdCampaign> {
   const id = `cmp_${crypto.randomBytes(8).toString('hex')}`
   const now = Timestamp.now()
@@ -18,7 +19,7 @@ export async function createCampaign(args: {
     ...args.input,
     id,
     orgId: args.orgId,
-    platform: 'meta',
+    platform: args.platform ?? 'meta',
     providerData: {},
     createdBy: args.createdBy,
     createdAt: now,

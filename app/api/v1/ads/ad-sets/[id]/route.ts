@@ -6,6 +6,12 @@ import { getAdSet, updateAdSet, deleteAdSet } from '@/lib/ads/adsets/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
 import { deleteAdSet as metaDeleteAdSet } from '@/lib/ads/providers/meta/adsets'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
+import {
+  updateAdGroup as googleUpdateAdGroup,
+  removeAdGroup as googleRemoveAdGroup,
+} from '@/lib/ads/providers/google/adgroups'
 import type { UpdateAdSetInput } from '@/lib/ads/types'
 import { logAdSetActivity } from '@/lib/ads/activity'
 
@@ -38,23 +44,55 @@ export const PATCH = withAuth(
     const patch = (await req.json()) as UpdateAdSetInput
     await updateAdSet(id, patch)
 
-    // If ad set is live in Meta, push the update upstream
-    // PATCH limited to: name, status, dailyBudget, lifetimeBudget, bidAmount
-    // Targeting changes require re-create (Meta API limitation)
     const warnings: string[] = []
-    const metaId = (adSet.providerData?.meta as { id?: string } | undefined)?.id
-    if (metaId) {
-      const ctx = await requireMetaContext(req)
-      if (!(ctx instanceof Response)) {
-        try {
-          await metaProvider.upsertAdSet!({
-            accessToken: ctx.accessToken,
-            adAccountId: ctx.adAccountId,
-            adSet: { ...adSet, ...patch } as any,
-            metaCampaignId: (adSet.providerData?.meta as { campaignId?: string } | undefined)?.campaignId ?? '',
-          })
-        } catch (err) {
-          warnings.push(`Meta sync warning: ${(err as Error).message}`)
+
+    if (adSet.platform === 'google') {
+      const googleData = (adSet.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+      const resourceName = typeof googleData?.adGroupResourceName === 'string' ? googleData.adGroupResourceName : undefined
+      if (resourceName) {
+        const conn = await getConnection({ orgId, platform: 'google' })
+        if (conn) {
+          const accessToken = decryptAccessToken(conn)
+          const developerToken = readDeveloperToken()
+          if (developerToken) {
+            const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+            const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+            if (loginCustomerId) {
+              try {
+                await googleUpdateAdGroup({
+                  customerId: loginCustomerId,
+                  accessToken,
+                  developerToken,
+                  loginCustomerId,
+                  resourceName,
+                  name: patch.name,
+                  status: patch.status,
+                })
+              } catch (err) {
+                warnings.push(`Google Ads sync warning: ${(err as Error).message}`)
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // Meta path — preserved verbatim
+      // PATCH limited to: name, status, dailyBudget, lifetimeBudget, bidAmount
+      // Targeting changes require re-create (Meta API limitation)
+      const metaId = (adSet.providerData?.meta as { id?: string } | undefined)?.id
+      if (metaId) {
+        const ctx = await requireMetaContext(req)
+        if (!(ctx instanceof Response)) {
+          try {
+            await metaProvider.upsertAdSet!({
+              accessToken: ctx.accessToken,
+              adAccountId: ctx.adAccountId,
+              adSet: { ...adSet, ...patch } as any,
+              metaCampaignId: (adSet.providerData?.meta as { campaignId?: string } | undefined)?.campaignId ?? '',
+            })
+          } catch (err) {
+            warnings.push(`Meta sync warning: ${(err as Error).message}`)
+          }
         }
       }
     }
@@ -75,15 +113,44 @@ export const DELETE = withAuth(
     const adSet = await getAdSet(id)
     if (!adSet || adSet.orgId !== orgId) return apiError('Ad set not found', 404)
 
-    // Best-effort delete from Meta first
-    const metaId = (adSet.providerData?.meta as { id?: string } | undefined)?.id
-    if (metaId) {
-      const ctx = await requireMetaContext(req)
-      if (!(ctx instanceof Response)) {
-        try {
-          await metaDeleteAdSet({ metaAdSetId: metaId, accessToken: ctx.accessToken })
-        } catch {
-          // swallow — local delete is source of truth
+    if (adSet.platform === 'google') {
+      const googleData = (adSet.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+      const resourceName = typeof googleData?.adGroupResourceName === 'string' ? googleData.adGroupResourceName : undefined
+      if (resourceName) {
+        const conn = await getConnection({ orgId, platform: 'google' })
+        if (conn) {
+          const accessToken = decryptAccessToken(conn)
+          const developerToken = readDeveloperToken()
+          if (developerToken) {
+            const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+            const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+            if (loginCustomerId) {
+              try {
+                await googleRemoveAdGroup({
+                  customerId: loginCustomerId,
+                  accessToken,
+                  developerToken,
+                  loginCustomerId,
+                  resourceName,
+                })
+              } catch {
+                // swallow — local delete is source of truth
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // Meta path — preserved verbatim
+      const metaId = (adSet.providerData?.meta as { id?: string } | undefined)?.id
+      if (metaId) {
+        const ctx = await requireMetaContext(req)
+        if (!(ctx instanceof Response)) {
+          try {
+            await metaDeleteAdSet({ metaAdSetId: metaId, accessToken: ctx.accessToken })
+          } catch {
+            // swallow — local delete is source of truth
+          }
         }
       }
     }

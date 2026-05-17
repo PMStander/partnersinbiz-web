@@ -6,7 +6,11 @@ import crypto from 'crypto'
 
 const COLLECTION = 'ads'
 
-export async function createAd(args: { orgId: string; input: CreateAdInput }): Promise<Ad> {
+export async function createAd(args: {
+  orgId: string
+  input: CreateAdInput
+  platform?: Ad['platform']
+}): Promise<Ad> {
   const id = `ad_${crypto.randomBytes(8).toString('hex')}`
   const now = Timestamp.now()
 
@@ -14,7 +18,7 @@ export async function createAd(args: { orgId: string; input: CreateAdInput }): P
     ...args.input,
     id,
     orgId: args.orgId,
-    platform: 'meta',
+    platform: args.platform ?? 'meta',
     providerData: {},
     createdAt: now,
     updatedAt: now,

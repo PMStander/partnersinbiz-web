@@ -5,6 +5,9 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { getCampaign, updateCampaign } from '@/lib/ads/campaigns/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
+import { pauseCampaign as googlePauseCampaign } from '@/lib/ads/providers/google/campaigns'
 import { logCampaignActivity } from '@/lib/ads/activity'
 import { notifyCampaignPaused } from '@/lib/ads/notifications'
 
@@ -20,19 +23,49 @@ export const POST = withAuth(
 
     await updateCampaign(id, { status: 'PAUSED' })
 
-    // Best-effort Meta sync — only if campaign is already pushed to Meta
-    const metaId = (campaign.providerData?.meta as { id?: string } | undefined)?.id
-    if (metaId) {
-      const ctx = await requireMetaContext(req)
-      if (!(ctx instanceof Response)) {
-        try {
-          await metaProvider.upsertCampaign!({
-            accessToken: ctx.accessToken,
-            adAccountId: ctx.adAccountId,
-            campaign: { ...campaign, status: 'PAUSED' } as any,
-          })
-        } catch {
-          // Status already updated locally; Meta sync failure is non-blocking
+    if (campaign.platform === 'google') {
+      // Best-effort Google sync — only if campaign has been pushed to Google
+      const googleData = (campaign.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+      const resourceName = typeof googleData?.campaignResourceName === 'string' ? googleData.campaignResourceName : undefined
+      if (resourceName) {
+        const conn = await getConnection({ orgId, platform: 'google' })
+        if (conn) {
+          const accessToken = decryptAccessToken(conn)
+          const developerToken = readDeveloperToken()
+          if (developerToken) {
+            const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+            const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+            if (loginCustomerId) {
+              try {
+                await googlePauseCampaign({
+                  customerId: loginCustomerId,
+                  accessToken,
+                  developerToken,
+                  loginCustomerId,
+                  resourceName,
+                })
+              } catch {
+                // Status already updated locally; Google sync failure is non-blocking
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // Meta path — preserved verbatim
+      const metaId = (campaign.providerData?.meta as { id?: string } | undefined)?.id
+      if (metaId) {
+        const ctx = await requireMetaContext(req)
+        if (!(ctx instanceof Response)) {
+          try {
+            await metaProvider.upsertCampaign!({
+              accessToken: ctx.accessToken,
+              adAccountId: ctx.adAccountId,
+              campaign: { ...campaign, status: 'PAUSED' } as any,
+            })
+          } catch {
+            // Status already updated locally; Meta sync failure is non-blocking
+          }
         }
       }
     }

@@ -5,7 +5,11 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { listAdSets, createAdSet } from '@/lib/ads/adsets/store'
 import { getCampaign } from '@/lib/ads/campaigns/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
-import type { CreateAdSetInput, AdEntityStatus } from '@/lib/ads/types'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
+import { createAdGroup } from '@/lib/ads/providers/google/adgroups'
+import { updateAdSet } from '@/lib/ads/adsets/store'
+import type { CreateAdSetInput, AdEntityStatus, AdPlatform } from '@/lib/ads/types'
 
 export const GET = withAuth('admin', async (req: NextRequest) => {
   const orgId = req.headers.get('X-Org-Id')
@@ -30,6 +34,8 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
 
   const body = (await req.json()) as {
     input?: Omit<CreateAdSetInput, 'adAccountId'>
+    platform?: AdPlatform
+    googleAds?: { defaultCpcBidMajor?: number }
   }
 
   if (!body.input?.name || !body.input?.campaignId) {
@@ -42,10 +48,46 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     return apiError('Campaign not found', 404)
   }
 
+  const platform: AdPlatform = body.platform ?? campaign.platform ?? 'meta'
+
   const adSet = await createAdSet({
     orgId: ctx.orgId,
     input: body.input as CreateAdSetInput,
+    platform,
   })
+
+  if (platform === 'google') {
+    const conn = await getConnection({ orgId: ctx.orgId, platform: 'google' })
+    if (!conn) return apiError('No Google Ads connection for org', 400)
+    const accessToken = decryptAccessToken(conn)
+    const developerToken = readDeveloperToken()
+    if (!developerToken) return apiError('Google Ads developer token not configured', 500)
+    const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+    const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+    if (!loginCustomerId) return apiError('No Customer ID set on Google connection', 400)
+
+    const googleCampaignData = (campaign.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+    const campaignResourceName = typeof googleCampaignData?.campaignResourceName === 'string' ? googleCampaignData.campaignResourceName : undefined
+    if (!campaignResourceName) return apiError('Parent campaign has no Google resource name', 400)
+
+    const result = await createAdGroup({
+      customerId: loginCustomerId,
+      accessToken,
+      developerToken,
+      loginCustomerId,
+      campaignResourceName,
+      canonical: adSet,
+      defaultCpcBidMajor: body.googleAds?.defaultCpcBidMajor,
+    })
+
+    await updateAdSet(adSet.id, {
+      providerData: {
+        ...(adSet.providerData ?? {}),
+        google: { ...((adSet.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined ?? {}), adGroupResourceName: result.resourceName, googleAdGroupId: result.id },
+      },
+    } as any)
+  }
+  // Meta: no provider push on POST — ad sets are pushed to Meta on /launch
 
   return apiSuccess(adSet, 201)
 })

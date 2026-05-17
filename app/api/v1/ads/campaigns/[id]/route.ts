@@ -6,6 +6,12 @@ import { getCampaign, updateCampaign, deleteCampaign } from '@/lib/ads/campaigns
 import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
 import { deleteCampaign as metaDeleteCampaign } from '@/lib/ads/providers/meta/campaigns'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
+import {
+  updateCampaign as googleUpdateCampaign,
+  removeCampaign as googleRemoveCampaign,
+} from '@/lib/ads/providers/google/campaigns'
 import type { UpdateAdCampaignInput } from '@/lib/ads/types'
 import { logCampaignActivity } from '@/lib/ads/activity'
 
@@ -38,20 +44,52 @@ export const PATCH = withAuth(
     const patch = (await req.json()) as UpdateAdCampaignInput
     await updateCampaign(id, patch)
 
-    // If campaign is live in Meta, push the update upstream
     const warnings: string[] = []
-    const metaId = (campaign.providerData?.meta as { id?: string } | undefined)?.id
-    if (metaId) {
-      const ctx = await requireMetaContext(req)
-      if (!(ctx instanceof Response)) {
-        try {
-          await metaProvider.upsertCampaign!({
-            accessToken: ctx.accessToken,
-            adAccountId: ctx.adAccountId,
-            campaign: { ...campaign, ...patch } as any,
-          })
-        } catch (err) {
-          warnings.push(`Meta sync warning: ${(err as Error).message}`)
+
+    if (campaign.platform === 'google') {
+      const googleData = (campaign.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+      const resourceName = typeof googleData?.campaignResourceName === 'string' ? googleData.campaignResourceName : undefined
+      if (resourceName) {
+        const conn = await getConnection({ orgId, platform: 'google' })
+        if (conn) {
+          const accessToken = decryptAccessToken(conn)
+          const developerToken = readDeveloperToken()
+          if (developerToken) {
+            const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+            const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+            if (loginCustomerId) {
+              try {
+                await googleUpdateCampaign({
+                  customerId: loginCustomerId,
+                  accessToken,
+                  developerToken,
+                  loginCustomerId,
+                  resourceName,
+                  name: patch.name,
+                  status: patch.status,
+                })
+              } catch (err) {
+                warnings.push(`Google Ads sync warning: ${(err as Error).message}`)
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // Meta path — preserved verbatim
+      const metaId = (campaign.providerData?.meta as { id?: string } | undefined)?.id
+      if (metaId) {
+        const ctx = await requireMetaContext(req)
+        if (!(ctx instanceof Response)) {
+          try {
+            await metaProvider.upsertCampaign!({
+              accessToken: ctx.accessToken,
+              adAccountId: ctx.adAccountId,
+              campaign: { ...campaign, ...patch } as any,
+            })
+          } catch (err) {
+            warnings.push(`Meta sync warning: ${(err as Error).message}`)
+          }
         }
       }
     }
@@ -72,15 +110,44 @@ export const DELETE = withAuth(
     const campaign = await getCampaign(id)
     if (!campaign || campaign.orgId !== orgId) return apiError('Campaign not found', 404)
 
-    // Best-effort delete from Meta first
-    const metaId = (campaign.providerData?.meta as { id?: string } | undefined)?.id
-    if (metaId) {
-      const ctx = await requireMetaContext(req)
-      if (!(ctx instanceof Response)) {
-        try {
-          await metaDeleteCampaign({ metaCampaignId: metaId, accessToken: ctx.accessToken })
-        } catch {
-          // swallow — local delete is source of truth
+    if (campaign.platform === 'google') {
+      const googleData = (campaign.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+      const resourceName = typeof googleData?.campaignResourceName === 'string' ? googleData.campaignResourceName : undefined
+      if (resourceName) {
+        const conn = await getConnection({ orgId, platform: 'google' })
+        if (conn) {
+          const accessToken = decryptAccessToken(conn)
+          const developerToken = readDeveloperToken()
+          if (developerToken) {
+            const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+            const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+            if (loginCustomerId) {
+              try {
+                await googleRemoveCampaign({
+                  customerId: loginCustomerId,
+                  accessToken,
+                  developerToken,
+                  loginCustomerId,
+                  resourceName,
+                })
+              } catch {
+                // swallow — local delete is source of truth
+              }
+            }
+          }
+        }
+      }
+    } else {
+      // Meta path — preserved verbatim
+      const metaId = (campaign.providerData?.meta as { id?: string } | undefined)?.id
+      if (metaId) {
+        const ctx = await requireMetaContext(req)
+        if (!(ctx instanceof Response)) {
+          try {
+            await metaDeleteCampaign({ metaCampaignId: metaId, accessToken: ctx.accessToken })
+          } catch {
+            // swallow — local delete is source of truth
+          }
         }
       }
     }

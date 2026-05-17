@@ -5,6 +5,9 @@ import { apiSuccess, apiError } from '@/lib/api/response'
 import { getCampaign, updateCampaign, setCampaignMetaId } from '@/lib/ads/campaigns/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
+import { resumeCampaign as googleResumeCampaign } from '@/lib/ads/providers/google/campaigns'
 import { logCampaignActivity } from '@/lib/ads/activity'
 import { notifyCampaignLaunched } from '@/lib/ads/notifications'
 
@@ -18,20 +21,44 @@ export const POST = withAuth(
     const campaign = await getCampaign(id)
     if (!campaign || campaign.orgId !== orgId) return apiError('Campaign not found', 404)
 
-    const ctx = await requireMetaContext(req)
-    if (ctx instanceof Response) return ctx
-
-    // Set status ACTIVE locally; metaProvider.upsertCampaign will create OR update
+    // Set status ACTIVE locally first
     await updateCampaign(id, { status: 'ACTIVE' })
 
-    const result = (await metaProvider.upsertCampaign!({
-      accessToken: ctx.accessToken,
-      adAccountId: ctx.adAccountId,
-      campaign: { ...campaign, status: 'ACTIVE' } as any,
-    })) as { metaCampaignId: string; created: boolean }
+    if (campaign.platform === 'google') {
+      const conn = await getConnection({ orgId, platform: 'google' })
+      if (!conn) return apiError('No Google Ads connection for org', 400)
+      const accessToken = decryptAccessToken(conn)
+      const developerToken = readDeveloperToken()
+      if (!developerToken) return apiError('Google Ads developer token not configured', 500)
+      const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+      const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+      if (!loginCustomerId) return apiError('No Customer ID set on Google connection', 400)
 
-    if (result.created) {
-      await setCampaignMetaId(id, result.metaCampaignId)
+      const googleData = (campaign.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined
+      const resourceName = typeof googleData?.campaignResourceName === 'string' ? googleData.campaignResourceName : undefined
+      if (!resourceName) return apiError('Campaign has no Google resource name — create first', 400)
+
+      await googleResumeCampaign({
+        customerId: loginCustomerId,
+        accessToken,
+        developerToken,
+        loginCustomerId,
+        resourceName,
+      })
+    } else {
+      // Meta path — preserved verbatim
+      const ctx = await requireMetaContext(req)
+      if (ctx instanceof Response) return ctx
+
+      const result = (await metaProvider.upsertCampaign!({
+        accessToken: ctx.accessToken,
+        adAccountId: ctx.adAccountId,
+        campaign: { ...campaign, status: 'ACTIVE' } as any,
+      })) as { metaCampaignId: string; created: boolean }
+
+      if (result.created) {
+        await setCampaignMetaId(id, result.metaCampaignId)
+      }
     }
 
     const actor = {

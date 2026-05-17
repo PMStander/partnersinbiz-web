@@ -2,9 +2,12 @@
 import { NextRequest } from 'next/server'
 import { withAuth } from '@/lib/api/auth'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import { listCampaigns, createCampaign } from '@/lib/ads/campaigns/store'
+import { listCampaigns, createCampaign, updateCampaign } from '@/lib/ads/campaigns/store'
 import { requireMetaContext } from '@/lib/ads/api-helpers'
-import type { CreateAdCampaignInput, AdEntityStatus } from '@/lib/ads/types'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
+import { createSearchCampaign } from '@/lib/ads/providers/google/campaigns'
+import type { CreateAdCampaignInput, AdEntityStatus, AdPlatform } from '@/lib/ads/types'
 
 export const GET = withAuth('admin', async (req: NextRequest) => {
   const orgId = req.headers.get('X-Org-Id')
@@ -29,11 +32,15 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
 
   const body = (await req.json()) as {
     input?: Omit<CreateAdCampaignInput, 'adAccountId'>
+    platform?: AdPlatform
+    googleAds?: { dailyBudgetMajor?: number }
   }
 
   if (!body.input?.name || !body.input?.objective) {
     return apiError('Missing required fields: name, objective', 400)
   }
+
+  const platform: AdPlatform = body.platform ?? 'meta'
 
   const campaign = await createCampaign({
     orgId: ctx.orgId,
@@ -42,7 +49,37 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
       ...body.input,
       adAccountId: ctx.adAccountId,
     } as CreateAdCampaignInput,
+    platform,
   })
+
+  if (platform === 'google') {
+    const conn = await getConnection({ orgId: ctx.orgId, platform: 'google' })
+    if (!conn) return apiError('No Google Ads connection for org', 400)
+    const accessToken = decryptAccessToken(conn)
+    const developerToken = readDeveloperToken()
+    if (!developerToken) return apiError('Google Ads developer token not configured', 500)
+    const googleMeta = ((conn.meta ?? {}) as Record<string, unknown>).google as Record<string, unknown> | undefined
+    const loginCustomerId = typeof googleMeta?.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+    const customerId = loginCustomerId
+    if (!customerId) return apiError('No Customer ID set on Google connection', 400)
+
+    const result = await createSearchCampaign({
+      customerId,
+      accessToken,
+      developerToken,
+      loginCustomerId,
+      canonical: campaign,
+      dailyBudgetMajor: body.googleAds?.dailyBudgetMajor,
+    })
+
+    await updateCampaign(campaign.id, {
+      providerData: {
+        ...(campaign.providerData ?? {}),
+        google: { ...((campaign.providerData as Record<string, unknown>)?.google as Record<string, unknown> | undefined ?? {}), campaignResourceName: result.resourceName, googleCampaignId: result.id },
+      },
+    } as any)
+  }
+  // Meta: no provider push on POST — campaigns are pushed to Meta on /launch
 
   return apiSuccess(campaign, 201)
 })
