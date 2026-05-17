@@ -23,6 +23,7 @@ import { verifyTurnstileToken } from '@/lib/forms/turnstile'
 import { getResendClient, FROM_ADDRESS } from '@/lib/email/resend'
 import type { Form } from '@/lib/forms/types'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
+import { formSubmissionRef } from '@/lib/orgMembers/memberRef'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +67,7 @@ function renderNotificationHtml(
 async function upsertContactForSubmission(
   orgId: string,
   formId: string,
+  formName: string,
   normalized: Record<string, unknown>,
 ): Promise<string | null> {
   const email = typeof normalized.email === 'string' ? normalized.email.trim().toLowerCase() : ''
@@ -100,6 +102,7 @@ async function upsertContactForSubmission(
     return doc.id
   }
 
+  const submitterRef = formSubmissionRef(formId, formName)
   const created = await adminDb.collection('contacts').add({
     orgId,
     name,
@@ -114,8 +117,10 @@ async function upsertContactForSubmission(
     notes: '',
     assignedTo: '',
     formId,
-    createdBy: 'system',
-    createdByType: 'system',
+    createdBy: submitterRef.uid,
+    createdByRef: submitterRef,
+    updatedBy: submitterRef.uid,
+    updatedByRef: submitterRef,
     deleted: false,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -200,6 +205,7 @@ export async function POST(
   }
 
   const normalized = result.normalized
+  const submitterRef = formSubmissionRef(form.id, form.name)
 
   // Persist submission.
   const submissionRef = await adminDb.collection('form_submissions').add({
@@ -212,18 +218,32 @@ export async function POST(
     status: 'new' as const,
     contactId: null,
     source: 'form',
+    createdBy: submitterRef.uid,
+    createdByRef: submitterRef,
   })
 
   // Upsert contact if requested.
   let contactId: string | null = null
   if (form.createContact) {
     try {
-      contactId = await upsertContactForSubmission(orgId, form.id, normalized)
+      contactId = await upsertContactForSubmission(orgId, form.id, form.name, normalized)
       if (contactId) {
         await submissionRef.update({ contactId })
+        // Write a CRM activity so this submission appears in the contact timeline.
+        await adminDb.collection('activities').add({
+          orgId,
+          contactId,
+          dealId: '',
+          type: 'note',
+          summary: `Submitted form: ${form.name}`,
+          metadata: { formId: form.id, submissionId: submissionRef.id, formName: form.name },
+          createdBy: submitterRef.uid,
+          createdByRef: submitterRef,
+          createdAt: FieldValue.serverTimestamp(),
+        })
       }
     } catch {
-      // Contact upsert failures must never block a submission.
+      // Contact upsert / activity failures must never block a submission.
     }
   }
 
