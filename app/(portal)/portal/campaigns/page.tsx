@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { getBrandKitForOrg } from '@/lib/brand-kit/store'
 import { serializeForClient } from '@/lib/campaigns/serialize'
+import { CampaignRequestPanel } from './CampaignRequestPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -167,6 +168,8 @@ export default async function PortalCampaignsIndex() {
         <StatTile label="Broadcasts sent" value={String(broadcastsSent)} icon="send" />
         <StatTile label="Avg open rate" value={avgOpen} icon="drafts" />
       </div>
+
+      <CampaignRequestPanel />
 
       {/* Section 1: Content & Social */}
       <section className="space-y-5">

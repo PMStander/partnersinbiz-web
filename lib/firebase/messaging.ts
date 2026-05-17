@@ -80,6 +80,43 @@ async function registerFcmServiceWorker(): Promise<ServiceWorkerRegistration> {
   return navigator.serviceWorker.register(url, { scope: '/firebase-cloud-messaging-push-scope' })
 }
 
+export async function waitForActiveServiceWorker(
+  registration: ServiceWorkerRegistration,
+  timeoutMs = 10000,
+): Promise<ServiceWorkerRegistration> {
+  if (registration.active) return registration
+
+  const worker = registration.installing ?? registration.waiting
+  if (!worker) {
+    await registration.update().catch(() => undefined)
+    if (registration.active) return registration
+  }
+
+  return new Promise((resolve, reject) => {
+    const pendingWorker = registration.installing ?? registration.waiting
+    if (!pendingWorker) {
+      reject(new Error('No service worker is installing for push notifications.'))
+      return
+    }
+    const activeWorker = pendingWorker
+
+    const timeout = globalThis.setTimeout(() => {
+      activeWorker.removeEventListener('statechange', onStateChange)
+      reject(new Error('Timed out waiting for the push service worker to activate.'))
+    }, timeoutMs)
+
+    function onStateChange() {
+      if (activeWorker.state !== 'activated') return
+      globalThis.clearTimeout(timeout)
+      activeWorker.removeEventListener('statechange', onStateChange)
+      resolve(registration)
+    }
+
+    activeWorker.addEventListener('statechange', onStateChange)
+    onStateChange()
+  })
+}
+
 export type PushPermissionResult =
   | { ok: true; token: string }
   | { ok: false; reason: 'denied' | 'dismissed' | 'unsupported' | 'no-vapid' | 'error'; error?: string }
@@ -102,7 +139,7 @@ export async function requestPushPermission(): Promise<PushPermissionResult> {
 
   try {
     const registration = await registerFcmServiceWorker()
-    await navigator.serviceWorker.ready
+    await waitForActiveServiceWorker(registration)
     const messaging = await getMessagingInstance()
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,

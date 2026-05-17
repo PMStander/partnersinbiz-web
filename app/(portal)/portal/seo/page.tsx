@@ -60,7 +60,6 @@ async function loadStats(sprintId: string): Promise<any> {
   const topThree = keywords.filter((k) => k.status === 'top_3').length
 
   // Compute movers: keywords with biggest position improvement (lower = better) over last 2 pulls
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const movers = keywords
     .map((k) => {
       const positions = (k.positions ?? []) as { position: number; pulledAt: string }[]
@@ -115,7 +114,7 @@ export default async function PortalSeoIndex() {
   // ── Empty state ───────────────────────────────────────────────────────
   if (sprints.length === 0) {
     return (
-      <div className="card p-12 text-center max-w-xl mx-auto">
+      <div className="pib-card p-12 text-center max-w-xl mx-auto">
         <span className="material-symbols-outlined text-[48px] text-[var(--color-pib-text-muted)] mb-3">
           trending_up
         </span>
@@ -131,9 +130,10 @@ export default async function PortalSeoIndex() {
   // ── Multi-sprint state (simple cards) ─────────────────────────────────
   if (sprints.length > 1) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8">
         <header>
-          <h1 className="text-2xl font-semibold">Your SEO Sprints</h1>
+          <p className="eyebrow">SEO</p>
+          <h1 className="font-headline text-3xl md:text-4xl font-semibold mt-2">Your SEO Sprints</h1>
           <p className="text-sm text-[var(--color-pib-text-muted)]">
             Track progress, performance, and impact over each 90-day plan.
           </p>
@@ -148,7 +148,7 @@ export default async function PortalSeoIndex() {
               <Link
                 key={s.id}
                 href={`/portal/seo/sprints/${s.id}`}
-                className="card p-5 space-y-2 hover:border-gray-400"
+                className="pib-card pib-card-hover p-5 space-y-2"
               >
                 <div className="text-xs text-[var(--color-pib-text-muted)]">
                   {phase === 4 ? `Compounding · Day ${day}` : `Day ${day} of 90`} · {PHASE_LABELS[phase]}
@@ -177,7 +177,8 @@ export default async function PortalSeoIndex() {
   return (
     <div className="space-y-8">
       {/* ── Hero ──────────────────────────────────────────────────── */}
-      <section className="card p-8 space-y-5">
+      <section className="pib-card p-8 space-y-5 overflow-hidden relative">
+        <div className="absolute inset-x-0 top-0 h-1 bg-[var(--color-pib-accent)]" />
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="space-y-1">
             <p className="text-[10px] uppercase tracking-widest text-[var(--color-pib-text-muted)]">
@@ -212,7 +213,7 @@ export default async function PortalSeoIndex() {
 
       {/* ── Health banner (if any) ────────────────────────────────── */}
       {signals.length > 0 && (
-        <section className="card p-5 border-amber-500/30 bg-amber-500/5 space-y-2">
+      <section className="pib-card p-5 border-amber-500/30 bg-amber-500/5 space-y-2">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-amber-500 text-[20px]">notifications_active</span>
             <h3 className="font-semibold text-sm">{signals.length} thing{signals.length === 1 ? '' : 's'} need attention</h3>
@@ -254,7 +255,7 @@ export default async function PortalSeoIndex() {
       {/* ── Today + Movers + Wins ─────────────────────────────────── */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Today's focus */}
-        <div className="card p-5 space-y-3 lg:col-span-1">
+        <div className="pib-card p-5 space-y-3 lg:col-span-1">
           <h3 className="font-semibold text-sm flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px]">today</span>
             Today&apos;s focus
@@ -274,7 +275,7 @@ export default async function PortalSeoIndex() {
         </div>
 
         {/* Top movers */}
-        <div className="card p-5 space-y-3 lg:col-span-1">
+        <div className="pib-card p-5 space-y-3 lg:col-span-1">
           <h3 className="font-semibold text-sm flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px]">trending_up</span>
             Top movers
@@ -306,7 +307,7 @@ export default async function PortalSeoIndex() {
         </div>
 
         {/* Recent wins */}
-        <div className="card p-5 space-y-3 lg:col-span-1">
+        <div className="pib-card p-5 space-y-3 lg:col-span-1">
           <h3 className="font-semibold text-sm flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px]">check_circle</span>
             Recent wins
@@ -354,7 +355,7 @@ export default async function PortalSeoIndex() {
 
 function StatCard({ label, value, sub, icon }: { label: string; value: string; sub: string; icon: string }) {
   return (
-    <div className="card p-4 space-y-1">
+    <div className="pib-stat-card space-y-1">
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-widest text-[var(--color-pib-text-muted)]">{label}</p>
         <span className="material-symbols-outlined text-[16px] text-[var(--color-pib-text-muted)] opacity-70">
@@ -398,7 +399,7 @@ function DeepLink({ href, icon, label }: { href: string; icon: string; label: st
   return (
     <Link
       href={href}
-      className="card p-3 flex items-center gap-2 hover:border-gray-400 transition-colors"
+      className="pib-card pib-card-hover p-3 flex items-center gap-2 transition-colors"
     >
       <span className="material-symbols-outlined text-[18px] text-[var(--color-pib-text-muted)]">{icon}</span>
       <span className="text-sm font-medium">{label}</span>

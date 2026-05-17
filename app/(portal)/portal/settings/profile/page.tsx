@@ -52,7 +52,7 @@ export default function ProfilePage() {
   function field(key: keyof ProfileData, label: string, required = false) {
     return (
       <div className="flex flex-col gap-1.5">
-        <label className="text-[10px] font-mono uppercase tracking-widest text-[var(--color-pib-text-muted)]">
+        <label className="pib-label !mb-0">
           {label}{required && ' *'}
         </label>
         <input
@@ -60,7 +60,7 @@ export default function ProfilePage() {
           value={(profile[key] as string) ?? ''}
           onChange={e => setProfile(p => ({ ...p, [key]: e.target.value }))}
           required={required}
-          className="input-base text-sm"
+          className="pib-input"
         />
       </div>
     )
@@ -83,8 +83,8 @@ export default function ProfilePage() {
       )}
 
       <form onSubmit={handleSave} className="space-y-4">
-        <div className="bg-[var(--color-pib-surface)] border border-[var(--color-pib-line)] rounded-xl p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="pib-card space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             {field('firstName', 'First name', true)}
             {field('lastName', 'Last name', true)}
           </div>
@@ -97,9 +97,9 @@ export default function ProfilePage() {
         <button
           type="submit"
           disabled={saving}
-          className="btn-primary w-full sm:w-auto"
+          className="pib-btn-primary w-full justify-center disabled:opacity-60 sm:w-auto"
         >
-          {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save profile'}
+          {saving ? 'Saving...' : saved ? 'Saved' : 'Save profile'}
         </button>
       </form>
     </div>

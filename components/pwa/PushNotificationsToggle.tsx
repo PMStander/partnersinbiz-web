@@ -71,7 +71,7 @@ export function PushNotificationsToggle({ className }: { className?: string }) {
   if (state.kind === 'loading') {
     return (
       <div className={className}>
-        <div className="text-xs text-[var(--pib-muted)]">Checking push support…</div>
+        <div className="text-xs text-[var(--color-pib-text-muted)]">Checking push support...</div>
       </div>
     )
   }
@@ -96,9 +96,9 @@ export function PushNotificationsToggle({ className }: { className?: string }) {
   return (
     <div className={className}>
       <div className="flex items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium">Push notifications</p>
-          <p className="text-xs text-[var(--pib-muted)] mt-1">
+          <p className="text-xs text-[var(--color-pib-text-muted)] mt-1">
             Get notified about new messages, approvals and invoices on this device.
           </p>
         </div>
@@ -106,13 +106,12 @@ export function PushNotificationsToggle({ className }: { className?: string }) {
           type="button"
           onClick={enabled ? onDisable : onEnable}
           disabled={working}
-          className={`rounded-full text-xs font-medium px-3 py-1.5 transition ${
-            enabled
-              ? 'border border-white/15 text-[var(--pib-text)]'
-              : 'bg-[var(--pib-accent)] text-black'
-          } disabled:opacity-50`}
+          className={[
+            enabled ? 'pib-btn-secondary' : 'pib-btn-primary',
+            'shrink-0 !px-3 !py-1.5 !text-xs disabled:opacity-50',
+          ].join(' ')}
         >
-          {working ? '…' : enabled ? 'Disable' : 'Enable'}
+          {working ? '...' : enabled ? 'Disable' : 'Enable'}
         </button>
       </div>
       {state.kind === 'error' && (

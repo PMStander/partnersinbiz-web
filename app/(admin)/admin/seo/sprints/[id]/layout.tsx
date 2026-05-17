@@ -34,35 +34,38 @@ export default async function SprintLayout({
   const phaseLabels = ['Pre-launch', 'Foundation', 'Content', 'Authority', 'Compounding']
 
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
-        <Link href="/admin/seo" className="text-xs text-[var(--color-pib-text-muted)] hover:underline">
-          ← All sprints
+    <div className="space-y-8">
+      <header className="pib-card !p-6 md:!p-7">
+        <Link href="/admin/seo" className="text-xs text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] inline-flex items-center gap-1">
+          <span className="material-symbols-outlined text-[14px]">arrow_back</span>
+          All sprints
         </Link>
-        <div className="flex items-start justify-between">
+        <div className="mt-5 flex flex-col lg:flex-row lg:items-end justify-between gap-5">
           <div>
-            <h1 className="text-2xl font-semibold">{sprint.siteName}</h1>
-            <p className="text-sm text-[var(--color-pib-text-muted)]">{sprint.siteUrl}</p>
-            <p className="text-sm mt-1">
+            <p className="eyebrow">SEO Sprint</p>
+            <h1 className="font-headline text-3xl md:text-4xl font-semibold mt-2 tracking-tight">{sprint.siteName}</h1>
+            <p className="text-sm text-[var(--color-pib-text-muted)] mt-2">{sprint.siteUrl}</p>
+            <p className="text-sm mt-3 text-[var(--color-pib-text)]">
               {phase === 4 ? `Phase 4 — Compounding · Day ${day}` : `Day ${day} of 90`} · {phaseLabels[phase]}
             </p>
           </div>
           <form action={`/api/v1/seo/sprints/${id}/run`} method="POST">
             <button
               formAction={`/api/v1/seo/sprints/${id}/run`}
-              className="text-sm px-4 py-2 rounded bg-black text-white hover:bg-gray-800"
+              className="pib-btn-primary"
             >
+              <span className="material-symbols-outlined text-[18px]">play_arrow</span>
               Run today&apos;s SEO
             </button>
           </form>
         </div>
       </header>
-      <nav className="flex gap-1 border-b">
+      <nav className="pib-card !p-2 flex gap-1 overflow-x-auto">
         {TABS.map((t) => (
           <Link
             key={t.key}
             href={`/admin/seo/sprints/${id}${t.href}`}
-            className="px-3 py-2 text-sm border-b-2 border-transparent hover:border-gray-300"
+            className="px-3 py-2 text-sm rounded-md text-[var(--color-pib-text-muted)] hover:text-[var(--color-pib-text)] hover:bg-[var(--color-pib-surface-2)] whitespace-nowrap transition-colors"
           >
             {t.label}
           </Link>
