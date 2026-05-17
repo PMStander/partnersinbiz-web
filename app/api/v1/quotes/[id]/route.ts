@@ -200,6 +200,42 @@ async function handleQuoteUpdate(
         console.error('[webhook-dispatch-error] quote.rejected', err)
       }
     }
+
+    // Best-effort contact timeline writes for status transitions
+    const contactId = typeof before.contactId === 'string' && before.contactId ? before.contactId : undefined
+    if (contactId) {
+      let activityType: string | undefined
+      let activitySummary: string | undefined
+
+      if (fromStatus === 'draft' && toStatus === 'sent') {
+        activityType = 'email'
+        activitySummary = `Quote sent: ${before.quoteNumber}`
+      } else if (toStatus === 'accepted') {
+        activityType = 'note'
+        activitySummary = `Quote accepted: ${before.quoteNumber}`
+      } else if (toStatus === 'rejected') {
+        activityType = 'note'
+        activitySummary = `Quote rejected: ${before.quoteNumber}`
+      }
+
+      if (activityType && activitySummary) {
+        try {
+          const activityData = Object.fromEntries(Object.entries({
+            orgId: ctx.orgId,
+            contactId,
+            type: activityType,
+            summary: activitySummary,
+            metadata: { quoteNumber: before.quoteNumber, fromStatus, toStatus },
+            createdBy: ctx.isAgent ? undefined : actorRef.uid,
+            createdByRef: actorRef,
+            createdAt: FieldValue.serverTimestamp(),
+          }).filter(([, v]) => v !== undefined))
+          await adminDb.collection('activities').add(activityData)
+        } catch (err) {
+          console.error('[activities] timeline write failed (quote status change)', err)
+        }
+      }
+    }
   }
 
   return apiSuccess({ quote: { ...before, ...sanitized, id } })

@@ -84,6 +84,32 @@ async function handleDealUpdate(
       console.error('[webhook-dispatch-error] deal.stage_changed', e)
     }
 
+    // Resolve contactId for activities timeline writes (best-effort only)
+    const contactId =
+      (typeof body?.contactId === 'string' && body.contactId) ||
+      (typeof before.contactId === 'string' && before.contactId) ||
+      null
+
+    // Stage-change activity — appears on contact timeline regardless of sub-stage
+    if (contactId) {
+      try {
+        const activityData = Object.fromEntries(Object.entries({
+          orgId: ctx.orgId,
+          contactId,
+          dealId: id,
+          type: 'stage_change',
+          summary: `Deal moved: ${fromStage} → ${toStage}`,
+          metadata: { fromStage, toStage, dealTitle },
+          createdBy: ctx.isAgent ? undefined : ctx.actor.uid,
+          createdByRef: actorRef,
+          createdAt: FieldValue.serverTimestamp(),
+        }).filter(([, v]) => v !== undefined))
+        await adminDb.collection('activities').add(activityData)
+      } catch (e) {
+        console.error('[activities] timeline write failed (stage_change)', e)
+      }
+    }
+
     if (toStage === 'won') {
       try {
         await dispatchWebhook(ctx.orgId, 'deal.won', {
@@ -96,11 +122,6 @@ async function handleDealUpdate(
         console.error('[webhook-dispatch-error] deal.won', e)
       }
 
-      // Best-effort revenue attribution back to the most recent email click
-      const contactId =
-        (typeof body?.contactId === 'string' && body.contactId) ||
-        (typeof before.contactId === 'string' && before.contactId) ||
-        null
       const currency =
         (typeof body?.currency === 'string' && body.currency) ||
         (typeof before.currency === 'string' && before.currency) ||
@@ -132,6 +153,30 @@ async function handleDealUpdate(
       } catch (e) {
         console.error('[activity-log-error] crm_deal_won', e)
       }
+
+      // Deal won — additional timeline note with value
+      if (contactId) {
+        try {
+          const currency =
+            (typeof body?.currency === 'string' && body.currency) ||
+            (typeof before.currency === 'string' && before.currency) ||
+            'ZAR'
+          const activityData = Object.fromEntries(Object.entries({
+            orgId: ctx.orgId,
+            contactId,
+            dealId: id,
+            type: 'note',
+            summary: `Deal won: ${dealTitle} (${currency} ${dealValue})`,
+            metadata: { dealTitle, value: dealValue, currency },
+            createdBy: ctx.isAgent ? undefined : ctx.actor.uid,
+            createdByRef: actorRef,
+            createdAt: FieldValue.serverTimestamp(),
+          }).filter(([, v]) => v !== undefined))
+          await adminDb.collection('activities').add(activityData)
+        } catch (e) {
+          console.error('[activities] timeline write failed (deal.won)', e)
+        }
+      }
     } else if (toStage === 'lost') {
       try {
         await dispatchWebhook(ctx.orgId, 'deal.lost', {
@@ -158,6 +203,26 @@ async function handleDealUpdate(
         })
       } catch (e) {
         console.error('[activity-log-error] crm_deal_lost', e)
+      }
+
+      // Deal lost — additional timeline note
+      if (contactId) {
+        try {
+          const activityData = Object.fromEntries(Object.entries({
+            orgId: ctx.orgId,
+            contactId,
+            dealId: id,
+            type: 'note',
+            summary: `Deal lost: ${dealTitle}`,
+            metadata: { dealTitle },
+            createdBy: ctx.isAgent ? undefined : ctx.actor.uid,
+            createdByRef: actorRef,
+            createdAt: FieldValue.serverTimestamp(),
+          }).filter(([, v]) => v !== undefined))
+          await adminDb.collection('activities').add(activityData)
+        } catch (e) {
+          console.error('[activities] timeline write failed (deal.lost)', e)
+        }
       }
     } else {
       try {

@@ -94,6 +94,9 @@ export const POST = withCrmAuth('member', async (req: NextRequest, ctx) => {
 
   const actorRef = ctx.actor
 
+  // Optional CRM contact link
+  const contactId = typeof body.contactId === 'string' && body.contactId ? body.contactId : undefined
+
   const quoteData: Record<string, unknown> = {
     orgId: ctx.orgId,
     quoteNumber,
@@ -116,6 +119,7 @@ export const POST = withCrmAuth('member', async (req: NextRequest, ctx) => {
     updatedByRef: actorRef,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
+    contactId,
   }
 
   // Omit createdBy / updatedBy uid for agent calls
@@ -143,6 +147,25 @@ export const POST = withCrmAuth('member', async (req: NextRequest, ctx) => {
     })
   } catch (err) {
     console.error('[webhook-dispatch-error] quote.created', err)
+  }
+
+  // Best-effort contact timeline write
+  if (contactId) {
+    try {
+      const activityData = Object.fromEntries(Object.entries({
+        orgId: ctx.orgId,
+        contactId,
+        type: 'note',
+        summary: `Quote created: ${quoteNumber} (${sanitized.currency} ${total})`,
+        metadata: { quoteNumber, total, currency: sanitized.currency, quoteId: docRef.id },
+        createdBy: ctx.isAgent ? undefined : actorRef.uid,
+        createdByRef: actorRef,
+        createdAt: FieldValue.serverTimestamp(),
+      }).filter(([, v]) => v !== undefined))
+      await adminDb.collection('activities').add(activityData)
+    } catch (err) {
+      console.error('[activities] timeline write failed (quote.created)', err)
+    }
   }
 
   return apiSuccess({ ...sanitized, id: docRef.id }, 201)

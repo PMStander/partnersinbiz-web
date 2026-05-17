@@ -36,6 +36,10 @@ interface InvoiceCapture {
   capturedAdd?: jest.Mock
 }
 
+interface ActivitiesCapture {
+  capturedAdd?: jest.Mock
+}
+
 function makeQuoteDoc(id: string, partial: Record<string, unknown>): QuoteDoc {
   return {
     id,
@@ -62,6 +66,7 @@ function stageAuth(
   opts?: {
     quotes?: QuoteDoc[]
     invoiceCapture?: InvoiceCapture
+    activitiesCapture?: ActivitiesCapture
   },
 ) {
   ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: member.uid })
@@ -147,6 +152,11 @@ function stageAuth(
       return {
         add: capturedAdd,
       }
+
+    if (name === 'activities') {
+      const activitiesAddFn = opts?.activitiesCapture?.capturedAdd ?? jest.fn().mockResolvedValue({ id: 'act-new' })
+      return { add: activitiesAddFn }
+    }
 
     if (name === 'outbound_webhooks')
       return {
@@ -286,6 +296,89 @@ describe('PATCH /api/v1/quotes/:id — status transitions', () => {
     const { PATCH } = await import('@/app/api/v1/quotes/[id]/route')
     const res = await PATCH(req, { params: Promise.resolve({ id: 'q-other' }) })
     expect(res.status).toBe(404)
+  })
+
+  it('draft → sent with contactId writes email activity to contact timeline', async () => {
+    const member = seedOrgMember('org-1', 'uid-m', { role: 'member' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-1' })
+    stageAuth(member, {
+      quotes: [makeQuoteDoc('q-draft-contact', { status: 'draft', contactId: 'c-99', quoteNumber: 'Q-TES-010' })],
+      activitiesCapture: { capturedAdd: capturedActivitiesAdd },
+    })
+    ;(dispatchWebhook as jest.Mock).mockClear()
+
+    const req = callAsMember(member, 'PATCH', '/api/v1/quotes/q-draft-contact', { status: 'sent' })
+    const { PATCH } = await import('@/app/api/v1/quotes/[id]/route')
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'q-draft-contact' }) })
+    expect(res.status).toBe(200)
+    expect(capturedActivitiesAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 'org-1',
+        contactId: 'c-99',
+        type: 'email',
+        summary: 'Quote sent: Q-TES-010',
+      }),
+    )
+  })
+
+  it('→ accepted with contactId writes note activity to contact timeline', async () => {
+    const member = seedOrgMember('org-1', 'uid-m', { role: 'member' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-2' })
+    stageAuth(member, {
+      quotes: [makeQuoteDoc('q-sent-contact', { status: 'sent', contactId: 'c-99', quoteNumber: 'Q-TES-011' })],
+      activitiesCapture: { capturedAdd: capturedActivitiesAdd },
+    })
+    ;(dispatchWebhook as jest.Mock).mockClear()
+
+    const req = callAsMember(member, 'PATCH', '/api/v1/quotes/q-sent-contact', { status: 'accepted' })
+    const { PATCH } = await import('@/app/api/v1/quotes/[id]/route')
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'q-sent-contact' }) })
+    expect(res.status).toBe(200)
+    expect(capturedActivitiesAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 'org-1',
+        contactId: 'c-99',
+        type: 'note',
+        summary: 'Quote accepted: Q-TES-011',
+      }),
+    )
+  })
+
+  it('→ rejected with contactId writes note activity to contact timeline', async () => {
+    const member = seedOrgMember('org-1', 'uid-m', { role: 'member' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-3' })
+    stageAuth(member, {
+      quotes: [makeQuoteDoc('q-sent-rej', { status: 'sent', contactId: 'c-99', quoteNumber: 'Q-TES-012' })],
+      activitiesCapture: { capturedAdd: capturedActivitiesAdd },
+    })
+    ;(dispatchWebhook as jest.Mock).mockClear()
+
+    const req = callAsMember(member, 'PATCH', '/api/v1/quotes/q-sent-rej', { status: 'rejected' })
+    const { PATCH } = await import('@/app/api/v1/quotes/[id]/route')
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'q-sent-rej' }) })
+    expect(res.status).toBe(200)
+    expect(capturedActivitiesAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 'org-1',
+        contactId: 'c-99',
+        type: 'note',
+        summary: 'Quote rejected: Q-TES-012',
+      }),
+    )
+  })
+
+  it('status change WITHOUT contactId does NOT call activities.add', async () => {
+    const member = seedOrgMember('org-1', 'uid-m', { role: 'member' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-1' })
+    stageAuth(member, {
+      quotes: [makeQuoteDoc('q-no-contact', { status: 'draft' })],  // no contactId
+      activitiesCapture: { capturedAdd: capturedActivitiesAdd },
+    })
+
+    const req = callAsMember(member, 'PATCH', '/api/v1/quotes/q-no-contact', { status: 'sent' })
+    const { PATCH } = await import('@/app/api/v1/quotes/[id]/route')
+    await PATCH(req, { params: Promise.resolve({ id: 'q-no-contact' }) })
+    expect(capturedActivitiesAdd).not.toHaveBeenCalled()
   })
 
   it('PATCH empty body → 400', async () => {

@@ -26,6 +26,7 @@ function stageAuth(
   opts?: {
     existingQuotes?: Array<{ id: string; data: Record<string, unknown> }>
     capturedSet?: jest.Mock
+    capturedActivitiesAdd?: jest.Mock
   },
 ) {
   ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: member.uid })
@@ -94,6 +95,10 @@ function stageAuth(
         get: jest.fn().mockResolvedValue({ docs }),
         add: jest.fn().mockResolvedValue({ id: newDocId }),
       }
+    }
+    if (name === 'activities') {
+      const addFn = opts?.capturedActivitiesAdd ?? jest.fn().mockResolvedValue({ id: 'act-new' })
+      return { add: addFn }
     }
     if (name === 'outbound_webhooks') {
       return {
@@ -261,6 +266,47 @@ describe('POST /api/v1/quotes', () => {
     const { POST } = await import('@/app/api/v1/quotes/route')
     const res = await POST(req)
     expect(res.status).toBe(400)
+  })
+
+  it('POST with contactId writes activities entry for contact timeline', async () => {
+    const member = seedOrgMember('org-1', 'uid-m', { role: 'member', firstName: 'Jane', lastName: 'Doe' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-1' })
+    stageAuth(member, { capturedActivitiesAdd })
+
+    const req = callAsMember(member, 'POST', '/api/v1/quotes', {
+      lineItems: VALID_LINE_ITEMS,
+      currency: 'ZAR',
+      contactId: 'c-123',
+    })
+    const { POST } = await import('@/app/api/v1/quotes/route')
+    const res = await POST(req)
+    expect(res.status).toBe(201)
+    expect(capturedActivitiesAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 'org-1',
+        contactId: 'c-123',
+        type: 'note',
+        summary: expect.stringContaining('Quote created:'),
+      }),
+    )
+    // dealId must NOT be on quote activities
+    const call = capturedActivitiesAdd.mock.calls[0][0]
+    expect(call.dealId).toBeUndefined()
+  })
+
+  it('POST without contactId does NOT call activities.add', async () => {
+    const member = seedOrgMember('org-1', 'uid-m', { role: 'member' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-1' })
+    stageAuth(member, { capturedActivitiesAdd })
+
+    const req = callAsMember(member, 'POST', '/api/v1/quotes', {
+      lineItems: VALID_LINE_ITEMS,
+      currency: 'ZAR',
+      // no contactId
+    })
+    const { POST } = await import('@/app/api/v1/quotes/route')
+    await POST(req)
+    expect(capturedActivitiesAdd).not.toHaveBeenCalled()
   })
 
   it('webhook quote.created dispatched with explicit fields only (no body spread)', async () => {

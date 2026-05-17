@@ -23,6 +23,8 @@ export interface Quote {
   clientDetails?: InvoiceClientDetails
   /** If converted, the resulting invoice ID */
   convertedInvoiceId?: string
+  /** CRM contact linked to this quote (optional) */
+  contactId?: string
   sentAt: Timestamp | null
   acceptedAt: Timestamp | null
   createdBy: string

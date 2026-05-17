@@ -54,7 +54,7 @@ function stageAuthWithDeal(
   member: { uid: string; orgId: string; role: string; firstName?: string; lastName?: string },
   existingDeal: { id: string; data: Record<string, unknown> } | null,
   perms: Record<string, unknown> = {},
-  opts?: { capturedUpdate?: jest.Mock; capturedDelete?: jest.Mock; ownerLookup?: Record<string, { firstName?: string; lastName?: string }> },
+  opts?: { capturedUpdate?: jest.Mock; capturedDelete?: jest.Mock; ownerLookup?: Record<string, { firstName?: string; lastName?: string }>; capturedActivitiesAdd?: jest.Mock },
 ) {
   ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: member.uid })
   ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
@@ -83,6 +83,10 @@ function stageAuthWithDeal(
           delete: deleteFn,
         }),
       }
+    }
+    if (name === 'activities') {
+      const addFn = opts?.capturedActivitiesAdd ?? jest.fn().mockResolvedValue({ id: 'act-1' })
+      return { add: addFn }
     }
     return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }
   })
@@ -430,6 +434,86 @@ describe('PUT /api/v1/crm/deals/[id]', () => {
 
     const stageChangeCalls = (dispatchWebhook as jest.Mock).mock.calls.filter((c: unknown[]) => c[1] === 'deal.stage_changed')
     expect(stageChangeCalls).toHaveLength(0)
+  })
+
+  it('stage change with contactId writes activities entry with type stage_change', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-1' })
+    stageAuthWithDeal(
+      member,
+      { id: 'd1', data: { orgId: 'org-1', stage: 'discovery', value: 100, title: 'Deal A', contactId: 'c-1' } },
+      {},
+      { capturedActivitiesAdd },
+    )
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { stage: 'proposal' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    const res = await PUT(req, routeCtx('d1'))
+    expect(res.status).toBeLessThan(300)
+    expect(capturedActivitiesAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: 'org-1',
+        contactId: 'c-1',
+        dealId: 'd1',
+        type: 'stage_change',
+        summary: 'Deal moved: discovery → proposal',
+      }),
+    )
+  })
+
+  it('stage → won with contactId writes stage_change + deal won note to activities', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-1' })
+    stageAuthWithDeal(
+      member,
+      { id: 'd1', data: { orgId: 'org-1', stage: 'negotiation', value: 5000, title: 'Big Deal', contactId: 'c-1', currency: 'ZAR' } },
+      {},
+      { capturedActivitiesAdd },
+    )
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { stage: 'won' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    await PUT(req, routeCtx('d1'))
+    // activities.add should be called at least twice: stage_change + deal won note
+    const calls = capturedActivitiesAdd.mock.calls
+    expect(calls.length).toBeGreaterThanOrEqual(2)
+    const stageCall = calls.find((c: unknown[]) => (c[0] as any).type === 'stage_change')
+    const wonCall = calls.find((c: unknown[]) => (c[0] as any).type === 'note' && (c[0] as any).summary?.includes('Deal won'))
+    expect(stageCall).toBeDefined()
+    expect(wonCall).toBeDefined()
+    expect((wonCall![0] as any).summary).toContain('Big Deal')
+  })
+
+  it('stage → lost with contactId writes stage_change + deal lost note to activities', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-1' })
+    stageAuthWithDeal(
+      member,
+      { id: 'd1', data: { orgId: 'org-1', stage: 'negotiation', value: 500, title: 'Lost Deal', contactId: 'c-1' } },
+      {},
+      { capturedActivitiesAdd },
+    )
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { stage: 'lost' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    await PUT(req, routeCtx('d1'))
+    const calls = capturedActivitiesAdd.mock.calls
+    expect(calls.length).toBeGreaterThanOrEqual(2)
+    const lostCall = calls.find((c: unknown[]) => (c[0] as any).type === 'note' && (c[0] as any).summary?.includes('Deal lost'))
+    expect(lostCall).toBeDefined()
+    expect((lostCall![0] as any).summary).toContain('Lost Deal')
+  })
+
+  it('stage change WITHOUT contactId does NOT call activities.add', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member' })
+    const capturedActivitiesAdd = jest.fn().mockResolvedValue({ id: 'act-1' })
+    stageAuthWithDeal(
+      member,
+      { id: 'd1', data: { orgId: 'org-1', stage: 'discovery', value: 100, title: 'No Contact Deal' } },  // no contactId
+      {},
+      { capturedActivitiesAdd },
+    )
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/deals/d1', { stage: 'proposal' })
+    const { PUT } = await import('@/app/api/v1/crm/deals/[id]/route')
+    await PUT(req, routeCtx('d1'))
+    expect(capturedActivitiesAdd).not.toHaveBeenCalled()
   })
 })
 
