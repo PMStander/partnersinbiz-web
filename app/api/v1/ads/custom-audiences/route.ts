@@ -7,6 +7,11 @@ import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
 import type { AdCustomAudienceType, AdCustomAudienceStatus, CreateAdCustomAudienceInput } from '@/lib/ads/types'
 import { logCustomAudienceActivity } from '@/lib/ads/activity'
+import { adminDb } from '@/lib/firebase/admin'
+import { Timestamp } from 'firebase-admin/firestore'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
+import crypto from 'crypto'
 
 export const GET = withAuth('admin', async (req: NextRequest) => {
   const orgId = req.headers.get('X-Org-Id')
@@ -23,9 +28,158 @@ export const GET = withAuth('admin', async (req: NextRequest) => {
 })
 
 export const POST = withAuth('admin', async (req: NextRequest, user) => {
+  const orgId = req.headers.get('X-Org-Id')
+  if (!orgId) return apiError('Missing X-Org-Id header', 400)
+
+  // Parse body — may be { input: ... } for Meta or flat body for Google
+  let rawBody: Record<string, unknown>
+  try {
+    rawBody = await req.json()
+  } catch {
+    return apiError('Invalid JSON body', 400)
+  }
+
+  // ─── Google branch ────────────────────────────────────────────────────────
+  if (rawBody.platform === 'google') {
+    const body = rawBody as {
+      platform: 'google'
+      name?: string
+      description?: string
+      providerData?: {
+        google?: {
+          subtype?: string
+          uploadKeyType?: string
+          membershipLifeSpanDays?: number
+          rule?: { kind: string; value: string }
+          segmentType?: string
+          values?: unknown[]
+          audienceResourceName?: string
+          categoryName?: string
+          [key: string]: unknown
+        }
+      }
+    }
+
+    if (!body.name) return apiError('name is required', 400)
+
+    const subtype = body.providerData?.google?.subtype
+    if (!subtype) return apiError('Google audience requires providerData.google.subtype', 400)
+
+    const conn = await getConnection({ orgId, platform: 'google' })
+    if (!conn) return apiError('No Google Ads connection for org', 400)
+
+    const accessToken = decryptAccessToken(conn)
+    const developerToken = readDeveloperToken()
+    if (!developerToken) return apiError('GOOGLE_ADS_DEVELOPER_TOKEN not configured', 500)
+
+    const meta = (conn.meta ?? {}) as Record<string, unknown>
+    const googleMeta = (meta.google as Record<string, unknown> | undefined) ?? {}
+    const loginCustomerId = typeof googleMeta.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+    const customerId = loginCustomerId
+    if (!customerId) return apiError('No Customer ID set on Google connection', 400)
+
+    let result: { resourceName: string; id: string }
+
+    switch (subtype) {
+      case 'CUSTOMER_MATCH': {
+        const { createCustomerMatchList } = await import('@/lib/ads/providers/google/audiences/customer-match')
+        result = await createCustomerMatchList({
+          customerId,
+          accessToken,
+          developerToken,
+          loginCustomerId,
+          name: body.name,
+          description: body.description,
+          uploadKeyType: body.providerData?.google?.uploadKeyType as 'CONTACT_INFO' | 'CRM_ID' | 'MOBILE_ADVERTISING_ID' | undefined,
+        })
+        break
+      }
+      case 'REMARKETING': {
+        const { createRemarketingList } = await import('@/lib/ads/providers/google/audiences/remarketing')
+        const rule = body.providerData?.google?.rule as { kind: string; value: string } | undefined
+        if (!rule) return apiError('Remarketing requires providerData.google.rule', 400)
+        result = await createRemarketingList({
+          customerId,
+          accessToken,
+          developerToken,
+          loginCustomerId,
+          name: body.name,
+          description: body.description,
+          membershipLifeSpanDays: body.providerData?.google?.membershipLifeSpanDays,
+          rule: rule as Parameters<typeof createRemarketingList>[0]['rule'],
+        })
+        break
+      }
+      case 'CUSTOM_SEGMENT': {
+        const { createCustomSegment } = await import('@/lib/ads/providers/google/audiences/custom-segments')
+        const segmentType = body.providerData?.google?.segmentType
+        const values = body.providerData?.google?.values
+        if (!segmentType || !Array.isArray(values)) {
+          return apiError('Custom Segment requires providerData.google.{segmentType, values[]}', 400)
+        }
+        result = await createCustomSegment({
+          customerId,
+          accessToken,
+          developerToken,
+          loginCustomerId,
+          name: body.name,
+          description: body.description,
+          type: segmentType as 'KEYWORD' | 'URL' | 'APP',
+          values: values as string[],
+        })
+        break
+      }
+      case 'AFFINITY':
+      case 'IN_MARKET':
+      case 'DETAILED_DEMOGRAPHICS': {
+        // Predefined audiences aren't created via mutate — they're selected from the catalog.
+        // Persist the canonical doc with the user-supplied resourceName + categoryName.
+        const audienceResourceName = body.providerData?.google?.audienceResourceName
+        const categoryName = body.providerData?.google?.categoryName
+        if (!audienceResourceName || !categoryName) {
+          return apiError(`${subtype} requires providerData.google.{audienceResourceName, categoryName}`, 400)
+        }
+        result = {
+          resourceName: audienceResourceName as string,
+          id: (audienceResourceName as string).split('/').pop() ?? '',
+        }
+        break
+      }
+      default:
+        return apiError(`Unsupported Google audience subtype: ${subtype}`, 400)
+    }
+
+    // Persist canonical doc directly (store.createCustomAudience hardcodes platform:'meta')
+    const id = `ca_${crypto.randomBytes(8).toString('hex')}`
+    const now = Timestamp.now()
+    const googleProviderData = {
+      ...body.providerData?.google,
+      userListResourceName: result.resourceName,
+    }
+    const canonicalDoc = {
+      id,
+      orgId,
+      platform: 'google' as const,
+      name: body.name,
+      description: body.description ?? '',
+      type: subtypeToCanonicalType(subtype),
+      status: 'BUILDING' as const,
+      source: { kind: 'CUSTOMER_LIST' as const, csvStoragePath: '', hashCount: 0, uploadedAt: now },
+      providerData: { google: googleProviderData },
+      createdBy: (user as { uid?: string }).uid ?? 'unknown',
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    await adminDb.collection('custom_audiences').doc(id).set(canonicalDoc)
+
+    return apiSuccess(canonicalDoc, 201)
+  }
+
+  // ─── Meta branch (existing, unchanged) ────────────────────────────────────
   const ctx = await requireMetaContext(req)
   if (ctx instanceof Response) return ctx
-  const body = (await req.json()) as { input?: CreateAdCustomAudienceInput }
+  const body = rawBody as { input?: CreateAdCustomAudienceInput }
   if (!body.input?.name || !body.input?.type || !body.input?.source) {
     return apiError('Missing required fields: name, type, source', 400)
   }
@@ -70,3 +224,17 @@ export const POST = withAuth('admin', async (req: NextRequest, user) => {
     return apiError(`Meta sync failed: ${(err as Error).message}`, 500)
   }
 })
+
+/** Map Google audience subtype to canonical AdCustomAudienceType. */
+function subtypeToCanonicalType(subtype: string): AdCustomAudienceType {
+  switch (subtype) {
+    case 'CUSTOMER_MATCH': return 'CUSTOMER_LIST'
+    case 'REMARKETING': return 'WEBSITE'
+    case 'CUSTOM_SEGMENT': return 'ENGAGEMENT'
+    case 'AFFINITY':
+    case 'IN_MARKET':
+    case 'DETAILED_DEMOGRAPHICS':
+    default:
+      return 'APP'
+  }
+}

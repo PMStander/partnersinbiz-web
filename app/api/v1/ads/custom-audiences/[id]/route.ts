@@ -7,6 +7,8 @@ import { requireMetaContext } from '@/lib/ads/api-helpers'
 import { metaProvider } from '@/lib/ads/providers/meta'
 import type { UpdateAdCustomAudienceInput } from '@/lib/ads/types'
 import { logCustomAudienceActivity } from '@/lib/ads/activity'
+import { getConnection, decryptAccessToken } from '@/lib/ads/connections/store'
+import { readDeveloperToken } from '@/lib/integrations/google_ads/oauth'
 
 export const GET = withAuth(
   'admin',
@@ -52,19 +54,62 @@ export const DELETE = withAuth(
     const ca = await getCustomAudience(id)
     if (!ca || ca.orgId !== orgId) return apiError('Custom audience not found', 404)
 
-    // Best-effort delete from Meta first
-    const metaCaId = ca.providerData?.meta?.customAudienceId
-    if (metaCaId) {
-      const ctx = await requireMetaContext(req)
-      if (!(ctx instanceof Response)) {
+    // Best-effort provider delete first
+    if (ca.platform === 'google') {
+      // Google: dispatch to the appropriate remove helper based on subtype
+      const providerData = ca.providerData as Record<string, unknown>
+      const googleData = providerData?.google as Record<string, unknown> | undefined
+      const subtype = googleData?.subtype as string | undefined
+      const userListResourceName = googleData?.userListResourceName as string | undefined
+
+      const isPredefined =
+        subtype === 'AFFINITY' || subtype === 'IN_MARKET' || subtype === 'DETAILED_DEMOGRAPHICS'
+
+      if (!isPredefined && userListResourceName) {
         try {
-          await metaProvider.customAudienceCRUD!({
-            op: 'delete',
-            accessToken: ctx.accessToken,
-            metaCaId,
-          })
+          const conn = await getConnection({ orgId, platform: 'google' })
+          if (conn) {
+            const accessToken = decryptAccessToken(conn)
+            const developerToken = readDeveloperToken()
+            const meta = (conn.meta ?? {}) as Record<string, unknown>
+            const googleMeta = (meta.google as Record<string, unknown> | undefined) ?? {}
+            const loginCustomerId =
+              typeof googleMeta.loginCustomerId === 'string' ? googleMeta.loginCustomerId : undefined
+            const customerId = loginCustomerId
+
+            if (customerId && developerToken) {
+              const callArgs = { customerId, accessToken, developerToken, loginCustomerId, resourceName: userListResourceName }
+              if (subtype === 'CUSTOMER_MATCH') {
+                const { removeCustomerMatchList } = await import('@/lib/ads/providers/google/audiences/customer-match')
+                await removeCustomerMatchList(callArgs)
+              } else if (subtype === 'REMARKETING') {
+                const { removeRemarketingList } = await import('@/lib/ads/providers/google/audiences/remarketing')
+                await removeRemarketingList(callArgs)
+              } else if (subtype === 'CUSTOM_SEGMENT') {
+                const { removeCustomSegment } = await import('@/lib/ads/providers/google/audiences/custom-segments')
+                await removeCustomSegment(callArgs)
+              }
+            }
+          }
         } catch {
           // swallow — local delete is source of truth
+        }
+      }
+    } else {
+      // Meta: best-effort delete
+      const metaCaId = ca.providerData?.meta?.customAudienceId
+      if (metaCaId) {
+        const ctx = await requireMetaContext(req)
+        if (!(ctx instanceof Response)) {
+          try {
+            await metaProvider.customAudienceCRUD!({
+              op: 'delete',
+              accessToken: ctx.accessToken,
+              metaCaId,
+            })
+          } catch {
+            // swallow — local delete is source of truth
+          }
         }
       }
     }
