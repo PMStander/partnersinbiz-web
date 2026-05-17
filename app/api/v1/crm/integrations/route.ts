@@ -1,6 +1,6 @@
 /**
- * GET  /api/v1/crm/integrations?orgId=...   — list integrations for an org
- * POST /api/v1/crm/integrations             — create an integration
+ * GET  /api/v1/crm/integrations   — list integrations for the authenticated org
+ * POST /api/v1/crm/integrations   — create an integration
  *
  * Body (POST):
  *   provider       string (required)  — one of CrmIntegrationProvider
@@ -10,15 +10,14 @@
  *   autoCampaignIds? string[]
  *   cadenceMinutes? number
  *
- * Auth: client (open to portal users)
+ * Auth: admin+ (GET is also admin — returns decrypted-then-redacted credential
+ * previews, so we limit credential surface area to admins only)
  *
  * Returns the public view (sensitive config redacted).
  */
-import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { resolveOrgScope } from '@/lib/api/orgScope'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import {
   EMPTY_SYNC_STATS,
@@ -29,14 +28,12 @@ import {
 } from '@/lib/crm/integrations/types'
 import { encryptCredentials, decryptCredentials } from '@/lib/integrations/crypto'
 
-export const GET = withAuth('client', async (req: NextRequest, user) => {
-  const { searchParams } = new URL(req.url)
-  const scope = resolveOrgScope(user, searchParams.get('orgId'))
-  if (!scope.ok) return apiError(scope.error, scope.status)
+const COLLECTION = 'crm_integrations'
 
+export const GET = withCrmAuth('admin', async (req, ctx) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const snap = await (adminDb.collection('crm_integrations') as any)
-    .where('orgId', '==', scope.orgId)
+  const snap = await (adminDb.collection(COLLECTION) as any)
+    .where('orgId', '==', ctx.orgId)
     .get()
 
   const integrations: CrmIntegration[] = snap.docs
@@ -62,14 +59,9 @@ export const GET = withAuth('client', async (req: NextRequest, user) => {
   return apiSuccess(integrations.map(toPublicView))
 })
 
-export const POST = withAuth('client', async (req: NextRequest, user) => {
+export const POST = withCrmAuth('admin', async (req, ctx) => {
   const body = await req.json().catch(() => null)
   if (!body) return apiError('Invalid JSON', 400)
-
-  const requestedOrgId = typeof body.orgId === 'string' ? body.orgId.trim() : null
-  const scope = resolveOrgScope(user, requestedOrgId)
-  if (!scope.ok) return apiError(scope.error, scope.status)
-  const orgId = scope.orgId
 
   const provider = body.provider as CrmIntegrationProvider | undefined
   const name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -92,10 +84,13 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
   }
 
   // Encrypt config before persisting — configEnc is stored in Firestore, config stays in-memory only
-  const configEnc = encryptCredentials(config, orgId)
+  const configEnc = encryptCredentials(config, ctx.orgId)
 
-  const docRef = await adminDb.collection('crm_integrations').add({
-    orgId,
+  // PR 5 pattern: use ctx.actor directly (no snapshotForWrite)
+  const actorRef = ctx.actor
+
+  const docData = {
+    orgId: ctx.orgId,
     provider,
     name,
     status: 'pending',
@@ -106,10 +101,19 @@ export const POST = withAuth('client', async (req: NextRequest, user) => {
     lastSyncedAt: null,
     lastSyncStats: EMPTY_SYNC_STATS,
     lastError: '',
+    createdBy: ctx.isAgent ? undefined : ctx.actor.uid,
+    createdByRef: actorRef,
+    updatedBy: ctx.isAgent ? undefined : ctx.actor.uid,
+    updatedByRef: actorRef,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     deleted: false,
-  })
+  }
+
+  // Firestore rejects undefined values — strip them before write
+  const sanitized = Object.fromEntries(Object.entries(docData).filter(([, v]) => v !== undefined))
+
+  const docRef = await adminDb.collection(COLLECTION).add(sanitized)
 
   const created = await docRef.get()
   const integration = { id: docRef.id, ...created.data(), config } as CrmIntegration
