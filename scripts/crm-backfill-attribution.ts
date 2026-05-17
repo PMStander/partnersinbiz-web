@@ -123,9 +123,20 @@ async function main() {
   const admin = require('firebase-admin')
   if (admin.apps.length === 0) {
     const keyPath = resolve(process.cwd(), 'service-account.json')
+    const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID?.trim()
+    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.trim()
+    const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n').trim()
+
     if (existsSync(keyPath)) {
       admin.initializeApp({ credential: admin.credential.cert(require(keyPath)) })
+    } else if (projectId && clientEmail && privateKey) {
+      // Same auth pattern as lib/firebase/admin.ts — uses .env.local creds
+      admin.initializeApp({
+        credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+      })
     } else {
+      // Last resort: gcloud Application Default Credentials
+      // (Requires `gcloud auth application-default login` — token can expire with invalid_rapt)
       admin.initializeApp({ credential: admin.credential.applicationDefault() })
     }
   }
