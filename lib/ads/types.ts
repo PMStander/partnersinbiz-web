@@ -667,6 +667,19 @@ export type GoogleAdsAudienceData =
   | GoogleAdsCustomSegmentData
   | GoogleAdsPredefinedAudienceData
 
+// ─── LinkedIn Ads provider extensions (Sub-3b) ────────────────────────────────
+
+export interface LinkedinAdConnectionData {
+  /** LinkedIn member URN of the OAuth grant owner: 'urn:li:person:{id}' */
+  memberUrn?: string
+  /** LinkedIn organization URN: 'urn:li:organization:{id}' */
+  organizationUrn?: string
+  /** Selected ad account URN: 'urn:li:sponsoredAccount:{id}' */
+  selectedAdAccountUrn?: string
+  /** Refresh token expiration (LinkedIn refresh tokens have a TTL, typically 365 days) */
+  refreshTokenExpiresAt?: Timestamp
+}
+
 // ─── Cross-platform Conversion Actions (Sub-3a Phase 6) ───────────────────────
 
 export type AdConversionCategory =
