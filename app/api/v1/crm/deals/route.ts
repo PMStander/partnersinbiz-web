@@ -2,24 +2,21 @@
  * GET  /api/v1/crm/deals  — list deals
  * POST /api/v1/crm/deals  — create deal
  */
-import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { resolveOrgScope } from '@/lib/api/orgScope'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
+import { resolveMemberRef, type MemberRef } from '@/lib/orgMembers/memberRef'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import type { Deal, DealInput, DealStage, Currency } from '@/lib/crm/types'
+import type { Deal, DealStage, Currency } from '@/lib/crm/types'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 import { logActivity } from '@/lib/activity/log'
 
 const VALID_STAGES: DealStage[] = ['discovery', 'proposal', 'negotiation', 'won', 'lost']
 const VALID_CURRENCIES: Currency[] = ['USD', 'EUR', 'ZAR']
 
-export const GET = withAuth('client', async (req, user) => {
+export const GET = withCrmAuth('viewer', async (req, ctx) => {
   const { searchParams } = new URL(req.url)
-  const scope = resolveOrgScope(user, searchParams.get('orgId'))
-  if (!scope.ok) return apiError(scope.error, scope.status)
-  const orgId = scope.orgId
+  const { orgId } = ctx
   const stage = searchParams.get('stage') as DealStage | null
   const contactId = searchParams.get('contactId')
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '100'), 500)
@@ -37,62 +34,83 @@ export const GET = withAuth('client', async (req, user) => {
     .get()
 
   const deals: Deal[] = snapshot.docs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((doc: any) => ({ id: doc.id, ...doc.data() }))
     .filter((d: Deal) => d.deleted !== true)
   return apiSuccess(deals, 200, { total: deals.length, page, limit })
 })
 
-export const POST = withAuth('client', async (req, user) => {
-  const body = await req.json() as DealInput
-  if (!body.title?.trim()) return apiError('Title is required')
-  if (!body.contactId?.trim()) return apiError('contactId is required')
-  if (body.stage && !VALID_STAGES.includes(body.stage)) return apiError('Invalid stage')
-  if (body.currency && !VALID_CURRENCIES.includes(body.currency))
-    return apiError('Invalid currency — use USD, EUR, or ZAR')
+export const POST = withCrmAuth('member', async (req, ctx) => {
+  const body = await req.json()
 
-  const requestedOrgId = typeof (body as { orgId?: unknown }).orgId === 'string'
-    ? ((body as { orgId?: string }).orgId as string).trim()
-    : null
-  const scope = resolveOrgScope(user, requestedOrgId)
-  if (!scope.ok) return apiError(scope.error, scope.status)
-  const orgId = scope.orgId
+  // Validation
+  if (!body.title?.trim()) return apiError('Title is required', 400)
+  if (!body.contactId?.trim()) return apiError('contactId is required', 400)
+  const stage = body.stage ?? 'discovery'
+  if (!VALID_STAGES.includes(stage)) return apiError('Invalid stage', 400)
+  const currency = body.currency ?? 'ZAR'
+  if (!VALID_CURRENCIES.includes(currency)) return apiError('Invalid currency — use USD, EUR, or ZAR', 400)
 
-  const docRef = await adminDb.collection('deals').add({
-    orgId,
+  // PR 3 pattern 1: use ctx.actor directly (no snapshotForWrite)
+  const actorRef: MemberRef = ctx.actor
+
+  // PR 3 pattern 3: ownerRef on POST when ownerUid present
+  let ownerRef: MemberRef | undefined
+  if (typeof body.ownerUid === 'string' && body.ownerUid !== '') {
+    ownerRef = await resolveMemberRef(ctx.orgId, body.ownerUid)
+  }
+
+  const dealData = {
+    orgId: ctx.orgId,
     contactId: body.contactId.trim(),
     title: body.title.trim(),
-    value: body.value ?? 0,
-    currency: body.currency ?? 'USD',
-    stage: body.stage ?? 'discovery',
+    value: typeof body.value === 'number' ? body.value : 0,
+    currency,
+    stage,
     expectedCloseDate: body.expectedCloseDate ?? null,
-    notes: body.notes?.trim() ?? '',
+    notes: typeof body.notes === 'string' ? body.notes.trim() : '',
     deleted: false,
+    ownerUid: typeof body.ownerUid === 'string' && body.ownerUid !== '' ? body.ownerUid : undefined,
+    ownerRef,
+    createdBy: ctx.isAgent ? undefined : ctx.actor.uid,
+    createdByRef: actorRef,
+    updatedBy: ctx.isAgent ? undefined : ctx.actor.uid,
+    updatedByRef: actorRef,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  })
+  }
 
+  // Firestore rejects undefined values — strip them before write
+  const sanitized = Object.fromEntries(Object.entries(dealData).filter(([, v]) => v !== undefined))
+
+  const docRef = adminDb.collection('deals').doc()
+  await docRef.set(sanitized)
+
+  // PR 3 pattern 2: explicit-field webhook payload (no body spread)
   try {
-    await dispatchWebhook(orgId, 'deal.created', {
+    await dispatchWebhook(ctx.orgId, 'deal.created', {
       id: docRef.id,
-      title: body.title.trim(),
-      value: body.value ?? 0,
-      stage: body.stage ?? 'discovery',
-      contactId: body.contactId.trim(),
+      title: dealData.title,
+      value: dealData.value,
+      stage: dealData.stage,
+      contactId: dealData.contactId,
+      createdByRef: actorRef,
+      ownerRef,
     })
   } catch (err) {
     console.error('[webhook-dispatch-error] deal.created', err)
   }
 
   logActivity({
-    orgId,
+    orgId: ctx.orgId,
     type: 'crm_deal_created',
-    actorId: user.uid,
-    actorName: user.uid,
-    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
-    description: `Created deal: "${body.title.trim()}"`,
+    actorId: ctx.actor.uid,
+    actorName: ctx.actor.displayName,
+    actorRole: ctx.isAgent ? 'ai' : ctx.role === 'admin' ? 'admin' : 'client',
+    description: `Created deal: "${dealData.title}"`,
     entityId: docRef.id,
     entityType: 'deal',
-    entityTitle: body.title.trim(),
+    entityTitle: dealData.title,
   }).catch(() => {})
 
   return apiSuccess({ id: docRef.id }, 201)
