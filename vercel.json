@@ -59,6 +59,10 @@
     {
       "path": "/api/cron/seo-weekly",
       "schedule": "0 5 * * 1"
+    },
+    {
+      "path": "/api/v1/ads/cron/process-refresh-queue",
+      "schedule": "* * * * *"
     }
   ]
 }
