@@ -787,3 +787,15 @@ POST /crm/contacts/import
   "rows": [ ... ] }
 # → { "created": 210, "updated": 8, "skipped": 2, "invalidRows": [...] }
 ```
+
+## Ads attribution (cross-ref)
+
+When a deal closes-won, the system can call `POST /api/v1/ads/conversions/track`
+to feed Meta CAPI. This requires:
+- A pixel config configured under `/admin/org/<slug>/ads/pixel-config`
+- The deal contact's email + phone hashed and posted as the `user.email` /
+  `user.phone` fields in the event payload (server hashes — DO NOT pre-hash
+  in skill calls)
+- An `event_id` matching the browser pixel's eventID for dedupe
+
+See the Ads sub-project 1 design spec for full payload shape.
