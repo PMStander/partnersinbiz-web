@@ -7,13 +7,11 @@
  *   3. status='active' on success or 'error' on failure
  *   4. write lastSyncedAt + lastSyncStats + lastError
  *
- * Auth: client
+ * Auth: admin+
  */
-import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { resolveOrgScope } from '@/lib/api/orgScope'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import {
   EMPTY_SYNC_STATS,
@@ -24,19 +22,33 @@ import {
 import { syncMailchimp } from '@/lib/crm/integrations/handlers/mailchimp'
 import { syncHubspot } from '@/lib/crm/integrations/handlers/hubspot'
 import { syncGmail } from '@/lib/crm/integrations/handlers/gmail'
-import type { ApiUser } from '@/lib/api/types'
 
-type Params = { params: Promise<{ id: string }> }
+const COLLECTION = 'crm_integrations'
 
-export const POST = withAuth('client', async (_req: NextRequest, user: ApiUser, context?: unknown) => {
-  const { id } = await (context as Params).params
+type RouteCtx = { params: Promise<{ id: string }> }
 
-  const snap = await adminDb.collection('crm_integrations').doc(id).get()
-  if (!snap.exists || snap.data()?.deleted) return apiError('Integration not found', 404)
+// ---------------------------------------------------------------------------
+// Tenant-scoped loader — returns 404 for missing OR cross-org documents
+// (duplicated from [id]/route.ts — PR 5 decision: duplicate, don't share lib)
+// ---------------------------------------------------------------------------
 
-  const integration = { id: snap.id, ...snap.data() } as CrmIntegration
-  const scope = resolveOrgScope(user, integration.orgId ?? null)
-  if (!scope.ok) return apiError(scope.error, scope.status)
+async function loadIntegration(id: string, ctxOrgId: string) {
+  const ref = adminDb.collection(COLLECTION).doc(id)
+  const snap = await ref.get()
+  if (!snap.exists) return { ok: false as const, status: 404, error: 'Integration not found' }
+  const data = snap.data()!
+  if (data.orgId !== ctxOrgId) return { ok: false as const, status: 404, error: 'Integration not found' }
+  if (data.deleted === true) return { ok: false as const, status: 404, error: 'Integration not found' }
+  return { ok: true as const, ref, data }
+}
+
+export const POST = withCrmAuth<RouteCtx>('admin', async (_req, ctx, routeCtx) => {
+  const { id } = await routeCtx!.params
+
+  const r = await loadIntegration(id, ctx.orgId)
+  if (!r.ok) return apiError(r.error, r.status)
+
+  const integration = { id, ...r.data } as CrmIntegration
 
   if (integration.status === 'syncing') {
     return apiError('A sync is already in progress for this integration', 422)
@@ -45,12 +57,23 @@ export const POST = withAuth('client', async (_req: NextRequest, user: ApiUser, 
     return apiError(`Integration is ${integration.status} — resume it first`, 422)
   }
 
-  await snap.ref.update({ status: 'syncing', updatedAt: FieldValue.serverTimestamp() })
+  // PR 5 pattern: use ctx.actor directly (no snapshotForWrite)
+  const actorRef = ctx.actor
+  const actorPatch = Object.fromEntries(
+    Object.entries({
+      updatedBy: ctx.isAgent ? undefined : ctx.actor.uid,
+      updatedByRef: actorRef,
+    }).filter(([, v]) => v !== undefined),
+  )
+
+  // Step 1: status → 'syncing'
+  await r.ref.update({ status: 'syncing', ...actorPatch, updatedAt: FieldValue.serverTimestamp() })
 
   let stats: CrmIntegrationSyncStats = { ...EMPTY_SYNC_STATS }
   let error = ''
   let ok = false
 
+  // Step 2: invoke handler (dispatch by provider — preserve existing pattern)
   try {
     if (integration.provider === 'mailchimp') {
       const result = await syncMailchimp(integration)
@@ -74,17 +97,21 @@ export const POST = withAuth('client', async (_req: NextRequest, user: ApiUser, 
     error = err instanceof Error ? err.message : 'Unknown error'
   }
 
-  await snap.ref.update({
+  // Step 3: status → 'active' or 'error' + lastSyncedAt + lastSyncStats + lastError
+  await r.ref.update({
     status: ok ? 'active' : 'error',
     lastSyncedAt: FieldValue.serverTimestamp(),
     lastSyncStats: stats,
     lastError: error,
+    ...actorPatch,
     updatedAt: FieldValue.serverTimestamp(),
   })
 
-  const refreshed = await snap.ref.get()
+  const refreshed = await r.ref.get()
+  // config is never stored in Firestore (only configEnc). Pass empty map so
+  // toPublicView / buildConfigPreview doesn't crash on undefined.
   return apiSuccess({
-    integration: toPublicView({ id: snap.id, ...refreshed.data() } as CrmIntegration),
+    integration: toPublicView({ id, ...refreshed.data(), config: {} } as CrmIntegration),
     ok,
     stats,
     error,

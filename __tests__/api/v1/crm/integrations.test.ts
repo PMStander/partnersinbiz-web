@@ -459,3 +459,424 @@ describe('POST /api/v1/crm/integrations', () => {
     expect(res.status).toBe(403)
   })
 })
+
+// ---------------------------------------------------------------------------
+// stageAuthWithDoc — extends stageAuth to support single-doc fetch (crm_integrations.doc(id).get())
+// ---------------------------------------------------------------------------
+
+function stageAuthWithDoc(
+  member: { uid: string; orgId: string; role: string; firstName?: string; lastName?: string },
+  integrationData: Record<string, unknown> | null,
+  opts: {
+    integrationId?: string
+    perms?: Record<string, unknown>
+    capturedUpdate?: jest.Mock
+  } = {},
+) {
+  const integrationId = opts.integrationId ?? 'int-1'
+  const perms = opts.perms ?? {}
+  const capturedUpdate = opts.capturedUpdate ?? jest.fn().mockResolvedValue(undefined)
+
+  ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: member.uid })
+
+  const exists = integrationData !== null
+
+  // refreshed snap returned by r.ref.get() after update
+  const refreshedSnap = {
+    exists,
+    data: () => integrationData ?? {},
+    id: integrationId,
+  }
+
+  // The docRef returned by doc(id) — this IS r.ref in loadIntegration
+  const mockDocRef = {
+    update: capturedUpdate,
+    get: jest.fn()
+      .mockResolvedValueOnce({ exists, data: () => integrationData ?? {}, id: integrationId })
+      .mockResolvedValue(refreshedSnap),
+  }
+
+  ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
+    if (name === 'users')
+      return {
+        doc: () => ({
+          get: () => Promise.resolve({ exists: true, data: () => ({ activeOrgId: member.orgId }) }),
+        }),
+      }
+    if (name === 'orgMembers')
+      return {
+        doc: () => ({
+          get: () => Promise.resolve({ exists: true, data: () => member }),
+        }),
+      }
+    if (name === 'organizations')
+      return {
+        doc: () => ({
+          get: () =>
+            Promise.resolve({ exists: true, data: () => ({ settings: { permissions: perms } }) }),
+        }),
+      }
+    if (name === 'crm_integrations')
+      return {
+        doc: jest.fn(() => mockDocRef),
+        where: jest.fn().mockReturnThis(),
+        get: jest.fn().mockResolvedValue({ docs: [] }),
+      }
+    return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }
+  })
+
+  return { mockDocRef, capturedUpdate }
+}
+
+function fakeIntegrationData(orgId: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    orgId,
+    provider: 'mailchimp',
+    name: 'Test Integration',
+    status: 'active',
+    configEnc: { enc: 'ENCRYPTED', tag: 'tag', iv: 'iv', keyVersion: 1 },
+    autoTags: [],
+    autoCampaignIds: [],
+    cadenceMinutes: 60,
+    lastSyncedAt: null,
+    lastSyncStats: { imported: 0, created: 0, updated: 0, skipped: 0, errored: 0 },
+    lastError: '',
+    createdAt: null,
+    updatedAt: null,
+    deleted: false,
+    ...overrides,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/crm/integrations/[id]
+// ---------------------------------------------------------------------------
+
+describe('GET /api/v1/crm/integrations/[id]', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('admin can GET own-org integration — returns toPublicView shape', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1'))
+
+    const req = callAsMember(admin, 'GET', '/api/v1/crm/integrations/int-1')
+    const { GET } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await GET(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.data).toHaveProperty('id')
+    expect(body.data).toHaveProperty('provider')
+    expect(body.data).toHaveProperty('configPreview')
+    expect(body.data).not.toHaveProperty('configEnc')
+    expect(body.data).not.toHaveProperty('config')
+  })
+
+  it('cross-org integration → 404 (no leakage)', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    // Integration belongs to org-2
+    stageAuthWithDoc(admin, fakeIntegrationData('org-2'))
+
+    const req = callAsMember(admin, 'GET', '/api/v1/crm/integrations/int-1')
+    const { GET } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await GET(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('soft-deleted integration → 404', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1', { deleted: true }))
+
+    const req = callAsMember(admin, 'GET', '/api/v1/crm/integrations/int-1')
+    const { GET } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await GET(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('member (non-admin) → 403', async () => {
+    const member = seedOrgMember('org-1', 'uid-member', { role: 'member' })
+    stageAuthWithDoc(member, fakeIntegrationData('org-1'))
+
+    const req = callAsMember(member, 'GET', '/api/v1/crm/integrations/int-1')
+    const { GET } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await GET(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 401 without auth', async () => {
+    const { NextRequest } = require('next/server')
+    const req = new NextRequest('http://localhost/api/v1/crm/integrations/int-1')
+    const { GET } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await GET(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(401)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PUT /api/v1/crm/integrations/[id]
+// ---------------------------------------------------------------------------
+
+describe('PUT /api/v1/crm/integrations/[id]', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('admin updates name, autoTags, cadenceMinutes, status', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin', firstName: 'Ada', lastName: 'Min' })
+    const capturedUpdate = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1'), { capturedUpdate })
+
+    const req = callAsMember(admin, 'PUT', '/api/v1/crm/integrations/int-1', {
+      name: 'Updated Name',
+      autoTags: ['tag-a'],
+      cadenceMinutes: 120,
+      status: 'paused',
+    })
+    const { PUT } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await PUT(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.success).toBe(true)
+
+    expect(capturedUpdate).toHaveBeenCalledTimes(1)
+    const updateArg = capturedUpdate.mock.calls[0][0]
+    expect(updateArg.name).toBe('Updated Name')
+    expect(updateArg.autoTags).toEqual(['tag-a'])
+    expect(updateArg.cadenceMinutes).toBe(120)
+    expect(updateArg.status).toBe('paused')
+  })
+
+  it('admin updates config: decryptCredentials called + encryptCredentials called with merged config', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    const capturedUpdate = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1'), { capturedUpdate })
+
+    const { decryptCredentials: mockDecrypt, encryptCredentials: mockEncrypt } = require('@/lib/integrations/crypto')
+
+    const req = callAsMember(admin, 'PUT', '/api/v1/crm/integrations/int-1', {
+      config: { apiKey: 'new-key-us10', listId: 'new-list' },
+    })
+    const { PUT } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await PUT(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(200)
+
+    // decrypt was called with existing configEnc
+    expect(mockDecrypt).toHaveBeenCalled()
+    // encrypt was called with merged config
+    expect(mockEncrypt).toHaveBeenCalled()
+    // configEnc written, not plaintext config
+    const updateArg = capturedUpdate.mock.calls[0][0]
+    expect(updateArg.configEnc).toBeDefined()
+    expect(updateArg.config).toBeUndefined()
+  })
+
+  it('admin PUT writes updatedByRef', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin', firstName: 'Ada', lastName: 'Min' })
+    const capturedUpdate = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1'), { capturedUpdate })
+
+    const req = callAsMember(admin, 'PUT', '/api/v1/crm/integrations/int-1', { name: 'New Name' })
+    const { PUT } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    await PUT(req, { params: Promise.resolve({ id: 'int-1' }) })
+
+    const updateArg = capturedUpdate.mock.calls[0][0]
+    expect(updateArg.updatedByRef).toBeDefined()
+    expect(updateArg.updatedByRef.kind).toBe('human')
+    expect(updateArg.updatedBy).toBe('uid-admin')
+  })
+
+  it('cross-org → 404', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuthWithDoc(admin, fakeIntegrationData('org-2'))
+
+    const req = callAsMember(admin, 'PUT', '/api/v1/crm/integrations/int-1', { name: 'X' })
+    const { PUT } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await PUT(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('soft-deleted → 404', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1', { deleted: true }))
+
+    const req = callAsMember(admin, 'PUT', '/api/v1/crm/integrations/int-1', { name: 'X' })
+    const { PUT } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await PUT(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('member → 403', async () => {
+    const member = seedOrgMember('org-1', 'uid-member', { role: 'member' })
+    stageAuthWithDoc(member, fakeIntegrationData('org-1'))
+
+    const req = callAsMember(member, 'PUT', '/api/v1/crm/integrations/int-1', { name: 'X' })
+    const { PUT } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await PUT(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(403)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DELETE /api/v1/crm/integrations/[id]
+// ---------------------------------------------------------------------------
+
+describe('DELETE /api/v1/crm/integrations/[id]', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('admin soft-deletes with updatedByRef and returns {id}', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin', firstName: 'Ada', lastName: 'Min' })
+    const capturedUpdate = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1'), { capturedUpdate })
+
+    const req = callAsMember(admin, 'DELETE', '/api/v1/crm/integrations/int-1')
+    const { DELETE } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.data.id).toBe('int-1')
+
+    expect(capturedUpdate).toHaveBeenCalledTimes(1)
+    const updateArg = capturedUpdate.mock.calls[0][0]
+    expect(updateArg.deleted).toBe(true)
+    expect(updateArg.updatedByRef).toBeDefined()
+    expect(updateArg.updatedBy).toBe('uid-admin')
+  })
+
+  it('cross-org → 404', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuthWithDoc(admin, fakeIntegrationData('org-2'))
+
+    const req = callAsMember(admin, 'DELETE', '/api/v1/crm/integrations/int-1')
+    const { DELETE } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('soft-deleted (already) → 404', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1', { deleted: true }))
+
+    const req = callAsMember(admin, 'DELETE', '/api/v1/crm/integrations/int-1')
+    const { DELETE } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('member → 403', async () => {
+    const member = seedOrgMember('org-1', 'uid-member', { role: 'member' })
+    stageAuthWithDoc(member, fakeIntegrationData('org-1'))
+
+    const req = callAsMember(member, 'DELETE', '/api/v1/crm/integrations/int-1')
+    const { DELETE } = await import('@/app/api/v1/crm/integrations/[id]/route')
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(403)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/crm/integrations/[id]/sync — via integrations.test.ts
+// ---------------------------------------------------------------------------
+
+jest.mock('@/lib/crm/integrations/handlers/mailchimp', () => ({
+  syncMailchimp: jest.fn(),
+}))
+jest.mock('@/lib/crm/integrations/handlers/hubspot', () => ({
+  syncHubspot: jest.fn(),
+}))
+jest.mock('@/lib/crm/integrations/handlers/gmail', () => ({
+  syncGmail: jest.fn(),
+}))
+
+describe('POST /api/v1/crm/integrations/[id]/sync', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  const GOOD_STATS = { imported: 5, skipped: 0, errors: 0, total: 5, created: 5, updated: 0, errored: 0 }
+  const SYNC_RESULT_OK = { ok: true, stats: GOOD_STATS, error: '' }
+
+  it('admin triggers sync — status=syncing → handler called → status=active + lastSyncedAt + lastSyncStats', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin', firstName: 'Ada', lastName: 'Min' })
+    const capturedUpdate = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1', { status: 'active' }), { capturedUpdate })
+
+    const { syncMailchimp } = require('@/lib/crm/integrations/handlers/mailchimp')
+    ;(syncMailchimp as jest.Mock).mockResolvedValue(SYNC_RESULT_OK)
+
+    const req = callAsMember(admin, 'POST', '/api/v1/crm/integrations/int-1/sync')
+    const { POST } = await import('@/app/api/v1/crm/integrations/[id]/sync/route')
+    const res = await POST(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.ok).toBe(true)
+    expect(body.data.stats).toMatchObject({ imported: 5 })
+
+    // Two updates: step 1 (syncing) + step 3 (active)
+    expect(capturedUpdate).toHaveBeenCalledTimes(2)
+    const firstUpdate = capturedUpdate.mock.calls[0][0]
+    expect(firstUpdate.status).toBe('syncing')
+    const secondUpdate = capturedUpdate.mock.calls[1][0]
+    expect(secondUpdate.status).toBe('active')
+    expect(secondUpdate.lastSyncedAt).toBeDefined()
+    expect(secondUpdate.lastSyncStats).toBeDefined()
+    expect(syncMailchimp).toHaveBeenCalledTimes(1)
+  })
+
+  it('sync writes updatedByRef on both status transitions', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin', firstName: 'Ada', lastName: 'Min' })
+    const capturedUpdate = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1', { status: 'active' }), { capturedUpdate })
+
+    const { syncMailchimp } = require('@/lib/crm/integrations/handlers/mailchimp')
+    ;(syncMailchimp as jest.Mock).mockResolvedValue(SYNC_RESULT_OK)
+
+    const req = callAsMember(admin, 'POST', '/api/v1/crm/integrations/int-1/sync')
+    const { POST } = await import('@/app/api/v1/crm/integrations/[id]/sync/route')
+    await POST(req, { params: Promise.resolve({ id: 'int-1' }) })
+
+    expect(capturedUpdate).toHaveBeenCalledTimes(2)
+    for (const call of capturedUpdate.mock.calls) {
+      const arg = call[0]
+      expect(arg.updatedByRef).toBeDefined()
+      expect(arg.updatedByRef.kind).toBe('human')
+      expect(arg.updatedBy).toBe('uid-admin')
+    }
+  })
+
+  it('failed handler → status=error + lastError set', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    const capturedUpdate = jest.fn().mockResolvedValue(undefined)
+    stageAuthWithDoc(admin, fakeIntegrationData('org-1', { status: 'active' }), { capturedUpdate })
+
+    const { syncMailchimp } = require('@/lib/crm/integrations/handlers/mailchimp')
+    ;(syncMailchimp as jest.Mock).mockResolvedValue({ ok: false, stats: { imported: 0, created: 0, updated: 0, skipped: 0, errored: 1 }, error: 'API rate limit' })
+
+    const req = callAsMember(admin, 'POST', '/api/v1/crm/integrations/int-1/sync')
+    const { POST } = await import('@/app/api/v1/crm/integrations/[id]/sync/route')
+    const res = await POST(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.data.ok).toBe(false)
+
+    const secondUpdate = capturedUpdate.mock.calls[1][0]
+    expect(secondUpdate.status).toBe('error')
+    expect(secondUpdate.lastError).toBe('API rate limit')
+  })
+
+  it('cross-org → 404', async () => {
+    const admin = seedOrgMember('org-1', 'uid-admin', { role: 'admin' })
+    stageAuthWithDoc(admin, fakeIntegrationData('org-2'))
+
+    const req = callAsMember(admin, 'POST', '/api/v1/crm/integrations/int-1/sync')
+    const { POST } = await import('@/app/api/v1/crm/integrations/[id]/sync/route')
+    const res = await POST(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(404)
+  })
+
+  it('member → 403', async () => {
+    const member = seedOrgMember('org-1', 'uid-member', { role: 'member' })
+    stageAuthWithDoc(member, fakeIntegrationData('org-1'))
+
+    const req = callAsMember(member, 'POST', '/api/v1/crm/integrations/int-1/sync')
+    const { POST } = await import('@/app/api/v1/crm/integrations/[id]/sync/route')
+    const res = await POST(req, { params: Promise.resolve({ id: 'int-1' }) })
+    expect(res.status).toBe(403)
+  })
+})
