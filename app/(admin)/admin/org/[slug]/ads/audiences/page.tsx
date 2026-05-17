@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { resolveOrgIdBySlug } from '@/lib/organizations/resolve-by-slug'
 import { listCustomAudiences } from '@/lib/ads/custom-audiences/store'
+import { AudiencesPlatformTabs } from './AudiencesPlatformTabs'
 
 interface Params { slug: string }
 
@@ -18,17 +19,14 @@ export default async function AudiencesPage({ params }: { params: Promise<Params
   if (!orgId) return <div className="text-white/60">Org not found.</div>
   const cas = await listCustomAudiences({ orgId })
 
-  return (
-    <section className="space-y-4">
+  const metaContent = (
+    <>
       <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Custom audiences</h1>
-          <p className="text-sm text-white/60 mt-1">
-            {cas.length} {cas.length === 1 ? 'audience' : 'audiences'}. Used in ad-set targeting.
-          </p>
-        </div>
+        <p className="text-sm text-white/60">
+          {cas.length} {cas.length === 1 ? 'audience' : 'audiences'}. Used in ad-set targeting.
+        </p>
         <Link href={`/admin/org/${slug}/ads/audiences/new`} className="btn-pib-accent text-sm">
-          New audience
+          New Meta audience
         </Link>
       </header>
 
@@ -59,6 +57,13 @@ export default async function AudiencesPage({ params }: { params: Promise<Params
           ))}
         </ul>
       )}
+    </>
+  )
+
+  return (
+    <section className="space-y-4">
+      <h1 className="text-2xl font-semibold">Custom audiences</h1>
+      <AudiencesPlatformTabs orgId={orgId} orgSlug={slug} metaContent={metaContent} />
     </section>
   )
 }
