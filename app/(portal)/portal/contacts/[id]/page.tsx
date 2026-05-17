@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { fmtTimestamp } from '@/components/admin/email/fmtTimestamp'
+import { ContactDealsPanel } from '@/components/crm/ContactDealsPanel'
 
 interface ContactRecord {
   id?: string
@@ -336,6 +337,8 @@ export default function PortalContactDetailPage() {
               </div>
             )}
           </div>
+
+          <ContactDealsPanel contactId={id} />
         </section>
       </div>
     </div>
