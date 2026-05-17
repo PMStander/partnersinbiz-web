@@ -193,6 +193,45 @@ describe('POST /api/v1/crm/contacts', () => {
     expect(res.status).toBe(403)
   })
 
+  it('writes assignedToRef when POST body has assignedTo (resolves via orgMembers)', async () => {
+    const member = seedOrgMember('org-1', 'uid-1', { role: 'member', firstName: 'Alice', lastName: 'B' })
+    const captured = jest.fn().mockResolvedValue(undefined)
+
+    ;(adminAuth.verifySessionCookie as jest.Mock).mockResolvedValue({ uid: member.uid })
+    ;(adminDb.collection as jest.Mock).mockImplementation((name: string) => {
+      if (name === 'users') return { doc: () => ({ get: () => Promise.resolve({ exists: true, data: () => ({ activeOrgId: 'org-1' }) }) }) }
+      if (name === 'orgMembers') return {
+        doc: jest.fn().mockImplementation((id: string) => ({
+          get: () => Promise.resolve(
+            id === 'org-1_uid-1' ? { exists: true, data: () => member }
+              : id === 'org-1_uid-2' ? { exists: true, data: () => ({ uid: 'uid-2', firstName: 'Bob', lastName: 'C' }) }
+              : { exists: false },
+          ),
+        })),
+      }
+      if (name === 'organizations') return { doc: () => ({ get: () => Promise.resolve({ exists: true, data: () => ({ settings: { permissions: {} } }) }) }) }
+      if (name === 'contacts') return {
+        doc: jest.fn().mockReturnValue({ id: 'auto-id-x', set: captured, get: jest.fn().mockResolvedValue({ exists: true, data: () => ({}) }) }),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        get: () => Promise.resolve({ docs: [] }),
+      }
+      return { doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }
+    })
+
+    const req = callAsMember(member, 'POST', '/api/v1/crm/contacts', {
+      name: 'X', email: 'x@y.com', source: 'manual', assignedTo: 'uid-2',
+    })
+    const { POST } = await import('@/app/api/v1/crm/contacts/route')
+    const res = await POST(req)
+    expect(res.status).toBeLessThan(300)
+    const writtenData = captured.mock.calls[0][0]
+    expect(writtenData.assignedTo).toBe('uid-2')
+    expect(writtenData.assignedToRef.displayName).toBe('Bob C')
+    expect(writtenData.assignedToRef.kind).toBe('human')
+  })
+
   it('writes createdByRef snapshot on POST (member)', async () => {
     const member = seedOrgMember('org-1', 'uid-1', { role: 'member', firstName: 'Alice', lastName: 'B' })
     const captured = jest.fn().mockResolvedValue(undefined)

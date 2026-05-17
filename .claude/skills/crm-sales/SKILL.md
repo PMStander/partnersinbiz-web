@@ -41,11 +41,20 @@ Except for `POST /forms/[slug]/submit` which is **public** (no auth required).
 
 Sales opportunities that need client review should produce Sales Proposal documents through the `client-documents` skill. Link them with `linked.dealId`, keep pricing/legal/scope assumptions as `blocks_publish` until resolved, and use formal acceptance for proposal approval.
 
+## Auth & org scoping (PR 2+)
+
+All `/api/v1/crm/contacts/*` routes now use the `withCrmAuth` middleware:
+- **Bearer API key (agent calls):** `Authorization: Bearer ${AI_API_KEY}` + `X-Org-Id: <orgId>` header. Role is `system` — bypasses every minRole and every permission toggle.
+- **Session cookie (portal users):** `__session` cookie. Role resolved from `orgMembers/{orgId}_{uid}`. Routes enforce `viewer`/`member`/`admin` minRole.
+- The `orgId` body field on POST is IGNORED — middleware reads orgId from the token. Always send `X-Org-Id` for Bearer calls.
+- Every write embeds `createdByRef` / `updatedByRef` snapshots. Agent calls show as `Pip` (`uid: 'agent:pip', kind: 'agent'`).
+
 ## orgId conventions
 
 - `contacts`, `deals`, `activities`, `quotes`, `forms`, `form_submissions` all carry `orgId` as a field.
-- **Important current limitation:** legacy `contacts` and `deals` may not have `orgId` set. When you create new ones, always pass `orgId` in the body so webhook dispatch works.
-- For filters: pass `?orgId=X` as query param on GET.
+- **Contacts routes:** orgId is read from auth middleware, not the POST body. For Bearer calls, send `X-Org-Id: <orgId>` header instead.
+- **Deals, quotes, forms, activities:** still require `orgId` in the POST body. Legacy routes not yet migrated to `withCrmAuth`.
+- For filters on GET: pass `?orgId=X` as query param (deals, quotes, forms). Contacts GET uses `X-Org-Id` for Bearer calls.
 
 ## Collaboration primitives
 
@@ -66,7 +75,7 @@ Sales opportunities that need client review should produce Sales Proposal docume
 
 ### Contacts
 
-#### `GET /crm/contacts` — auth: admin
+#### `GET /crm/contacts` — auth: cookie (viewer+) or Bearer + X-Org-Id
 List contacts with filters.
 
 Query params:
@@ -86,15 +95,14 @@ Response: array of `Contact`:
   "createdAt": "...", "updatedAt": "...", "lastContactedAt": null, "deleted": false }
 ```
 
-#### `POST /crm/contacts` — auth: admin
-Required: `orgId`, `name`, `email` (valid). Defaults: `source='manual'`, `type='lead'`, `stage='new'`, `tags=[]`.
+#### `POST /crm/contacts` — auth: cookie (member+) or Bearer + X-Org-Id
+Required: `name`, `email` (valid). Defaults: `source='manual'`, `type='lead'`, `stage='new'`, `tags=[]`.
 
-`orgId` is **required** — contacts must belong to an organisation so webhooks and org-scoped reports work. 400 if missing.
+`orgId` is read from the auth middleware — do NOT include it in the POST body. For Bearer calls, send `X-Org-Id: <orgId>` as a request header.
 
 Body:
 ```json
 {
-  "orgId": "org_xyz",  
   "name": "Jane Doe",
   "email": "jane@acme.com",
   "phone": "+27...",
@@ -111,22 +119,22 @@ Body:
 
 Response (201): `{ "id": "contact_abc" }`. Dispatches `contact.created` webhook when `orgId` present.
 
-#### `GET /crm/contacts/[id]` — auth: admin
+#### `GET /crm/contacts/[id]` — auth: cookie (viewer+) or Bearer + X-Org-Id
 Full contact.
 
-#### `PUT /crm/contacts/[id]` — auth: admin
+#### `PUT /crm/contacts/[id]` — auth: cookie (member+) or Bearer + X-Org-Id
 Update any contact field. Records `updatedAt`. Dispatches `contact.updated` webhook.
 
-#### `DELETE /crm/contacts/[id]` — auth: admin
-Soft-delete (`deleted: true`).
+#### `DELETE /crm/contacts/[id]` — auth: cookie (member+) or Bearer + X-Org-Id
+Soft-delete (`deleted: true`). Members blocked if `membersCanDeleteContacts` permission toggle is off.
 
-#### `GET /crm/contacts/[id]/activities` — auth: admin
+#### `GET /crm/contacts/[id]/activities` — auth: cookie (viewer+) or Bearer + X-Org-Id
 Activity timeline for this contact. Sorted `createdAt desc`.
 
-#### `POST /crm/contacts/[id]/activities` — auth: admin
+#### `POST /crm/contacts/[id]/activities` — auth: cookie (member+) or Bearer + X-Org-Id
 Log activity. Body: `{ type, summary, dealId?, metadata? }`. `type`: `email_sent`|`email_received`|`call`|`note`|`stage_change`|`sequence_enrolled`|`sequence_completed`.
 
-#### `POST /crm/contacts/[id]/tags` — auth: admin
+#### `POST /crm/contacts/[id]/tags` — auth: cookie (member+) or Bearer + X-Org-Id
 Atomic tag update. Body: `{ add?: string[], remove?: string[] }`. Uses Firestore `arrayUnion` / `arrayRemove`. Returns `{ id, tags }` (post-update).
 
 ### Deals
@@ -400,7 +408,7 @@ Use the `platform-ops` skill's `/reports/pipeline` endpoint for `byStage` counts
 
 ## Agent patterns
 
-1. **Always pass `orgId`** on new contacts/deals — webhook dispatch depends on it.
+1. **Always send `X-Org-Id: <orgId>` header** on all Bearer contact calls — middleware reads orgId from there, not the body. For deals/quotes/forms/activities, still pass `orgId` in the body (those routes not yet migrated).
 2. **Get a contact brief before calls** — `GET /ai/contact-brief/[id]` is cheap and rich.
 3. **Log activities proactively** — AI should log every call/email so future briefs are accurate.
 4. **Use tags for segmentation** — cheaper than custom fields and queryable with `array-contains-any`.
