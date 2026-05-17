@@ -1852,6 +1852,15 @@
         { "fieldPath": "eventName", "order": "ASCENDING" },
         { "fieldPath": "eventTime", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "ad_comments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "adId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
