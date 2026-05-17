@@ -567,3 +567,19 @@ export interface AdCampaignApprovalEntry {
   reason?: string
   at: Timestamp
 }
+
+// ─── Google Ads provider extensions (Sub-3a) ─────────────────────────────────
+// Additive only — `AdPlatform` already includes `'google'`. `AdConnection.meta`
+// is loosely typed as `Record<string, unknown>`, so callers can stash
+// `GoogleAdsConnectionData` there directly without breaking existing Meta callers.
+
+export interface GoogleAdsConnectionData {
+  /**
+   * Pointer to encrypted dev token in tokens collection — or env-derived if
+   * shared with the analytics adapter.
+   */
+  developerToken: string
+  /** MCC (Manager) customer ID. Required when client has manager hierarchy. */
+  loginCustomerId?: string
+  refreshTokenExpiresAt?: Timestamp
+}
