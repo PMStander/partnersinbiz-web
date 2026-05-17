@@ -8,7 +8,7 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withCrmAuth } from '@/lib/auth/crm-middleware'
-import { snapshotForWrite, resolveMemberRef } from '@/lib/orgMembers/memberRef'
+import { resolveMemberRef } from '@/lib/orgMembers/memberRef'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type {
   Contact,
@@ -112,10 +112,7 @@ export const POST = withCrmAuth('member', async (req, ctx) => {
     ? ((body as { capturedFromId?: string }).capturedFromId as string).trim()
     : ''
 
-  // Resolve actor reference — agent gets AGENT_PIP_REF directly, human gets a fresh snapshot
-  const actorRef = ctx.isAgent
-    ? ctx.actor
-    : await snapshotForWrite(ctx.orgId, ctx.actor.uid)
+  const actorRef = ctx.actor
 
   // Resolve assignedToRef when assignedTo is provided (mirrors PATCH handler logic)
   let assignedToRef: import('@/lib/orgMembers/memberRef').MemberRef | undefined

@@ -13,7 +13,6 @@ import { adminDb } from '@/lib/firebase/admin'
 import { FieldValue } from 'firebase-admin/firestore'
 import { withCrmAuth } from '@/lib/auth/crm-middleware'
 import { apiSuccess, apiError } from '@/lib/api/response'
-import { snapshotForWrite } from '@/lib/orgMembers/memberRef'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,10 +43,7 @@ export const POST = withCrmAuth<RouteContext>(
       return apiError('Provide add[] and/or remove[] to update tags', 400)
     }
 
-    // Resolve actor reference
-    const actorRef = ctx.isAgent
-      ? ctx.actor
-      : await snapshotForWrite(ctx.orgId, ctx.actor.uid)
+    const actorRef = ctx.actor
 
     const actorPatch: Record<string, unknown> = {
       updatedBy: ctx.isAgent ? undefined : ctx.actor.uid,

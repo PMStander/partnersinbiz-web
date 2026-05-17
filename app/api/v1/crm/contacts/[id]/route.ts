@@ -13,7 +13,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { NextRequest } from 'next/server'
 import { adminDb } from '@/lib/firebase/admin'
 import { withCrmAuth, type CrmAuthContext } from '@/lib/auth/crm-middleware'
-import { snapshotForWrite, resolveMemberRef } from '@/lib/orgMembers/memberRef'
+import { resolveMemberRef } from '@/lib/orgMembers/memberRef'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import { dispatchWebhook } from '@/lib/webhooks/dispatch'
 import { logActivity } from '@/lib/activity/log'
@@ -54,10 +54,7 @@ async function handleUpdate(
   const existing = snap.data()!
   if (existing.orgId !== ctx.orgId) return apiError('Contact not found', 404)
 
-  // Resolve actor reference — agent gets AGENT_PIP_REF directly; human gets a fresh snapshot
-  const actorRef = ctx.isAgent
-    ? ctx.actor
-    : await snapshotForWrite(ctx.orgId, ctx.actor.uid)
+  const actorRef = ctx.actor
 
   const patch: Record<string, unknown> = {
     ...body,
@@ -129,10 +126,7 @@ export const DELETE = withCrmAuth<RouteCtx>(
     const existing = snap.data()!
     if (existing.orgId !== ctx.orgId) return apiError('Contact not found', 404)
 
-    // Resolve actor reference
-    const actorRef = ctx.isAgent
-      ? ctx.actor
-      : await snapshotForWrite(ctx.orgId, ctx.actor.uid)
+    const actorRef = ctx.actor
 
     // Soft delete
     const softDeletePatch: Record<string, unknown> = {

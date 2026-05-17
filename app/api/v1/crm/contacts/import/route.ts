@@ -33,7 +33,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
 import { withCrmAuth } from '@/lib/auth/crm-middleware'
-import { snapshotForWrite } from '@/lib/orgMembers/memberRef'
 import { apiSuccess, apiError } from '@/lib/api/response'
 
 const MAX_ROWS = 5000
@@ -124,10 +123,7 @@ export const POST = withCrmAuth('member', async (req, ctx) => {
   const defaultTags = Array.isArray(body.defaultTags) ? body.defaultTags : []
   const dryRun = body.dryRun === true
 
-  // Resolve actor reference ONCE for the whole batch
-  const actorRef = ctx.isAgent
-    ? ctx.actor
-    : await snapshotForWrite(ctx.orgId, ctx.actor.uid)
+  const actorRef = ctx.actor
 
   // Resolve capture source autoTags (and confirm same org). If the source
   // doesn't belong to the org, we silently ignore it (don't apply autoTags
