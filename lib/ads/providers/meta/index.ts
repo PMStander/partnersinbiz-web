@@ -8,6 +8,7 @@ import * as ads from './ads'
 import * as caClient from './custom-audiences'
 import * as saClient from './saved-audiences'
 import { ensureSynced } from './creative-sync'
+import { fetchInsights, type InsightLevel } from './insights'
 import type { AdCampaign, AdSet, Ad, AdCustomAudience, AdSavedAudience, AdTargeting } from '@/lib/ads/types'
 
 export const metaProvider: AdProvider = {
@@ -258,5 +259,16 @@ export const metaProvider: AdProvider = {
         })
         return { success: true }
     }
+  },
+
+  // Phase 5 — Insights
+  async listInsights(args: {
+    metaObjectId: string
+    accessToken: string
+    since: string
+    until: string
+    level?: InsightLevel
+  }) {
+    return fetchInsights(args)
   },
 }
