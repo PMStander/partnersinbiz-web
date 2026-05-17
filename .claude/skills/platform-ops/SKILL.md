@@ -150,6 +150,18 @@ Recent activity feed for dashboard widgets.
 #### `GET /activity` — auth: admin
 Full activity feed (audit log). Filters: `orgId`, `type`, `resourceType`, `resourceId`, `from`, `to`, `page`, `limit`.
 
+### Ads activity types (Phase 7)
+
+Ad lifecycle events emit to the same `activity` collection with these types:
+
+- `ad_campaign.{created|launched|paused|edited|deleted}`
+- `ad_set.{created|launched|paused|edited|deleted}`
+- `ad.{created|launched|paused|edited|deleted}`
+- `ad_creative.{uploaded|archived|synced}`
+- `ad_custom_audience.{created|list_uploaded|deleted}`
+
+Each entry has `entityId` + `entityType` + `entityTitle` for cross-linking to the relevant ads admin page.
+
 ### Files
 
 #### `POST /upload` — auth: admin
