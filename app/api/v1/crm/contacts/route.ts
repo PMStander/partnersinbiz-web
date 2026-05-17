@@ -3,13 +3,12 @@
  * POST /api/v1/crm/contacts  — create a new contact
  *
  * Query params (GET): stage, type, source, search, limit (default 50), page (default 1)
- * Auth: admin or ai
+ * Auth: GET → viewer+, POST → member+
  */
-import { NextRequest } from 'next/server'
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/lib/firebase/admin'
-import { withAuth } from '@/lib/api/auth'
-import { resolveOrgScope } from '@/lib/api/orgScope'
+import { withCrmAuth } from '@/lib/auth/crm-middleware'
+import { snapshotForWrite } from '@/lib/orgMembers/memberRef'
 import { apiSuccess, apiError } from '@/lib/api/response'
 import type {
   Contact,
@@ -31,12 +30,10 @@ function isValidEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
 }
 
-export const GET = withAuth('client', async (req, user) => {
+export const GET = withCrmAuth('viewer', async (req, ctx) => {
   const { searchParams } = new URL(req.url)
-  const requestedOrgId = searchParams.get('orgId')
-  const scope = resolveOrgScope(user, requestedOrgId)
-  if (!scope.ok) return apiError(scope.error, scope.status)
-  const orgId = scope.orgId
+  const { orgId } = ctx
+
   const stage = searchParams.get('stage') as ContactStage | null
   const type = searchParams.get('type') as ContactType | null
   const source = searchParams.get('source') as ContactSource | null
@@ -82,6 +79,7 @@ export const GET = withAuth('client', async (req, user) => {
     .get()
 
   let contacts: Contact[] = snapshot.docs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((doc: any) => ({ id: doc.id, ...doc.data() }))
     .filter((c: Contact) => c.deleted !== true)
 
@@ -98,7 +96,7 @@ export const GET = withAuth('client', async (req, user) => {
   return apiSuccess(contacts, 200, { total: contacts.length, page, limit })
 })
 
-export const POST = withAuth('client', async (req, user) => {
+export const POST = withCrmAuth('member', async (req, ctx) => {
   const body = await req.json() as ContactInput
 
   if (!body.name?.trim()) return apiError('Name is required')
@@ -108,18 +106,18 @@ export const POST = withAuth('client', async (req, user) => {
   if (body.type && !VALID_TYPES.includes(body.type)) return apiError('Invalid type')
   if (body.source && !VALID_SOURCES.includes(body.source)) return apiError('Invalid source')
 
-  const requestedOrgId = typeof (body as { orgId?: unknown }).orgId === 'string'
-    ? ((body as { orgId?: string }).orgId as string).trim()
-    : null
-  const scope = resolveOrgScope(user, requestedOrgId)
-  if (!scope.ok) return apiError(scope.error, scope.status)
-  const orgId = scope.orgId
+  const { orgId } = ctx
 
   const capturedFromId = typeof (body as { capturedFromId?: unknown }).capturedFromId === 'string'
     ? ((body as { capturedFromId?: string }).capturedFromId as string).trim()
     : ''
 
-  const docRef = await adminDb.collection('contacts').add({
+  // Resolve actor reference — agent gets AGENT_PIP_REF directly, human gets a fresh snapshot
+  const actorRef = ctx.isAgent
+    ? ctx.actor
+    : await snapshotForWrite(ctx.orgId, ctx.actor.uid)
+
+  const contactData = {
     orgId,
     capturedFromId,
     name: body.name.trim(),
@@ -140,7 +138,19 @@ export const POST = withAuth('client', async (req, user) => {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     lastContactedAt: null,
-  })
+    createdBy: ctx.isAgent ? undefined : ctx.actor.uid,
+    createdByRef: actorRef,
+    updatedBy: ctx.isAgent ? undefined : ctx.actor.uid,
+    updatedByRef: actorRef,
+  }
+
+  // Firestore rejects undefined values — strip them before write
+  const sanitized = Object.fromEntries(
+    Object.entries(contactData).filter(([, v]) => v !== undefined),
+  )
+
+  const docRef = adminDb.collection('contacts').doc()
+  await docRef.set(sanitized)
 
   try {
     await dispatchWebhook(orgId, 'contact.created', {
@@ -150,6 +160,7 @@ export const POST = withAuth('client', async (req, user) => {
       phone: body.phone?.trim() ?? '',
       company: body.company?.trim() ?? '',
       source: body.source ?? 'manual',
+      createdByRef: actorRef,
     })
   } catch (err) {
     console.error('[webhook-dispatch-error] contact.created', err)
@@ -158,9 +169,9 @@ export const POST = withAuth('client', async (req, user) => {
   logActivity({
     orgId,
     type: 'crm_contact_created',
-    actorId: user.uid,
-    actorName: user.uid,
-    actorRole: user.role === 'ai' ? 'ai' : user.role === 'admin' ? 'admin' : 'client',
+    actorId: ctx.actor.uid,
+    actorName: ctx.actor.displayName,
+    actorRole: ctx.isAgent ? 'ai' : ctx.role === 'admin' ? 'admin' : 'client',
     description: `Created contact: "${body.name.trim()}"`,
     entityId: docRef.id,
     entityType: 'contact',
