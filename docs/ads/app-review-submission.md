@@ -124,3 +124,200 @@ In Meta App Dashboard → Roles → Test Users:
 Track status in Meta App Dashboard → App Review → Permissions. Status moves through: Submitted → In Review → Approved | Rejected. If rejected, the rejection email lists which scopes failed + why. Address each and resubmit.
 
 Once **all four scopes** are approved, flip the app to Live mode (App Dashboard → App Mode toggle).
+
+---
+
+# Google Ads — Production Access Application
+
+This section covers what Peet needs to submit to Google to get the PiB Google Ads developer token elevated from TEST to BASIC (and eventually STANDARD) access.
+
+## Lead time
+
+Google Ads API access elevation typically takes **3-10 business days** for BASIC and **2-4 weeks** for STANDARD. Apply well before a client go-live.
+
+## Access levels
+
+| Level | Operations/day | Use case |
+|---|---|---|
+| TEST | 10 | Development only — sandbox accounts, no real spend |
+| BASIC | 15,000 | Production — up to ~15 client accounts active |
+| STANDARD | Unlimited | Production — agency scale, no per-day ceiling |
+
+Apply at: https://developers.google.com/google-ads/api/docs/access-levels
+
+## Prerequisites
+
+- Google Ads developer token (already applied for in Google Ads API Center)
+- OAuth 2.0 Client ID + Secret registered in Google Cloud Console → APIs & Services → Credentials
+- Authorized redirect URIs registered in the OAuth client:
+  - `https://partnersinbiz.online/api/v1/ads/google/oauth/callback`
+  - `https://partnersinbiz.online/api/v1/ads/google/merchant-center/oauth/callback`
+- Google Cloud project: enable `Google Ads API` in APIs & Services → Library
+- PiB Vercel deploy reachable from the public internet (Google reviewers access it)
+
+## Required OAuth Scopes
+
+| Scope | Purpose |
+|---|---|
+| `https://www.googleapis.com/auth/adwords` | Google Ads full access — campaigns, ad groups, ads, keywords, audiences, conversions, insights pull |
+| `https://www.googleapis.com/auth/content` | Merchant Center — Shopping campaign feed management |
+
+Both scopes are requested during the OAuth connect flow at `Admin → Org → <client> → Ads → Connections → Connect Google`.
+
+## Developer Token Elevation
+
+1. Log into your Google Ads Manager account (MCC)
+2. Go to **Tools & Settings → API Center**
+3. Under **Developer token**, click **Apply for Basic Access**
+4. Fill in:
+   - **Company name**: Partners in Biz
+   - **Company website**: https://partnersinbiz.online
+   - **Primary contact email**: peet.stander@partnersinbiz.online
+   - **Application description** (see template below)
+5. Submit and track status in API Center
+
+### Application description template
+
+```
+Partners in Biz (https://partnersinbiz.online) is a white-label agency platform
+that manages Google Ads campaigns on behalf of client businesses. Admins log into
+our multi-tenant dashboard and use the Ads module to:
+
+1. Connect a client Google Ads account via OAuth 2.0 (scope: adwords).
+2. Create and manage Search, Display, and Shopping campaigns including ad groups,
+   ads, keywords, audiences, and bidding strategies.
+3. Build Customer Match audiences from client-uploaded contact lists (hashed
+   client-side before transmission to Google).
+4. Pull daily performance insights (cost, impressions, clicks, conversions, ROAS)
+   via the searchStream GAQL endpoint for reporting dashboards.
+5. Upload enhanced conversions to improve attribution beyond browser signals.
+6. Manage Shopping campaigns linked to a Merchant Center account
+   (scope: content).
+
+All API calls are server-side; no end-user browsers touch the Google Ads API
+directly. Credentials are encrypted at rest. See our Privacy Policy at
+https://partnersinbiz.online/privacy for data handling details.
+```
+
+## MCC (Manager Account) Pre-Approval
+
+Agency-managed client accounts sit under the PiB MCC. The `login-customer-id` header is sent on every API call to identify the MCC. No additional pre-approval is needed for BASIC access; for STANDARD access:
+
+1. Go to your MCC → **Tools & Settings → Account access**
+2. Verify the `login-customer-id` is set to the MCC's numeric customer ID (without dashes)
+3. Env var `GOOGLE_ADS_LOGIN_CUSTOMER_ID` in Vercel must match
+
+## Content Policy Compliance Checklist
+
+- [ ] Ads comply with [Google Ads Policies](https://support.google.com/adspolicy)
+- [ ] Restricted categories (gambling, alcohol, financial products, health) have separate Google approvals before enabling for those clients
+- [ ] Personalized advertising features (Customer Match, remarketing) disclosed in the Privacy Policy at https://partnersinbiz.online/privacy
+- [ ] No personally identifiable information stored unencrypted — all contact lists are SHA-256 hashed client-side before the API call
+- [ ] Enhanced conversions data (email hash, phone hash) handled under Google's [Customer Data Policy](https://support.google.com/google-ads/answer/9888656)
+
+## Sample API Requests
+
+Provide these examples in the API Center application form. Use realistic but fully redacted tokens.
+
+### Create Search campaign
+
+```http
+POST https://googleads.googleapis.com/v17/customers/1234567890/campaigns:mutate
+Authorization: Bearer ACCESS_TOKEN_REDACTED
+developer-token: DEV_TOKEN_REDACTED
+login-customer-id: 9876543210
+Content-Type: application/json
+
+{
+  "operations": [{
+    "create": {
+      "name": "PiB Demo — Search Traffic",
+      "status": "PAUSED",
+      "advertisingChannelType": "SEARCH",
+      "campaignBudget": "customers/1234567890/campaignBudgets/~1",
+      "biddingStrategyType": "MAXIMIZE_CLICKS",
+      "networkSettings": {
+        "targetGoogleSearch": true,
+        "targetSearchNetwork": true
+      },
+      "startDate": "2026-06-01",
+      "endDate": "2026-12-31"
+    }
+  }]
+}
+```
+
+### Fetch daily insights (GAQL searchStream)
+
+```http
+POST https://googleads.googleapis.com/v17/customers/1234567890/googleAds:searchStream
+Authorization: Bearer ACCESS_TOKEN_REDACTED
+developer-token: DEV_TOKEN_REDACTED
+login-customer-id: 9876543210
+Content-Type: application/json
+
+{
+  "query": "SELECT segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.conversions, metrics.conversions_value, metrics.ctr, metrics.average_cpc FROM campaign WHERE campaign.id = 111222333 AND segments.date BETWEEN '2026-05-01' AND '2026-05-17' ORDER BY segments.date ASC"
+}
+```
+
+### Upload enhanced conversion click
+
+```http
+POST https://googleads.googleapis.com/v17/customers/1234567890:uploadClickConversions
+Authorization: Bearer ACCESS_TOKEN_REDACTED
+developer-token: DEV_TOKEN_REDACTED
+login-customer-id: 9876543210
+Content-Type: application/json
+
+{
+  "conversions": [{
+    "gclid": "GCLID_REDACTED",
+    "conversionAction": "customers/1234567890/conversionActions/987654321",
+    "conversionDateTime": "2026-05-17 10:30:00+02:00",
+    "conversionValue": 149.99,
+    "currencyCode": "USD",
+    "userIdentifiers": [{
+      "hashedEmail": "SHA256_HASH_REDACTED"
+    }]
+  }],
+  "partialFailure": true
+}
+```
+
+## Screencast Script
+
+3-5 minute video for Google's reviewers. Record with Loom or QuickTime. Show all flows that use the `adwords` scope.
+
+1. **Connect Google Ads** — Admin → Org → [test client] → Ads → Connections → Connect Google → OAuth consent screen → redirect back → connection active, ad accounts listed
+2. **Create Search campaign** — Ads → Campaigns → New → Search objective → budget → ad group with keyword → text ad → Create (status: PAUSED; no real spend)
+3. **Build Customer Match audience** — Ads → Audiences → New → Customer Match → upload small test CSV (2-3 rows) → hashing happens client-side → show audience created in BUILDING status
+4. **View insights chart** — Ads → Insights → select campaign → show daily ROAS/spend/clicks chart populated from the searchStream pull
+5. **Submit a conversion** — Ads → Conversions → Upload → show the enhanced conversion POST with a test GCLID → show the success response
+
+Add a narration note: "All campaigns created in the screencast remain PAUSED; no actual budget is spent during the demo."
+
+## Common Rejection Reasons
+
+- **"Insufficient use case justification"** — Be specific about which API methods each feature calls. Vague descriptions like "manage ads" are flagged.
+- **"Privacy policy inadequate"** — The Privacy Policy must explicitly mention: Customer Match hashing, enhanced conversions, data retention periods, and user data deletion rights.
+- **"Sample requests too simplistic"** — Use realistic GAQL queries and full mutate operation structures. The `create` operation above with all required fields is the right level of detail.
+- **"Test account not accessible"** — Configure `pib-reviewer@partnersinbiz.online` as a test user before submitting (see below).
+- **"App not reachable"** — Ensure Vercel prod is live and CRON_SECRET + all Google env vars are set so the reviewers can trigger the OAuth flow.
+
+## Test User Setup
+
+1. In the PiB Google Cloud project → IAM → Add `pib-reviewer@partnersinbiz.online` as a test user on the OAuth client
+2. In the test Google Ads Manager account → Account access → invite `pib-reviewer@partnersinbiz.online` as Admin
+3. Provide the reviewer with:
+   - Login: `pib-reviewer@partnersinbiz.online`
+   - Password: (generate and share via private Slack DM or 1Password Send)
+   - Test client URL: `https://partnersinbiz.online` → log in as admin, then navigate to the test org
+4. Document these credentials in the `#pib-google-review` private channel
+
+## After Elevation
+
+- Update `GOOGLE_ADS_DEVELOPER_TOKEN` in Vercel env (it changes after elevation)
+- Run `vercel env pull` and verify no trailing newline corruption (see [[Vercel env trailing-newline gotcha]])
+- Test a live insert from the daily cron: `POST https://partnersinbiz.online/api/v1/ads/cron/daily-insights-pull` with `Authorization: Bearer $CRON_SECRET`
+- Monitor Firestore `metrics` collection for `source: 'google_ads'` documents
