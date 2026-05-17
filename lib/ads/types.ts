@@ -568,6 +568,31 @@ export interface AdCampaignApprovalEntry {
   at: Timestamp
 }
 
+// ─── Canonical Keyword type (Sub-3a Phase 2) — used by Google, future LinkedIn/Bing ─
+
+export type { AdKeywordMatchType } from '@/lib/ads/providers/google/mappers'
+import type { AdKeywordMatchType } from '@/lib/ads/providers/google/mappers'
+
+export interface AdKeyword {
+  id: string
+  orgId: string
+  campaignId: string
+  adSetId: string  // canonical adSet = Google Ad Group
+  text: string
+  matchType: AdKeywordMatchType
+  status: AdEntityStatus
+  negativeKeyword: boolean
+  cpcBidMicros?: string  // optional override; falls back to ad-group default
+  providerData?: {
+    google?: {
+      keywordResourceName: string  // 'customers/{cid}/adGroupCriteria/{adGroupId}~{criterionId}'
+      cpcBidMicros?: string
+    }
+  }
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
 // ─── Google Ads provider extensions (Sub-3a) ─────────────────────────────────
 // Additive only — `AdPlatform` already includes `'google'`. `AdConnection.meta`
 // is loosely typed as `Record<string, unknown>`, so callers can stash
