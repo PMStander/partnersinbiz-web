@@ -46,6 +46,13 @@ const NAV_LINKS: NavItem[] = [
     ],
   },
   {
+    href: '/portal/deals',
+    label: 'Deals',
+    icon: 'monetization_on',
+    group: 'work',
+    activePatterns: ['/portal/deals'],
+  },
+  {
     href: '/portal/messages',
     label: 'Messages',
     icon: 'forum',
