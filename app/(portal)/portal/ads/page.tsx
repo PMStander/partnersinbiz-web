@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { adminAuth, adminDb } from '@/lib/firebase/admin'
 import { listCampaigns } from '@/lib/ads/campaigns/store'
 import type { AdCampaign } from '@/lib/ads/types'
+import { BulkApproveButton } from './BulkApproveButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,7 +53,10 @@ export default async function PortalAdsListPage() {
     <div className="space-y-6">
       {awaiting.length > 0 && (
         <section>
-          <h2 className="eyebrow !text-[10px] mb-2">Awaiting your review · {awaiting.length}</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="eyebrow !text-[10px]">Awaiting your review · {awaiting.length}</h2>
+            <BulkApproveButton count={awaiting.length} />
+          </div>
           <ul className="space-y-2">
             {awaiting.map((c) => (
               <CampaignRow key={c.id} campaign={c} highlight />

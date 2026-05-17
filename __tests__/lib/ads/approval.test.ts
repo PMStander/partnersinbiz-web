@@ -3,9 +3,11 @@
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 const mockUpdateCampaign = jest.fn().mockResolvedValue(undefined)
+const mockListCampaigns = jest.fn().mockResolvedValue([])
 
 jest.mock('@/lib/ads/campaigns/store', () => ({
   updateCampaign: (...args: unknown[]) => mockUpdateCampaign(...args),
+  listCampaigns: (...args: unknown[]) => mockListCampaigns(...args),
 }))
 
 const mockTimestampNow = jest.fn().mockReturnValue({ seconds: 1716000000, nanoseconds: 0 })
@@ -22,7 +24,7 @@ jest.mock('firebase-admin/firestore', () => ({
 
 // ─── Subject ─────────────────────────────────────────────────────────────────
 
-import { setReviewState } from '@/lib/ads/approval'
+import { setReviewState, bulkSetReviewStateApprove } from '@/lib/ads/approval'
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,7 @@ beforeEach(() => {
   mockTimestampNow.mockReturnValue({ seconds: 1716000000, nanoseconds: 0 })
   mockArrayUnion.mockImplementation((...items: unknown[]) => ({ __arrayUnion: items }))
   mockUpdateCampaign.mockResolvedValue(undefined)
+  mockListCampaigns.mockResolvedValue([])
 })
 
 describe('setReviewState — submitted (DRAFT → PENDING_REVIEW + awaiting)', () => {
@@ -138,5 +141,36 @@ describe('setReviewState — rejected (PENDING_REVIEW → DRAFT + reviewState re
       reason,
       at: { seconds: 1716000000, nanoseconds: 0 },
     })
+  })
+})
+
+describe('bulkSetReviewStateApprove — filters + per-campaign isolation', () => {
+  it('approves only awaiting campaigns; failures land in failed[] without aborting the batch', async () => {
+    mockListCampaigns.mockResolvedValueOnce([
+      { id: 'cmp_ok_1', orgId: 'org_1', name: 'Ok 1', reviewState: 'awaiting' },
+      { id: 'cmp_skip', orgId: 'org_1', name: 'Skip', reviewState: 'approved' },
+      { id: 'cmp_fail', orgId: 'org_1', name: 'Fail', reviewState: 'awaiting' },
+      { id: 'cmp_ok_2', orgId: 'org_1', name: 'Ok 2', reviewState: 'awaiting' },
+    ])
+    // 3 awaiting → 3 updateCampaign calls: ok, fail, ok
+    mockUpdateCampaign
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(undefined)
+
+    const result = await bulkSetReviewStateApprove({
+      orgId: 'org_1',
+      actorUid: 'uid_client',
+      actorRole: 'member',
+    })
+
+    expect(result.approved).toEqual(['cmp_ok_1', 'cmp_ok_2'])
+    expect(result.failed).toEqual([{ id: 'cmp_fail', error: 'boom' }])
+    expect(result.approvedCampaigns).toEqual([
+      { id: 'cmp_ok_1', name: 'Ok 1' },
+      { id: 'cmp_ok_2', name: 'Ok 2' },
+    ])
+    // Only awaiting ones were even attempted
+    expect(mockUpdateCampaign).toHaveBeenCalledTimes(3)
   })
 })
