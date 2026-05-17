@@ -5,8 +5,10 @@ import { listAdAccounts as listMetaAdAccounts } from './client'
 import * as campaigns from './campaigns'
 import * as adsets from './adsets'
 import * as ads from './ads'
+import * as caClient from './custom-audiences'
+import * as saClient from './saved-audiences'
 import { ensureSynced } from './creative-sync'
-import type { AdCampaign, AdSet, Ad } from '@/lib/ads/types'
+import type { AdCampaign, AdSet, Ad, AdCustomAudience, AdSavedAudience, AdTargeting } from '@/lib/ads/types'
 
 export const metaProvider: AdProvider = {
   platform: 'meta',
@@ -152,5 +154,109 @@ export const metaProvider: AdProvider = {
       accessToken: args.accessToken,
       patch: args.patch as Partial<Ad>,
     })
+  },
+
+  // Phase 4 — Custom Audiences
+  async customAudienceCRUD(args: {
+    op: 'create' | 'get' | 'list' | 'update' | 'delete' | 'upload-users'
+    accessToken: string
+    adAccountId?: string
+    metaCaId?: string
+    ca?: AdCustomAudience
+    patch?: { name?: string; description?: string }
+    uploadPayload?: { schema: string[]; hashedRows: string[][] }
+    originMetaCaId?: string
+  }) {
+    switch (args.op) {
+      case 'create':
+        if (!args.adAccountId || !args.ca) throw new Error('create requires adAccountId + ca')
+        return await caClient.createMetaCustomAudience({
+          adAccountId: args.adAccountId,
+          accessToken: args.accessToken,
+          ca: args.ca,
+          originMetaCaId: args.originMetaCaId,
+        })
+      case 'list':
+        if (!args.adAccountId) throw new Error('list requires adAccountId')
+        return await caClient.listMetaCustomAudiences({
+          adAccountId: args.adAccountId,
+          accessToken: args.accessToken,
+        })
+      case 'get':
+        if (!args.metaCaId) throw new Error('get requires metaCaId')
+        return await caClient.getMetaCustomAudience({
+          metaCaId: args.metaCaId,
+          accessToken: args.accessToken,
+        })
+      case 'update':
+        if (!args.metaCaId || !args.patch) throw new Error('update requires metaCaId + patch')
+        return await caClient.updateMetaCustomAudience({
+          metaCaId: args.metaCaId,
+          accessToken: args.accessToken,
+          patch: args.patch,
+        })
+      case 'delete':
+        if (!args.metaCaId) throw new Error('delete requires metaCaId')
+        await caClient.deleteMetaCustomAudience({
+          metaCaId: args.metaCaId,
+          accessToken: args.accessToken,
+        })
+        return { success: true }
+      case 'upload-users':
+        if (!args.metaCaId || !args.uploadPayload)
+          throw new Error('upload-users requires metaCaId + uploadPayload')
+        return await caClient.uploadCustomerListUsers({
+          metaCaId: args.metaCaId,
+          accessToken: args.accessToken,
+          schema: args.uploadPayload.schema,
+          hashedRows: args.uploadPayload.hashedRows,
+        })
+    }
+  },
+
+  // Phase 4 — Saved Audiences
+  async savedAudienceCRUD(args: {
+    op: 'create' | 'get' | 'list' | 'update' | 'delete'
+    accessToken: string
+    adAccountId?: string
+    metaSavId?: string
+    sa?: AdSavedAudience
+    patch?: { name?: string; description?: string; targeting?: AdTargeting }
+  }) {
+    switch (args.op) {
+      case 'create':
+        if (!args.adAccountId || !args.sa) throw new Error('create requires adAccountId + sa')
+        return await saClient.createMetaSavedAudience({
+          adAccountId: args.adAccountId,
+          accessToken: args.accessToken,
+          sa: args.sa,
+        })
+      case 'list':
+        if (!args.adAccountId) throw new Error('list requires adAccountId')
+        return await saClient.listMetaSavedAudiences({
+          adAccountId: args.adAccountId,
+          accessToken: args.accessToken,
+        })
+      case 'get':
+        if (!args.metaSavId) throw new Error('get requires metaSavId')
+        return await saClient.getMetaSavedAudience({
+          metaSavId: args.metaSavId,
+          accessToken: args.accessToken,
+        })
+      case 'update':
+        if (!args.metaSavId || !args.patch) throw new Error('update requires metaSavId + patch')
+        return await saClient.updateMetaSavedAudience({
+          metaSavId: args.metaSavId,
+          accessToken: args.accessToken,
+          patch: args.patch,
+        })
+      case 'delete':
+        if (!args.metaSavId) throw new Error('delete requires metaSavId')
+        await saClient.deleteMetaSavedAudience({
+          metaSavId: args.metaSavId,
+          accessToken: args.accessToken,
+        })
+        return { success: true }
+    }
   },
 }
