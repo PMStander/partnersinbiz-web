@@ -26,7 +26,7 @@ export const GET = withCrmAuth<SubRouteCtx>('viewer', async (_req, ctx, routeCtx
   if (sub.orgId !== ctx.orgId) return apiError('Submission not found', 404)
   if (sub.formId !== id) return apiError('Submission not found', 404)
 
-  return apiSuccess({ submission: { id: subSnap.id, ...sub } })
+  return apiSuccess({ submission: { ...sub, id: subSnap.id } })
 })
 
 export const PATCH = withCrmAuth<SubRouteCtx>('admin', async (req, ctx, routeCtx) => {
@@ -64,5 +64,5 @@ export const PATCH = withCrmAuth<SubRouteCtx>('admin', async (req, ctx, routeCtx
 
   await ref.update(sanitized)
 
-  return apiSuccess({ submission: { id: subId, ...sub, ...sanitized } })
+  return apiSuccess({ submission: { ...sub, ...sanitized, id: subId } })
 })

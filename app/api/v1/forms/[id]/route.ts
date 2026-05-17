@@ -90,7 +90,7 @@ export const GET = withCrmAuth<RouteCtx>('viewer', async (_req, ctx, routeCtx) =
   const { id } = await routeCtx!.params
   const r = await loadForm(id, ctx.orgId)
   if (!r.ok) return apiError(r.error, r.status)
-  return apiSuccess({ id, ...r.data } as Form)
+  return apiSuccess({ ...r.data, id } as Form)
 })
 
 // ---------------------------------------------------------------------------
