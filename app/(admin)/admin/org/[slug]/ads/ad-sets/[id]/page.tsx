@@ -1,9 +1,11 @@
 // app/(admin)/admin/org/[slug]/ads/ad-sets/[id]/page.tsx
+// Sub-3a Phase 2 Batch 4 — mounts KeywordEditor for Google ad sets.
 import Link from 'next/link'
 import { resolveOrgIdBySlug } from '@/lib/organizations/resolve-by-slug'
 import { getAdSet } from '@/lib/ads/adsets/store'
 import { listAds } from '@/lib/ads/ads/store'
 import { getCampaign } from '@/lib/ads/campaigns/store'
+import { AdSetKeywordsSection } from './AdSetKeywordsSection'
 
 interface Params {
   slug: string
@@ -48,34 +50,45 @@ export default async function AdSetDetailPage({
         </div>
       </header>
 
-      <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Targeting</h2>
-        <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <div>
-            <dt className="text-white/40">Countries</dt>
-            <dd>{adSet.targeting.geo.countries?.join(', ') ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-white/40">Age range</dt>
-            <dd>
-              {adSet.targeting.demographics.ageMin}-{adSet.targeting.demographics.ageMax}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-white/40">Genders</dt>
-            <dd>{adSet.targeting.demographics.genders?.join(', ') ?? 'All'}</dd>
-          </div>
-          <div>
-            <dt className="text-white/40">Placements</dt>
-            <dd>
-              {Object.entries(adSet.placements)
-                .filter(([, v]) => v)
-                .map(([k]) => k)
-                .join(', ')}
-            </dd>
-          </div>
-        </dl>
-      </section>
+      {adSet.platform !== 'google' && (
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Targeting</h2>
+          <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <div>
+              <dt className="text-white/40">Countries</dt>
+              <dd>{adSet.targeting.geo.countries?.join(', ') ?? '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-white/40">Age range</dt>
+              <dd>
+                {adSet.targeting.demographics.ageMin}-{adSet.targeting.demographics.ageMax}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-white/40">Genders</dt>
+              <dd>{adSet.targeting.demographics.genders?.join(', ') ?? 'All'}</dd>
+            </div>
+            <div>
+              <dt className="text-white/40">Placements</dt>
+              <dd>
+                {Object.entries(adSet.placements)
+                  .filter(([, v]) => v)
+                  .map(([k]) => k)
+                  .join(', ')}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      )}
+
+      {/* Keywords panel — Google only */}
+      {adSet.platform === 'google' && (
+        <AdSetKeywordsSection
+          orgId={orgId}
+          adSetId={id}
+          campaignId={adSet.campaignId}
+        />
+      )}
 
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">Ads ({ads.length})</h2>
